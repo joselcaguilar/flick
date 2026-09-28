@@ -1319,6 +1319,8 @@ struct HandRuntime {
     classifier: Option<ModelRunner>,
 }
 
+type GestureModelOutputs = (Option<[f32; 128]>, Option<[f32; 8]>);
+
 impl HandRuntime {
     fn new(models: &ModelSet, ep_choice: &EpChoice) -> Result<Self, VisionError> {
         let factory = OrtSessionFactory::new(models.root().join("models/cache"));
@@ -1349,12 +1351,14 @@ impl HandRuntime {
         )?;
         let regressors = output_tensor(&outputs, "Identity")?;
         let logits = output_tensor(&outputs, "Identity_1")?;
-        let mut decoded = Vec::with_capacity(regressors.len() / 18);
-        for chunk in regressors.chunks_exact(18) {
-            let mut raw = [0.0_f32; 18];
-            raw.copy_from_slice(chunk);
-            decoded.push(raw);
+        let (chunks, remainder) = regressors.as_chunks::<18>();
+        if !remainder.is_empty() {
+            return Err(VisionError::InvalidModelOutput(
+                "palm regressors length is not divisible by 18".to_owned(),
+            ));
         }
+        let mut decoded = Vec::with_capacity(chunks.len());
+        decoded.extend_from_slice(chunks);
         decode_palms(&decoded, logits, anchors, letterbox, 0.5, 0.3)
     }
 
@@ -1424,7 +1428,7 @@ impl HandRuntime {
     fn run_gesture_models(
         &mut self,
         hand: &RawHandObservation,
-    ) -> Result<(Option<[f32; 128]>, Option<[f32; 8]>), VisionError> {
+    ) -> Result<GestureModelOutputs, VisionError> {
         let Some(embedder) = self.embedder.as_mut() else {
             return Ok((None, None));
         };
@@ -1972,8 +1976,7 @@ fn rgb_to_nchw_224(data: &[u8], width: u32, height: u32) -> Result<Array4<f32>, 
             let src = ((src_y * width + src_x) * 3) as usize;
             for c in 0..3 {
                 let value = data[src + c] as f32 / 255.0;
-                tensor[(0, c, y as usize, x as usize)] =
-                    (value - mean[c as usize]) / std[c as usize];
+                tensor[(0, c, y as usize, x as usize)] = (value - mean[c]) / std[c];
             }
         }
     }
