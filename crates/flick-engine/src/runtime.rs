@@ -3,14 +3,19 @@
 use std::{
     collections::{BTreeMap, HashMap},
     net::SocketAddr,
+    path::{Path, PathBuf},
     str::FromStr,
-    sync::Arc,
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    thread,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::Context;
 use async_trait::async_trait;
-use axum::Router;
+use axum::{Json, Router, routing::get};
 use flick_api::{
     ActionDto, ActionOutcomeDto, ActionTargetDto, Anchor as ApiAnchor, ApiConfig, ApiGateways,
     ApiProblem, ApiState, AvailableCamera, CameraFormat, CameraStatus, EngineControl, EngineStatus,
@@ -21,20 +26,29 @@ use flick_api::{
     TeachCommitResponse, TeachGateway, TeachLevelRequest, TeachLevelResponse, TeachRequest,
     TeachSession as ApiTeachSession, TeachSpotResponse, VerbBinding, router,
 };
-use flick_core::{
-    Action, ActionOutcome, ActionStatus, ActionTarget, AnchorId, CameraId, DialProperty, PlaceId,
-    Verb,
+use flick_capture::{
+    CameraPermissionStatus, CaptureHandle, CaptureStatus, FileSource, FileSourceOptions,
+    LatestFrameSlot, LocalCameraOptions, LocalCameraSource, camera_permission_status,
+    spawn_capture,
 };
+use flick_core::{
+    Action, ActionOutcome, ActionStatus, ActionTarget, AnchorId, CameraId, DialProperty, Frame,
+    FrameSource, HandFrame, HandPipeline, PlaceId, SourceInfo, SourceKind, Verb,
+};
+use flick_gestures::{GestureEngine, GestureEngineConfig};
 use flick_ha::{
     EntityState, HaClient, HaConnectionConfig, HaStatus, RegistrySnapshot, SafetyInput,
     SafetyValidator,
 };
 use flick_spatial::{
-    AnchorGeometry, DEFAULT_ESTIMATOR_VERSION, PlaceRecord, PlaceStatus, PointingRay, RaySource,
-    RealignPair, StoredIntrinsics, TeachObservation, TeachSession as SpatialTeachSession,
-    TeachTarget, realign,
+    AnchorGeometry, CameraIntrinsics, DEFAULT_ESTIMATOR_VERSION, PlaceRecord, PlaceStatus,
+    PointingRay, RaySource, RealignPair, StoredIntrinsics, TargetSelectorImpl,
+    TargetSelectorSettings, TeachObservation, TeachSession as SpatialTeachSession, TeachTarget,
+    realign,
 };
 use flick_store::Store;
+use flick_vision::{EpChoice, HandPipelineImpl, ModelSet};
+use serde::Serialize;
 use serde_json::json;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::{net::TcpListener, sync::Mutex};
@@ -96,10 +110,23 @@ pub async fn serve(runtime: RuntimeConfig, token: String) -> anyhow::Result<()> 
     }
 
     let app_router: Router = router(state);
+    if let Some(path) = runtime.fake_camera.as_deref() {
+        app.start_file_camera(path).await?;
+    }
+    let app_router = app_router.route("/updates", get(sidecar_updates));
     axum::serve(listener, app_router)
         .with_graceful_shutdown(shutdown_signal())
         .await
         .context("API server failed")
+}
+
+#[derive(Debug, Serialize)]
+struct SidecarUpdatesResponse {
+    busy_reason: Option<String>,
+}
+
+async fn sidecar_updates() -> Json<SidecarUpdatesResponse> {
+    Json(SidecarUpdatesResponse { busy_reason: None })
 }
 
 fn api_config(runtime: &RuntimeConfig, port: u16, token: String) -> ApiConfig {
@@ -179,6 +206,7 @@ struct EngineApp {
     targeting: SqliteTargetingStore,
     teach_sessions: Mutex<HashMap<String, EngineTeachSession>>,
     realign_sessions: Mutex<HashMap<String, EngineRealignSession>>,
+    capture: Mutex<Option<EngineCapture>>,
 }
 
 impl EngineApp {
@@ -195,6 +223,7 @@ impl EngineApp {
             targeting: SqliteTargetingStore::new(Arc::clone(&store)),
             teach_sessions: Mutex::new(HashMap::new()),
             realign_sessions: Mutex::new(HashMap::new()),
+            capture: Mutex::new(None),
         }
     }
 
@@ -211,6 +240,27 @@ impl EngineApp {
         *self.ha_client.lock().await = Some(client);
         *self.ha_instance.lock().await = instance;
         *self.registry.lock().await = snapshot;
+    }
+
+    async fn start_file_camera(&self, path: &Path) -> anyhow::Result<CameraStatus> {
+        let source = FileSource::open(FileSourceOptions::fake_camera(path))?;
+        self.start_source(source).await
+    }
+
+    async fn start_source<S>(&self, source: S) -> anyhow::Result<CameraStatus>
+    where
+        S: FrameSource,
+    {
+        let dispatcher = self.dispatcher.lock().await.clone();
+        let model_root = model_manifest_path();
+        let capture = EngineCapture::start(source, dispatcher, model_root.as_deref())?;
+        let status = capture.status();
+        let mut current = self.capture.lock().await;
+        if let Some(old) = current.take() {
+            let _ = old.stop();
+        }
+        *current = Some(capture);
+        Ok(status)
     }
 
     fn ensure_place(&self, camera_id: CameraId) -> Result<PlaceRecord, ApiProblem> {
@@ -294,6 +344,152 @@ struct EngineRealignSession {
     pairs: Vec<RealignPair>,
 }
 
+struct EngineCapture {
+    source_info: SourceInfo,
+    handle: Option<CaptureHandle>,
+    worker_stop: Arc<AtomicBool>,
+    worker: Option<thread::JoinHandle<()>>,
+    latest_frame: Arc<std::sync::Mutex<Option<Frame>>>,
+    latest_hands: Arc<std::sync::Mutex<Option<HandFrame>>>,
+    last_error: Arc<std::sync::Mutex<Option<String>>>,
+}
+
+impl EngineCapture {
+    fn start<S>(
+        source: S,
+        dispatcher: Option<Dispatcher>,
+        model_root: Option<&Path>,
+    ) -> anyhow::Result<Self>
+    where
+        S: FrameSource,
+    {
+        let source_info = source.info().clone();
+        let slot = LatestFrameSlot::new();
+        let handle = spawn_capture(source, slot.clone());
+        let worker_stop = Arc::new(AtomicBool::new(false));
+        let latest_frame = Arc::new(std::sync::Mutex::new(None));
+        let latest_hands = Arc::new(std::sync::Mutex::new(None));
+        let last_error = Arc::new(std::sync::Mutex::new(None));
+        let worker = {
+            let worker_stop = Arc::clone(&worker_stop);
+            let latest_frame = Arc::clone(&latest_frame);
+            let latest_hands = Arc::clone(&latest_hands);
+            let last_error = Arc::clone(&last_error);
+            let source_info = source_info.clone();
+            let handle = tokio::runtime::Handle::current();
+            let mut pipeline = build_hand_pipeline(model_root, source_info.mirror);
+            let mut gestures = GestureEngine::new(GestureEngineConfig::default());
+            let mut selector = TargetSelectorImpl::new(
+                CameraIntrinsics::sane_default(source_info.width, source_info.height),
+                Vec::new(),
+                TargetSelectorSettings::default(),
+            );
+            thread::Builder::new()
+                .name(format!("flick-vision-{}", source_info.id))
+                .spawn(move || {
+                    while !worker_stop.load(Ordering::Relaxed) {
+                        let Some(frame) = slot.wait_latest(Duration::from_millis(100)) else {
+                            continue;
+                        };
+                        if let Ok(mut latest) = latest_frame.lock() {
+                            *latest = Some(frame.clone());
+                        }
+                        match pipeline.process(&frame) {
+                            Ok(hands) => {
+                                let selection = selector.update(&hands, None);
+                                if let Some(dispatcher) = dispatcher.as_ref() {
+                                    for event in gestures.update(&hands, &selection).events {
+                                        let dispatcher = dispatcher.clone();
+                                        handle.block_on(async move {
+                                            let _ = dispatcher.dispatch(&event).await;
+                                        });
+                                    }
+                                }
+                                if let Ok(mut latest) = latest_hands.lock() {
+                                    *latest = Some(hands);
+                                }
+                                if let Ok(mut error) = last_error.lock() {
+                                    *error = None;
+                                }
+                            }
+                            Err(err) => {
+                                if let Ok(mut error) = last_error.lock() {
+                                    *error = Some(err.to_string());
+                                }
+                            }
+                        }
+                    }
+                })
+                .context("failed to spawn vision worker")?
+        };
+        Ok(Self {
+            source_info,
+            handle: Some(handle),
+            worker_stop,
+            worker: Some(worker),
+            latest_frame,
+            latest_hands,
+            last_error,
+        })
+    }
+
+    fn status(&self) -> CameraStatus {
+        let (state, error) = self
+            .handle
+            .as_ref()
+            .map_or(("stopped".to_owned(), None), |handle| {
+                capture_status_parts(handle.status())
+            });
+        let error = error.or_else(|| self.last_error.lock().ok().and_then(|value| value.clone()));
+        CameraStatus {
+            camera_id: self.source_info.id.to_string(),
+            state,
+            fps: Some(f64::from(self.source_info.fps)),
+            error,
+        }
+    }
+
+    fn latest_preview(&self) -> Option<PreviewFrame> {
+        let frame = self.latest_frame.lock().ok()?.clone()?;
+        if frame.format != flick_core::PixelFormat::Rgb8 {
+            return None;
+        }
+        Some(PreviewFrame {
+            width: frame.width,
+            height: frame.height,
+            rgb: frame.data.to_vec(),
+        })
+    }
+
+    fn stop(mut self) -> CameraStatus {
+        self.worker_stop.store(true, Ordering::Relaxed);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.stop();
+        }
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+        CameraStatus {
+            camera_id: self.source_info.id.to_string(),
+            state: "stopped".to_owned(),
+            fps: Some(0.0),
+            error: None,
+        }
+    }
+}
+
+impl Drop for EngineCapture {
+    fn drop(&mut self) {
+        self.worker_stop.store(true, Ordering::Relaxed);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.stop();
+        }
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
+}
+
 #[async_trait]
 impl EngineControl for EngineApp {
     async fn status(&self) -> EngineStatus {
@@ -301,41 +497,54 @@ impl EngineControl for EngineApp {
         let _ = self.started_at.elapsed();
         let _ = self.store.db_path();
         let _ = self.dispatcher.lock().await.is_some();
+        let capture = self.capture.lock().await;
+        let cameras = capture
+            .as_ref()
+            .map(|capture| vec![capture.status()])
+            .unwrap_or_else(|| {
+                vec![CameraStatus {
+                    camera_id: "dev-camera".to_owned(),
+                    state: "idle".to_owned(),
+                    fps: Some(0.0),
+                    error: None,
+                }]
+            });
+        let stages = capture
+            .as_ref()
+            .and_then(|capture| {
+                capture
+                    .latest_hands
+                    .lock()
+                    .ok()
+                    .and_then(|hands| hands.as_ref().map(|hands| hands.timings))
+            })
+            .map(|timings| {
+                vec![
+                    StageLatency {
+                        stage: "capture".to_owned(),
+                        p50_ms: f64::from(timings.capture_ms),
+                        p95_ms: f64::from(timings.capture_ms),
+                    },
+                    StageLatency {
+                        stage: "recognize".to_owned(),
+                        p50_ms: f64::from(timings.total_ms),
+                        p95_ms: f64::from(timings.total_ms),
+                    },
+                    StageLatency {
+                        stage: "dispatch".to_owned(),
+                        p50_ms: 0.0,
+                        p95_ms: 0.0,
+                    },
+                ]
+            })
+            .unwrap_or_else(default_stages);
         EngineStatus {
             paused,
             paused_until: None,
-            cameras: vec![CameraStatus {
-                camera_id: "dev-camera".to_owned(),
-                state: if self.runtime.fake_camera.is_some()
-                    || self.runtime.fake_landmarks.is_some()
-                {
-                    "running"
-                } else {
-                    "idle"
-                }
-                .to_owned(),
-                fps: Some(30.0),
-                error: None,
-            }],
+            cameras,
             ha: self.ha_status_dto().await,
-            stages: vec![
-                StageLatency {
-                    stage: "capture".to_owned(),
-                    p50_ms: 0.0,
-                    p95_ms: 0.0,
-                },
-                StageLatency {
-                    stage: "recognize".to_owned(),
-                    p50_ms: 0.0,
-                    p95_ms: 0.0,
-                },
-                StageLatency {
-                    stage: "dispatch".to_owned(),
-                    p50_ms: 0.0,
-                    p95_ms: 0.0,
-                },
-            ],
-            camera_permission: Some("not_requested".to_owned()),
+            stages,
+            camera_permission: Some(permission_status_str(camera_permission_status()).to_owned()),
         }
     }
 
@@ -350,47 +559,66 @@ impl EngineControl for EngineApp {
     }
 
     async fn available_cameras(&self) -> Vec<AvailableCamera> {
-        vec![AvailableCamera {
-            device_ref: self.runtime.fake_camera.as_ref().map_or_else(
-                || "dev-camera".to_owned(),
-                |path| path.display().to_string(),
-            ),
-            name: if self.runtime.fake_camera.is_some() {
-                "Fake camera"
-            } else {
-                "Dev camera"
-            }
-            .to_owned(),
-            kind: if self.runtime.fake_camera.is_some() {
-                "file"
-            } else {
-                "local"
-            }
-            .to_owned(),
-            formats: vec![CameraFormat {
-                width: 1280,
-                height: 720,
-                fps: 30,
-                format: "rgb".to_owned(),
-            }],
-        }]
+        if let Some(path) = &self.runtime.fake_camera {
+            return vec![available_camera(
+                path.display().to_string(),
+                "Fake camera".to_owned(),
+                SourceKind::File,
+            )];
+        }
+        match LocalCameraSource::enumerate() {
+            Ok(devices) if !devices.is_empty() => devices
+                .into_iter()
+                .map(|device| available_camera(device.stable_id, device.name, SourceKind::Local))
+                .collect(),
+            _ => vec![available_camera(
+                "0".to_owned(),
+                "Local camera".to_owned(),
+                SourceKind::Local,
+            )],
+        }
     }
 
     async fn start_camera(&self, camera_id: &str) -> CameraStatus {
-        CameraStatus {
-            camera_id: camera_id.to_owned(),
-            state: "running".to_owned(),
-            fps: Some(30.0),
-            error: None,
+        let result = if let Some(path) = self.runtime.fake_camera.as_deref() {
+            self.start_file_camera(path).await
+        } else {
+            let source_id = CameraId::from_str(camera_id).unwrap_or_else(|_| CameraId::new());
+            let index = camera_id.parse::<u32>().unwrap_or(0);
+            match LocalCameraSource::open(LocalCameraOptions {
+                camera_id: source_id,
+                index,
+                width: 1280,
+                height: 720,
+                fps: 30,
+                mirror: true,
+            }) {
+                Ok(source) => self.start_source(source).await,
+                Err(err) => Err(anyhow::Error::from(err)),
+            }
+        };
+        match result {
+            Ok(status) => status,
+            Err(err) => CameraStatus {
+                camera_id: camera_id.to_owned(),
+                state: "error".to_owned(),
+                fps: Some(0.0),
+                error: Some(err.to_string()),
+            },
         }
     }
 
     async fn stop_camera(&self, camera_id: &str) -> CameraStatus {
-        CameraStatus {
-            camera_id: camera_id.to_owned(),
-            state: "stopped".to_owned(),
-            fps: Some(0.0),
-            error: None,
+        let mut capture = self.capture.lock().await;
+        if let Some(capture) = capture.take() {
+            capture.stop()
+        } else {
+            CameraStatus {
+                camera_id: camera_id.to_owned(),
+                state: "stopped".to_owned(),
+                fps: Some(0.0),
+                error: None,
+            }
         }
     }
 }
@@ -850,6 +1078,15 @@ impl HaGateway for EngineApp {
 #[async_trait]
 impl PreviewSource for EngineApp {
     async fn next_frame(&self, _camera_id: &str) -> Option<PreviewFrame> {
+        if let Some(frame) = self
+            .capture
+            .lock()
+            .await
+            .as_ref()
+            .and_then(EngineCapture::latest_preview)
+        {
+            return Some(frame);
+        }
         let width = 320;
         let height = 180;
         let mut rgb = Vec::with_capacity(width * height * 3);
@@ -865,6 +1102,89 @@ impl PreviewSource for EngineApp {
             height: height as u32,
             rgb,
         })
+    }
+}
+
+fn build_hand_pipeline(model_root: Option<&Path>, mirrored: bool) -> HandPipelineImpl {
+    let Some(model_root) = model_root else {
+        return HandPipelineImpl::without_models().with_mirrored_input(mirrored);
+    };
+    match ModelSet::load(model_root)
+        .and_then(|models| HandPipelineImpl::new(models, EpChoice::default()))
+    {
+        Ok(pipeline) => pipeline.with_mirrored_input(mirrored),
+        Err(err) => {
+            tracing::warn!(
+                error = %err,
+                model_root = %model_root.display(),
+                "vision models unavailable; using model-free hand pipeline"
+            );
+            HandPipelineImpl::without_models().with_mirrored_input(mirrored)
+        }
+    }
+}
+
+fn model_manifest_path() -> Option<PathBuf> {
+    let path = PathBuf::from("models/manifest.toml");
+    path.exists().then_some(path)
+}
+
+fn capture_status_parts(status: CaptureStatus) -> (String, Option<String>) {
+    match status {
+        CaptureStatus::Running => ("running".to_owned(), None),
+        CaptureStatus::Disconnected => ("reconnecting".to_owned(), None),
+        CaptureStatus::Stopped => ("stopped".to_owned(), None),
+        CaptureStatus::Failed(message) => ("error".to_owned(), Some(message)),
+    }
+}
+
+fn permission_status_str(status: CameraPermissionStatus) -> &'static str {
+    match status {
+        CameraPermissionStatus::Authorized => "authorized",
+        CameraPermissionStatus::NotAuthorized => "denied",
+        CameraPermissionStatus::Unknown => "unknown",
+    }
+}
+
+fn default_stages() -> Vec<StageLatency> {
+    vec![
+        StageLatency {
+            stage: "capture".to_owned(),
+            p50_ms: 0.0,
+            p95_ms: 0.0,
+        },
+        StageLatency {
+            stage: "recognize".to_owned(),
+            p50_ms: 0.0,
+            p95_ms: 0.0,
+        },
+        StageLatency {
+            stage: "dispatch".to_owned(),
+            p50_ms: 0.0,
+            p95_ms: 0.0,
+        },
+    ]
+}
+
+fn available_camera(device_ref: String, name: String, kind: SourceKind) -> AvailableCamera {
+    AvailableCamera {
+        device_ref,
+        name,
+        kind: source_kind_str(kind).to_owned(),
+        formats: vec![CameraFormat {
+            width: 1280,
+            height: 720,
+            fps: 30,
+            format: "rgb".to_owned(),
+        }],
+    }
+}
+
+fn source_kind_str(kind: SourceKind) -> &'static str {
+    match kind {
+        SourceKind::Local => "local",
+        SourceKind::Rtsp => "rtsp",
+        SourceKind::File => "file",
     }
 }
 

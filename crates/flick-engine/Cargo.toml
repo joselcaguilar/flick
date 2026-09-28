@@ -19,6 +19,8 @@ path = "src/main.rs"
 [dependencies]
 flick-api.workspace = true
 flick-core.workspace = true
+flick-capture.workspace = true
+flick-vision.workspace = true
 flick-gestures.workspace = true
 flick-ha.workspace = true
 flick-spatial.workspace = true

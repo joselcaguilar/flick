@@ -193,7 +193,7 @@ impl ModelEntry {
     pub fn is_selected(&self) -> bool {
         self.conversion_status
             .as_deref()
-            .is_none_or(|status| status.starts_with("selected"))
+            .is_none_or(|status| matches!(status, "selected" | "selected_ota_only"))
     }
 }
 

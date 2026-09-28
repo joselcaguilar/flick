@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "xtask"]
+members = ["crates/*", "xtask", "apps/desktop/src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
@@ -25,10 +25,12 @@ strip = "symbols"
 
 [workspace.dependencies]
 flick-api = { path = "crates/flick-api" }
+flick-capture = { path = "crates/flick-capture" }
 flick-core = { path = "crates/flick-core" }
 flick-gestures = { path = "crates/flick-gestures" }
 flick-ha = { path = "crates/flick-ha" }
 flick-spatial = { path = "crates/flick-spatial" }
+flick-vision = { path = "crates/flick-vision" }
 flick-store = { path = "crates/flick-store" }
 
 # core/runtime
@@ -90,6 +92,20 @@ base64 = "0.23.1"
 zstd = "0.14.0"
 tar = "0.4.46"
 semver = { version = "1.0.28", features = ["serde"] }
+
+# desktop shell
+tauri = { version = "2.12.0", features = ["custom-protocol", "image-png", "macos-private-api", "tray-icon"] }
+tauri-build = "2.7.0"
+tauri-plugin-autostart = "2.6.0"
+tauri-plugin-deep-link = "2.5.0"
+tauri-plugin-global-shortcut = "2.4.0"
+tauri-plugin-notification = "2.5.0"
+tauri-plugin-opener = "2.6.0"
+tauri-plugin-shell = "2.4.0"
+tauri-plugin-single-instance = { version = "2.5.0", features = ["deep-link"] }
+tauri-plugin-updater = "2.13.0"
+tauri-plugin-window-state = "2.5.0"
+getrandom = "0.3.4"
 
 # tests/dev
 proptest = "1.11.0"
