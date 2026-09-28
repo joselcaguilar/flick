@@ -253,7 +253,8 @@ export function useCheckUpdates() {
 export function useInstallUpdate() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: { kind: "app" | "pack"; id?: string }) => api.post<void>("/api/v1/updates/install", body),
+    mutationFn: (body: { kind: "app" | "pack"; id?: string }) =>
+      api.post<void>("/api/v1/updates/install", body),
     onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.updates }),
   });
 }
@@ -261,7 +262,8 @@ export function useInstallUpdate() {
 export function useRollbackUpdate() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: { kind: "app" | "pack"; id?: string }) => api.post<void>("/api/v1/updates/rollback", body),
+    mutationFn: (body: { kind: "app" | "pack"; id?: string }) =>
+      api.post<void>("/api/v1/updates/rollback", body),
     onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.updates }),
   });
 }
@@ -275,7 +277,8 @@ export function useExportGesturePack() {
 
 export function usePreviewGesturePack() {
   return useMutation({
-    mutationFn: (pack: Record<string, unknown>) => api.post<GesturePackPreview>("/api/v1/packs/import/preview", pack),
+    mutationFn: (pack: Record<string, unknown>) =>
+      api.post<GesturePackPreview>("/api/v1/packs/import/preview", pack),
   });
 }
 

@@ -7,8 +7,8 @@ export function TeachStepPlaceholder() {
         <Badge tone="accent">Step 5 slot</Badge>
         <h3>Teach a device</h3>
         <p>
-          Point at something in this room — like Ventilador dormitorio — and Flick will remember it.
-          The dedicated Teach component will mount here at merge time.
+          Point at something in this room — like Ventilador dormitorio — and Flick will remember it. The
+          dedicated Teach component will mount here at merge time.
         </p>
       </div>
       <div className="teach-slot-preview" aria-hidden="true">

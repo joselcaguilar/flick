@@ -1,5 +1,4 @@
 import { type ChangeEvent, useMemo, useRef, useState } from "react";
-import type { Gesture } from "../../api/types";
 import {
   useCommitGesturePack,
   useExportGesturePack,
@@ -7,6 +6,7 @@ import {
   usePatchGesture,
   usePreviewGesturePack,
 } from "../../api/hooks";
+import type { Gesture } from "../../api/types";
 import { GestureGlyph } from "../../components/domain";
 import { Badge, Button, GlassPanel, ListRow, Switch, TypeChip } from "../../components/ui";
 import { asPercent } from "../../lib/utils";
@@ -38,11 +38,16 @@ function GestureCard({
   pending: boolean;
 }) {
   const type = gestureType(gesture);
-  const tuned = gesture.source === "builtin" && ["builtin.circle_cw", "builtin.two_hand_separate"].includes(gesture.id);
+  const tuned =
+    gesture.source === "builtin" && ["builtin.circle_cw", "builtin.two_hand_separate"].includes(gesture.id);
   return (
     <article className="gesture-card" data-disabled={!gesture.enabled}>
       <label className="gesture-select">
-        <input type="checkbox" checked={checked} onChange={(event) => onCheckedChange(event.target.checked)} />
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => onCheckedChange(event.target.checked)}
+        />
         <span>Select for export</span>
       </label>
       <div className="gesture-card-main">
@@ -66,7 +71,9 @@ function GestureCard({
       {gesture.source === "custom" ? (
         <div className="gesture-quality">
           <span>Accuracy {gesture.accuracy == null ? "—" : asPercent(gesture.accuracy)}</span>
-          <span>Distinctiveness {gesture.distinctiveness == null ? "—" : asPercent(gesture.distinctiveness)}</span>
+          <span>
+            Distinctiveness {gesture.distinctiveness == null ? "—" : asPercent(gesture.distinctiveness)}
+          </span>
         </div>
       ) : (
         <p className="gesture-fallback-note">Animated glyph · static fallback under Reduce Motion.</p>
@@ -133,10 +140,15 @@ export function GesturesLibraryRoute() {
   const previewPack = usePreviewGesturePack();
   const commitPack = useCommitGesturePack();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set(["builtin.circle_cw", "builtin.two_hand_separate"]));
+  const [selected, setSelected] = useState<Set<string>>(
+    new Set(["builtin.circle_cw", "builtin.two_hand_separate"]),
+  );
   const [packStatus, setPackStatus] = useState<string | null>(null);
   const allGestures = gestures.data ?? [];
-  const builtIns = useMemo(() => allGestures.filter((gesture) => gesture.source === "builtin"), [allGestures]);
+  const builtIns = useMemo(
+    () => allGestures.filter((gesture) => gesture.source === "builtin"),
+    [allGestures],
+  );
   const custom = useMemo(() => allGestures.filter((gesture) => gesture.source === "custom"), [allGestures]);
 
   function setSelectedGesture(id: string, checked: boolean) {
@@ -191,8 +203,8 @@ export function GesturesLibraryRoute() {
         <p className="route-path">Gestures / Library</p>
         <h1 id="screen-title">Every flick Flick understands.</h1>
         <p>
-          Built-ins work without training. Custom gestures keep their takes, quality and thresholds local, and packs
-          share gestures without Home Assistant identifiers.
+          Built-ins work without training. Custom gestures keep their takes, quality and thresholds local, and
+          packs share gestures without Home Assistant identifiers.
         </p>
       </div>
 
@@ -202,13 +214,24 @@ export function GesturesLibraryRoute() {
           <span>Choose gestures for a portable .flickpack.json.</span>
         </div>
         <div className="gesture-toolbar-actions">
-          <Button variant="primary" onClick={exportSelected} disabled={selected.size === 0} loading={exportPack.isPending}>
+          <Button
+            variant="primary"
+            onClick={exportSelected}
+            disabled={selected.size === 0}
+            loading={exportPack.isPending}
+          >
             Export selected
           </Button>
-          <Button variant="secondary" onClick={() => fileRef.current?.click()} loading={commitPack.isPending || previewPack.isPending}>
+          <Button
+            variant="secondary"
+            onClick={() => fileRef.current?.click()}
+            loading={commitPack.isPending || previewPack.isPending}
+          >
             Import pack
           </Button>
-          <a className="ui-button ui-button-ghost ui-button-md" href="/gestures/new">Record new gesture</a>
+          <a className="ui-button ui-button-ghost ui-button-md" href="/gestures/new">
+            Record new gesture
+          </a>
           <input
             ref={fileRef}
             className="visually-hidden-file"
@@ -219,7 +242,11 @@ export function GesturesLibraryRoute() {
         </div>
       </GlassPanel>
 
-      {packStatus ? <p className="gestures-status" role="status">{packStatus}</p> : null}
+      {packStatus ? (
+        <p className="gestures-status" role="status">
+          {packStatus}
+        </p>
+      ) : null}
 
       <GestureSection
         title="Built-in"
@@ -250,7 +277,11 @@ export function GesturesLibraryRoute() {
           <ListRow
             title="No custom gestures yet"
             description="Record a gesture in Studio, then train and save it locally."
-            trailing={<a className="ui-button ui-button-primary ui-button-sm" href="/gestures/new">Record</a>}
+            trailing={
+              <a className="ui-button ui-button-primary ui-button-sm" href="/gestures/new">
+                Record
+              </a>
+            }
           />
         </GlassPanel>
       ) : null}

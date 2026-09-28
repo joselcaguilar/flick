@@ -38,7 +38,9 @@ const mockHand: HandObservationEvent = {
 
 function errorMessage(error: unknown) {
   const problem = (error as { problem?: { title?: string; detail?: string } }).problem;
-  return problem?.detail ?? problem?.title ?? (error instanceof Error ? error.message : "Something went wrong.");
+  return (
+    problem?.detail ?? problem?.title ?? (error instanceof Error ? error.message : "Something went wrong.")
+  );
 }
 
 function cameraStateCopy(permission: CameraPermission) {
@@ -164,13 +166,25 @@ export function OnboardingRoute() {
               </p>
             </div>
             <div className="onboarding-promises">
-              <PromiseItem icon="⌂" title="Private" body="Video stays local; Flick stores hand points only." />
+              <PromiseItem
+                icon="⌂"
+                title="Private"
+                body="Video stays local; Flick stores hand points only."
+              />
               <PromiseItem icon="⚡" title="Instant" body="Point, lock, flick, then see the result." />
-              <PromiseItem icon="✋" title="No training needed" body="Built-ins work first; custom gestures come later." />
+              <PromiseItem
+                icon="✋"
+                title="No training needed"
+                body="Built-ins work first; custom gestures come later."
+              />
             </div>
             <div className="onboarding-actions">
-              <Button variant="primary" onClick={next}>Get started</Button>
-              <Button variant="ghost" onClick={() => setStep("ha")}>Skip camera tour</Button>
+              <Button variant="primary" onClick={next}>
+                Get started
+              </Button>
+              <Button variant="ghost" onClick={() => setStep("ha")}>
+                Skip camera tour
+              </Button>
             </div>
           </GlassPanel>
         ) : null}
@@ -182,26 +196,31 @@ export function OnboardingRoute() {
                 <Badge tone={cameraCopy.tone}>{cameraPermission.replace("_", " ")}</Badge>
                 <h2>Allow camera access.</h2>
                 <p>{cameraCopy.body}</p>
-                <label className="onboarding-field">
+                <div className="onboarding-field">
                   <span>Camera</span>
                   <Select
                     label="Camera"
                     value={cameraRef}
                     onValueChange={setCameraRef}
-                    items={(cameras.data ?? []).map((camera) => ({ value: camera.device_ref, label: camera.name }))}
+                    items={(cameras.data ?? []).map((camera) => ({
+                      value: camera.device_ref,
+                      label: camera.name,
+                    }))}
                   />
-                </label>
-                <div className="permission-grid" aria-label="Camera permission states">
-                  {(["authorized", "not_determined", "denied", "restricted"] as CameraPermission[]).map((state) => (
-                    <button
-                      key={state}
-                      type="button"
-                      data-active={cameraPermission === state}
-                      onClick={() => setCameraPermission(state)}
-                    >
-                      {state.replace("_", " ")}
-                    </button>
-                  ))}
+                </div>
+                <div className="permission-grid">
+                  {(["authorized", "not_determined", "denied", "restricted"] as CameraPermission[]).map(
+                    (state) => (
+                      <button
+                        key={state}
+                        type="button"
+                        data-active={cameraPermission === state}
+                        onClick={() => setCameraPermission(state)}
+                      >
+                        {state.replace("_", " ")}
+                      </button>
+                    ),
+                  )}
                 </div>
               </div>
               <div>
@@ -212,7 +231,10 @@ export function OnboardingRoute() {
                 />
                 <div className="preview-overlay-card onboarding-preview-card">
                   <DevicePill name="Ventilador dormitorio" domain="fan" detail="demo target" />
-                  <ConfidenceMeter value={cameraPermission === "authorized" ? 0.92 : 0.12} label="Hand tracked" />
+                  <ConfidenceMeter
+                    value={cameraPermission === "authorized" ? 0.92 : 0.12}
+                    label="Hand tracked"
+                  />
                 </div>
               </div>
             </div>
@@ -224,7 +246,9 @@ export function OnboardingRoute() {
               >
                 {cameraPermission === "authorized" ? "Continue" : "Allow camera"}
               </Button>
-              <Button variant="ghost" onClick={() => setCameraPermission("authorized")}>Preview granted state</Button>
+              <Button variant="ghost" onClick={() => setCameraPermission("authorized")}>
+                Preview granted state
+              </Button>
             </div>
           </GlassPanel>
         ) : null}
@@ -263,9 +287,13 @@ export function OnboardingRoute() {
                   void connectHomeAssistant();
                 }}
               >
-                <label className="onboarding-field">
+                <label className="onboarding-field" htmlFor="onboarding-ha-url">
                   <span>Home Assistant URL</span>
-                  <Input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} />
+                  <Input
+                    id="onboarding-ha-url"
+                    value={baseUrl}
+                    onChange={(event) => setBaseUrl(event.target.value)}
+                  />
                 </label>
                 <div className="token-guide">
                   <a href={`${baseUrl}/profile/security`} target="_blank" rel="noreferrer">
@@ -277,24 +305,37 @@ export function OnboardingRoute() {
                     <li>Paste it here; Flick verifies before saving.</li>
                   </ol>
                 </div>
-                <label className="onboarding-field">
+                <label className="onboarding-field" htmlFor="onboarding-ha-token">
                   <span>Long-lived access token</span>
                   <Input
+                    id="onboarding-ha-token"
                     value={token}
                     onChange={(event) => setToken(event.target.value)}
                     placeholder="Paste token"
                     type="password"
                   />
                 </label>
-                <div className="error-presets" aria-label="Try error states">
-                  <button type="button" onClick={() => setBaseUrl("http://offline.local:8123")}>Unreachable</button>
-                  <button type="button" onClick={() => setToken("invalid")}>Invalid token</button>
-                  <button type="button" onClick={() => setBaseUrl("https://self-signed.local:8123")}>TLS</button>
+                <div className="error-presets">
+                  <button type="button" onClick={() => setBaseUrl("http://offline.local:8123")}>
+                    Unreachable
+                  </button>
+                  <button type="button" onClick={() => setToken("invalid")}>
+                    Invalid token
+                  </button>
+                  <button type="button" onClick={() => setBaseUrl("https://self-signed.local:8123")}>
+                    TLS
+                  </button>
                 </div>
-                {haError ? <p className="inline-error" role="alert">{haError}</p> : null}
+                {haError ? (
+                  <p className="inline-error" role="alert">
+                    {haError}
+                  </p>
+                ) : null}
                 {haConnected ? <p className="inline-success">Connected to Home (2026.9).</p> : null}
                 <div className="onboarding-actions">
-                  <Button variant="primary" loading={connect.isPending} type="submit">Connect</Button>
+                  <Button variant="primary" loading={connect.isPending} type="submit">
+                    Connect
+                  </Button>
                   <Button
                     variant="ghost"
                     type="button"
@@ -306,7 +347,12 @@ export function OnboardingRoute() {
                   >
                     Skip HA for demo mode
                   </Button>
-                  <Button variant="secondary" type="button" onClick={next} disabled={!haConnected && !demoMode}>
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    onClick={next}
+                    disabled={!haConnected && !demoMode}
+                  >
                     Continue
                   </Button>
                 </div>
@@ -319,7 +365,9 @@ export function OnboardingRoute() {
           <GlassPanel className="onboarding-screen try-screen">
             <div className="onboarding-split">
               <div>
-                <Badge tone={demoMode ? "warning" : "accent"}>{demoMode ? "HUD only" : "Real call ready"}</Badge>
+                <Badge tone={demoMode ? "warning" : "accent"}>
+                  {demoMode ? "HUD only" : "Real call ready"}
+                </Badge>
                 <h2>Try your first flick.</h2>
                 <p>
                   Suggested first mapping: thumbs up toggles a light. In demo mode, Flick shows the exact HUD
@@ -328,7 +376,11 @@ export function OnboardingRoute() {
                 <ListRow
                   leading={<GestureGlyph name="thumbs-up" />}
                   title="Thumbs up → toggle a light"
-                  description={selectedLight ? `${selectedLight.name} · ${selectedLight.entity_id}` : "Light picker loading"}
+                  description={
+                    selectedLight
+                      ? `${selectedLight.name} · ${selectedLight.entity_id}`
+                      : "Light picker loading"
+                  }
                   trailing={<Badge tone="accent">global</Badge>}
                 />
                 <div className="onboarding-actions">
@@ -341,7 +393,9 @@ export function OnboardingRoute() {
                   >
                     Try it
                   </Button>
-                  <Button variant="ghost" onClick={next}>I saw it work</Button>
+                  <Button variant="ghost" onClick={next}>
+                    I saw it work
+                  </Button>
                 </div>
               </div>
               <div className="hud-demo" data-state={tryState}>
@@ -378,8 +432,12 @@ export function OnboardingRoute() {
               <TeachStepPlaceholder />
             </div>
             <div className="onboarding-actions">
-              <Button variant="primary" onClick={next}>Continue</Button>
-              <Button variant="ghost" onClick={next}>Later</Button>
+              <Button variant="primary" onClick={next}>
+                Continue
+              </Button>
+              <Button variant="ghost" onClick={next}>
+                Later
+              </Button>
             </div>
           </GlassPanel>
         ) : null}
@@ -389,18 +447,31 @@ export function OnboardingRoute() {
             <div>
               <Badge tone="success">Ready</Badge>
               <h2>Stay in control.</h2>
-              <p>Flick can pause from the menu bar, require an arm gesture, and block sensitive devices by default.</p>
+              <p>
+                Flick can pause from the menu bar, require an arm gesture, and block sensitive devices by
+                default.
+              </p>
             </div>
             <div className="control-grid">
               <PromiseItem icon="⌥" title="Pause instantly" body="Menu bar or ⌥⌘F pauses recognition." />
-              <PromiseItem icon="✋" title="Arm mode optional" body="Require a deliberate open-palm gesture first." />
-              <PromiseItem icon="🔒" title="Sensitive devices locked" body="Locks, alarms and garage doors need Safety enabled plus confirmation." />
+              <PromiseItem
+                icon="✋"
+                title="Arm mode optional"
+                body="Require a deliberate open-palm gesture first."
+              />
+              <PromiseItem
+                icon="🔒"
+                title="Sensitive devices locked"
+                body="Locks, alarms and garage doors need Safety enabled plus confirmation."
+              />
             </div>
             <div className="onboarding-actions">
               <Button variant="primary" loading={patchSettings.isPending} onClick={() => void finish()}>
                 Finish
               </Button>
-              {patchSettings.isSuccess ? <span className="inline-success">Flick is watching from the menu bar.</span> : null}
+              {patchSettings.isSuccess ? (
+                <span className="inline-success">Flick is watching from the menu bar.</span>
+              ) : null}
             </div>
           </GlassPanel>
         ) : null}

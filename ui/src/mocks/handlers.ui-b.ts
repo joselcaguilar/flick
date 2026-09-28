@@ -1,5 +1,5 @@
 import { HttpResponse, http } from "msw";
-import { jsonObject, type ActivityItem, type Gesture, type SettingsMap } from "../api/types";
+import { type ActivityItem, type Gesture, jsonObject, type SettingsMap } from "../api/types";
 import { activityItems, classifierReport, gestures, haInstance, now, settings } from "./data";
 
 const api = "*/api/v1";
@@ -63,7 +63,7 @@ let mutableSettings: SettingsMap = {
   "general.language": "en",
 };
 let mutableGestures: Gesture[] = [...gestures, ...customGestures];
-let mutableActivity: ActivityItem[] = [
+const mutableActivity: ActivityItem[] = [
   ...activityItems,
   {
     id: "01K5Y8W2D7DBG1",
@@ -282,7 +282,12 @@ export const uiBHandlers = [
     const patch = (await request.json()) as SettingsMap;
     const errors = validateSettings(patch);
     if (Object.keys(errors).length > 0) {
-      return problem(422, "Invalid settings", "Some settings need attention before Flick can save them.", errors);
+      return problem(
+        422,
+        "Invalid settings",
+        "Some settings need attention before Flick can save them.",
+        errors,
+      );
     }
     mutableSettings = { ...mutableSettings, ...patch };
     return ok(mutableSettings);
@@ -311,7 +316,9 @@ export const uiBHandlers = [
   http.patch(`${api}/gestures/:id`, async ({ request, params }) => {
     const patch = (await request.json()) as Partial<Gesture>;
     const id = String(params.id);
-    mutableGestures = mutableGestures.map((gesture) => (gesture.id === id ? { ...gesture, ...patch } : gesture));
+    mutableGestures = mutableGestures.map((gesture) =>
+      gesture.id === id ? { ...gesture, ...patch } : gesture,
+    );
     return ok(mutableGestures.find((gesture) => gesture.id === id) ?? { ...gestures[0], id, ...patch });
   }),
   http.get(`${api}/activity`, ({ request }) => {
@@ -325,10 +332,18 @@ export const uiBHandlers = [
     const baseUrl = body.base_url ?? "";
     const token = body.token ?? "";
     if (baseUrl.includes("offline")) {
-      return problem(503, "Home Assistant unreachable", "Flick could not reach Home Assistant on this network.");
+      return problem(
+        503,
+        "Home Assistant unreachable",
+        "Flick could not reach Home Assistant on this network.",
+      );
     }
     if (baseUrl.startsWith("https://self-signed")) {
-      return problem(495, "TLS certificate needs review", "The certificate is self-signed. Trust it only if this is your Home Assistant.");
+      return problem(
+        495,
+        "TLS certificate needs review",
+        "The certificate is self-signed. Trust it only if this is your Home Assistant.",
+      );
     }
     if (token.toLowerCase().includes("invalid") || token.length < 8) {
       return problem(401, "Invalid token", "Home Assistant rejected that long-lived access token.");

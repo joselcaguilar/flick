@@ -6,9 +6,9 @@ import {
   useCreateGesture,
   useTrainClassifier,
 } from "../../api/hooks";
-import type { HandObservationEvent } from "../../events/types";
 import { ConfidenceMeter, GestureGlyph, PreviewCanvas } from "../../components/domain";
-import { Badge, Button, GlassPanel, Input, Select, SegmentedControl, TypeChip } from "../../components/ui";
+import { Badge, Button, GlassPanel, Input, SegmentedControl, Select, TypeChip } from "../../components/ui";
+import type { HandObservationEvent } from "../../events/types";
 import { asPercent } from "../../lib/utils";
 import "./styles.css";
 
@@ -28,11 +28,35 @@ const handSegments = [
 ];
 
 const trajectories: Record<StudioType, Array<Array<[number, number]>>> = {
-  static: [[[0.42, 0.58], [0.47, 0.5], [0.52, 0.47], [0.57, 0.5], [0.62, 0.58]]],
-  motion: [[[0.22, 0.72], [0.36, 0.36], [0.55, 0.6], [0.72, 0.28], [0.84, 0.56]]],
+  static: [
+    [
+      [0.42, 0.58],
+      [0.47, 0.5],
+      [0.52, 0.47],
+      [0.57, 0.5],
+      [0.62, 0.58],
+    ],
+  ],
+  motion: [
+    [
+      [0.22, 0.72],
+      [0.36, 0.36],
+      [0.55, 0.6],
+      [0.72, 0.28],
+      [0.84, 0.56],
+    ],
+  ],
   "two-hand": [
-    [[0.42, 0.45], [0.34, 0.45], [0.26, 0.45]],
-    [[0.58, 0.45], [0.66, 0.45], [0.74, 0.45]],
+    [
+      [0.42, 0.45],
+      [0.34, 0.45],
+      [0.26, 0.45],
+    ],
+    [
+      [0.58, 0.45],
+      [0.66, 0.45],
+      [0.74, 0.45],
+    ],
   ],
 };
 
@@ -52,7 +76,12 @@ function buildHand(offset = 0): HandObservationEvent {
 function TrajectoryGlyph({ type, index }: { type: StudioType; index: number }) {
   const paths = trajectories[type];
   return (
-    <svg className="trajectory-glyph" viewBox="0 0 100 72" role="img" aria-label={`${type} trajectory ${index + 1}`}>
+    <svg
+      className="trajectory-glyph"
+      viewBox="0 0 100 72"
+      role="img"
+      aria-label={`${type} trajectory ${index + 1}`}
+    >
       <title>{`${type} take ${index + 1}`}</title>
       {paths.map((path, pathIndex) => (
         <polyline
@@ -103,10 +132,13 @@ export function GestureStudioRoute() {
   useEffect(() => {
     if (countdown === 0 && phase === "countdown") {
       setPhase("recording");
-      const timer = window.setTimeout(() => {
-        setTakes((current) => current + 1);
-        setPhase("ready");
-      }, type === "static" ? 650 : 900);
+      const timer = window.setTimeout(
+        () => {
+          setTakes((current) => current + 1);
+          setPhase("ready");
+        },
+        type === "static" ? 650 : 900,
+      );
       return () => window.clearTimeout(timer);
     }
   }, [countdown, phase, type]);
@@ -147,8 +179,8 @@ export function GestureStudioRoute() {
         <p className="route-path">Gestures / Studio</p>
         <h1 id="screen-title">Record, train, prove it.</h1>
         <p>
-          Studio keeps the flow under {targetTime(type)}: name the gesture, record a handful of takes, train locally,
-          live-test against confusions, then save.
+          Studio keeps the flow under {targetTime(type)}: name the gesture, record a handful of takes, train
+          locally, live-test against confusions, then save.
         </p>
       </div>
 
@@ -156,12 +188,12 @@ export function GestureStudioRoute() {
         <GlassPanel className="studio-panel setup-panel">
           <Badge tone="accent">Setup</Badge>
           <h2>Name and first take</h2>
-          <label className="studio-field">
+          <label className="studio-field" htmlFor="studio-gesture-name">
             <span>Gesture name</span>
-            <Input value={name} onChange={(event) => setName(event.target.value)} />
+            <Input id="studio-gesture-name" value={name} onChange={(event) => setName(event.target.value)} />
           </label>
           <SegmentedControl label="Hand" value={hand} segments={handSegments} onChange={setHand} />
-          <label className="studio-field">
+          <div className="studio-field">
             <span>Camera</span>
             <Select
               label="Camera"
@@ -169,7 +201,7 @@ export function GestureStudioRoute() {
               onValueChange={setCameraId}
               items={(cameras.data ?? []).map((camera) => ({ value: camera.id, label: camera.name }))}
             />
-          </label>
+          </div>
           <div className="auto-type-card">
             <div>
               <TypeChip>auto type</TypeChip>
@@ -200,28 +232,43 @@ export function GestureStudioRoute() {
             <span>{type === "static" ? "1.5 s steady hold" : "2 s capture bar"}</span>
           </div>
           <div className="studio-actions">
-            <Button variant="primary" onClick={recordTake} loading={captureGesture.isPending || phase === "countdown"}>
+            <Button
+              variant="primary"
+              onClick={recordTake}
+              loading={captureGesture.isPending || phase === "countdown"}
+            >
               {takes ? "Record another take" : "Start countdown"}
             </Button>
-            <span>{takes}/{requiredTakes} takes captured</span>
+            <span>
+              {takes}/{requiredTakes} takes captured
+            </span>
           </div>
         </GlassPanel>
 
         <GlassPanel className="studio-panel takes-panel">
           <Badge tone="accent">Takes</Badge>
           <h2>Trajectory glyphs</h2>
-          <p>Static takes render a steady skeleton. Motion and two-hand takes render normalized paths only.</p>
+          <p>
+            Static takes render a steady skeleton. Motion and two-hand takes render normalized paths only.
+          </p>
           <div className="trajectory-grid">
             {Array.from({ length: Math.max(takes, requiredTakes) }, (_, index) => (
               <div key={index} className="trajectory-card" data-empty={index >= takes}>
-                {index < takes ? <TrajectoryGlyph type={type} index={index} /> : <span>Take {index + 1}</span>}
+                {index < takes ? (
+                  <TrajectoryGlyph type={type} index={index} />
+                ) : (
+                  <span>Take {index + 1}</span>
+                )}
                 <small>{index < takes ? "accepted" : "ready"}</small>
               </div>
             ))}
           </div>
           {takes >= 1 ? (
             <p className="coach-copy">
-              Coach: {type === "static" ? "Turn your hand slightly for diversity." : "Same shape, a bit faster or slower."}
+              Coach:{" "}
+              {type === "static"
+                ? "Turn your hand slightly for diversity."
+                : "Same shape, a bit faster or slower."}
             </p>
           ) : null}
         </GlassPanel>
@@ -229,8 +276,15 @@ export function GestureStudioRoute() {
         <GlassPanel className="studio-panel train-panel">
           <Badge tone={phase === "trained" || phase === "saved" ? "success" : "neutral"}>Train</Badge>
           <h2>Learn locally</h2>
-          <p>Training activates the new classifier in under one second and keeps relaxed-hand negatives local.</p>
-          <Button variant="primary" onClick={train} disabled={takes < requiredTakes} loading={trainClassifier.isPending}>
+          <p>
+            Training activates the new classifier in under one second and keeps relaxed-hand negatives local.
+          </p>
+          <Button
+            variant="primary"
+            onClick={train}
+            disabled={takes < requiredTakes}
+            loading={trainClassifier.isPending}
+          >
             Train classifier
           </Button>
           {trainClassifier.isSuccess ? <p className="studio-success">Learned in 0.3 s.</p> : null}
@@ -240,7 +294,9 @@ export function GestureStudioRoute() {
           <Badge tone="accent">Live test</Badge>
           <h2>Confidence and threshold</h2>
           <div className="test-meter">
-            <GestureGlyph name={type === "two-hand" ? "two-hand-separate" : type === "motion" ? "circle-cw" : "open-palm"} />
+            <GestureGlyph
+              name={type === "two-hand" ? "two-hand-separate" : type === "motion" ? "circle-cw" : "open-palm"}
+            />
             <ConfidenceMeter value={testConfidence} label={name || "New gesture"} />
           </div>
           <label className="studio-field">
@@ -270,12 +326,18 @@ export function GestureStudioRoute() {
         <GlassPanel className="studio-panel quality-panel">
           <Badge tone="warning">Quality report</Badge>
           <h2>Confusions</h2>
-          <p>Accuracy {report?.loto_accuracy == null ? "—" : asPercent(report.loto_accuracy)} leave-one-take-out.</p>
+          <p>
+            Accuracy {report?.loto_accuracy == null ? "—" : asPercent(report.loto_accuracy)}{" "}
+            leave-one-take-out.
+          </p>
           <div className="confusion-list">
             {(report?.confusions ?? []).map((confusion) => (
               <div key={`${confusion.gesture_id}-${confusion.with}`}>
                 <strong>{confusion.gesture_id.replace(/^custom\.|^builtin\./, "")}</strong>
-                <span>looks a bit like {confusion.with.replace(/^custom\.|^builtin\./, "")} · {asPercent(confusion.score)}</span>
+                <span>
+                  looks a bit like {confusion.with.replace(/^custom\.|^builtin\./, "")} ·{" "}
+                  {asPercent(confusion.score)}
+                </span>
               </div>
             ))}
             {!report?.confusions?.length ? (
@@ -292,11 +354,18 @@ export function GestureStudioRoute() {
           <Badge tone={savedName ? "success" : "neutral"}>Save</Badge>
           <h2>Use it next</h2>
           <p>Save opens the next decision: use it as a device verb or as a global gesture.</p>
-          <Button variant="primary" onClick={saveGesture} disabled={!trainClassifier.isSuccess} loading={createGesture.isPending}>
+          <Button
+            variant="primary"
+            onClick={saveGesture}
+            disabled={!trainClassifier.isSuccess}
+            loading={createGesture.isPending}
+          >
             Save gesture
           </Button>
           {savedName ? (
-            <p className="studio-success">Saved {savedName}. Next: map it to a device verb or global action.</p>
+            <p className="studio-success">
+              Saved {savedName}. Next: map it to a device verb or global action.
+            </p>
           ) : null}
         </GlassPanel>
       </div>

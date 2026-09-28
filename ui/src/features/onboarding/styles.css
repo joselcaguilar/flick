@@ -286,7 +286,11 @@
   border: 1px solid var(--flick-border);
   border-radius: var(--radius-xl);
   background:
-    radial-gradient(circle at 75% 24%, color-mix(in srgb, var(--flick-accent-mint) 24%, transparent), transparent 8rem),
+    radial-gradient(
+      circle at 75% 24%,
+      color-mix(in srgb, var(--flick-accent-mint) 24%, transparent),
+      transparent 8rem
+    ),
     color-mix(in srgb, var(--flick-surface) 70%, transparent);
 }
 

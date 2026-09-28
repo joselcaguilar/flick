@@ -1,5 +1,4 @@
 import { HttpResponse, http } from "msw";
-import { uiBHandlers } from "./handlers.ui-b";
 import {
   activityItems,
   anchors,
@@ -18,6 +17,7 @@ import {
   status,
   updates,
 } from "./data";
+import { uiBHandlers } from "./handlers.ui-b";
 
 const api = "*/api/v1";
 let mutableSettings = { ...settings };

@@ -4,7 +4,7 @@ import type { ActivityItem } from "../../api/types";
 import { GestureGlyph } from "../../components/domain";
 import { Badge, Button, GlassPanel, Select, Switch } from "../../components/ui";
 import { asPercent, formatTime } from "../../lib/utils";
-import { reasonCopy, suppressionReasonCopy, suppressionReasonOrder } from "./reasons";
+import { reasonCopy, suppressionReasonOrder } from "./reasons";
 import "./styles.css";
 
 const statusItems = [
@@ -38,16 +38,34 @@ function latencyParts(item: ActivityItem) {
   ];
 }
 
-function ActivityRow({ item, selected, onSelect }: { item: ActivityItem; selected: boolean; onSelect: () => void }) {
+function ActivityRow({
+  item,
+  selected,
+  onSelect,
+}: {
+  item: ActivityItem;
+  selected: boolean;
+  onSelect: () => void;
+}) {
   const parts = latencyParts(item);
   return (
     <button type="button" className="activity-row" data-selected={selected} onClick={onSelect}>
       <span className="activity-time">{formatTime(item.ts)}</span>
       <span className="activity-gesture">
-        <GestureGlyph name={item.gesture_id?.includes("circle") ? "circle-cw" : item.gesture_id?.includes("two") ? "two-hand-separate" : "thumbs-up"} />
+        <GestureGlyph
+          name={
+            item.gesture_id?.includes("circle")
+              ? "circle-cw"
+              : item.gesture_id?.includes("two")
+                ? "two-hand-separate"
+                : "thumbs-up"
+          }
+        />
         <span>
           <strong>{item.gesture_name ?? item.action_summary ?? "Activity"}</strong>
-          <small>{item.confidence == null ? "confidence —" : `${asPercent(item.confidence)} confidence`}</small>
+          <small>
+            {item.confidence == null ? "confidence —" : `${asPercent(item.confidence)} confidence`}
+          </small>
         </span>
       </span>
       <span>
@@ -55,7 +73,9 @@ function ActivityRow({ item, selected, onSelect }: { item: ActivityItem; selecte
         <small>{item.mapping_id ?? "No mapping"}</small>
       </span>
       <Badge tone={statusTone(item.status)}>{item.status}</Badge>
-      <span className="latency-stack" title={parts.join(" · ")}>{parts.join(" · ")}</span>
+      <span className="latency-stack" title={parts.join(" · ")}>
+        {parts.join(" · ")}
+      </span>
     </button>
   );
 }
@@ -74,7 +94,9 @@ export function ActivityRoute() {
   const [gesture, setGesture] = useState("all");
   const [mapping, setMapping] = useState("all");
   const [timeRange, setTimeRange] = useState("all");
-  const query = useActivity(status === "all" ? "?limit=50" : `?limit=50&status=${encodeURIComponent(status)}`);
+  const query = useActivity(
+    status === "all" ? "?limit=50" : `?limit=50&status=${encodeURIComponent(status)}`,
+  );
   const gestures = useGestures();
   const mappings = useMappings();
   const settings = useSettings();
@@ -95,7 +117,17 @@ export function ActivityRoute() {
   const debugEnabled = Boolean(settings.data?.["debug.log_suppressed"]);
 
   function exportCsv() {
-    const header = ["time", "status", "gesture", "mapping", "action", "reason", "detect_ms", "dispatch_ms", "ha_ms"];
+    const header = [
+      "time",
+      "status",
+      "gesture",
+      "mapping",
+      "action",
+      "reason",
+      "detect_ms",
+      "dispatch_ms",
+      "ha_ms",
+    ];
     const rows = filtered.map((item) => [
       item.ts,
       item.status,
@@ -124,8 +156,8 @@ export function ActivityRoute() {
         <p className="route-path">Activity / Why didn't it fire?</p>
         <h1 id="screen-title">Every outcome, explainable.</h1>
         <p>
-          See fired actions, suppressed gestures and the detect → dispatch → Home Assistant latency chain. Debug mode
-          logs one plain-English reason per suppressed candidate.
+          See fired actions, suppressed gestures and the detect → dispatch → Home Assistant latency chain.
+          Debug mode logs one plain-English reason per suppressed candidate.
         </p>
       </div>
 
@@ -135,16 +167,24 @@ export function ActivityRoute() {
           value={gesture}
           onValueChange={setGesture}
           label="Gesture"
-          items={[{ value: "all", label: "All gestures" }, ...(gestures.data ?? []).map((item) => ({ value: item.id, label: item.name }))]}
+          items={[
+            { value: "all", label: "All gestures" },
+            ...(gestures.data ?? []).map((item) => ({ value: item.id, label: item.name })),
+          ]}
         />
         <Select
           value={mapping}
           onValueChange={setMapping}
           label="Mapping"
-          items={[{ value: "all", label: "All mappings" }, ...(mappings.data ?? []).map((item) => ({ value: item.id, label: item.name }))]}
+          items={[
+            { value: "all", label: "All mappings" },
+            ...(mappings.data ?? []).map((item) => ({ value: item.id, label: item.name })),
+          ]}
         />
         <Select value={timeRange} onValueChange={setTimeRange} label="Time range" items={timeItems} />
-        <Button variant="secondary" onClick={exportCsv}>Export CSV</Button>
+        <Button variant="secondary" onClick={exportCsv}>
+          Export CSV
+        </Button>
       </GlassPanel>
 
       <div className="activity-layout">
@@ -156,7 +196,7 @@ export function ActivityRoute() {
             </div>
             <span>Latency breakdown appears in every row.</span>
           </div>
-          <div className="activity-table" role="table" aria-label="Activity">
+          <div className="activity-table">
             {filtered.map((item) => (
               <ActivityRow
                 key={item.id}
@@ -177,7 +217,9 @@ export function ActivityRoute() {
             <Switch
               checked={debugEnabled}
               aria-label="Enable suppressed gesture logging"
-              onCheckedChange={(checked) => void patchSettings.mutateAsync({ "debug.log_suppressed": checked })}
+              onCheckedChange={(checked) =>
+                void patchSettings.mutateAsync({ "debug.log_suppressed": checked })
+              }
             />
           </div>
 
@@ -185,14 +227,20 @@ export function ActivityRoute() {
             <div className="selected-debug-card">
               <Badge tone={statusTone(selected.status)}>{selected.status}</Badge>
               <h3>{selected.action_summary ?? selected.gesture_name ?? "Selected activity"}</h3>
-              <p>{selected.reason ? reasonCopy(selected) : (selected.message ?? "No suppression — action reached Home Assistant.")}</p>
+              <p>
+                {selected.reason
+                  ? reasonCopy(selected)
+                  : (selected.message ?? "No suppression — action reached Home Assistant.")}
+              </p>
               <div className="latency-grid">
                 {latencyParts(selected).map((part) => (
                   <span key={part}>{part}</span>
                 ))}
               </div>
               {selected.reason === "below_threshold" ? (
-                <Button variant="ghost" size="sm">Lower threshold for this gesture to 0.65</Button>
+                <Button variant="ghost" size="sm">
+                  Lower threshold for this gesture to 0.65
+                </Button>
               ) : null}
             </div>
           ) : null}
@@ -207,7 +255,10 @@ export function ActivityRoute() {
             </div>
             <div className="debug-aliases">
               <strong>Compatibility aliases</strong>
-              <span>low_confidence → below_threshold · sensitive_blocked → blocked_domain · hand_too_far → too_small</span>
+              <span>
+                low_confidence → below_threshold · sensitive_blocked → blocked_domain · hand_too_far →
+                too_small
+              </span>
             </div>
           </div>
         </GlassPanel>
