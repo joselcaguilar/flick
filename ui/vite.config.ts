@@ -8,7 +8,7 @@ export default defineConfig({
   server: {
     port: 5173,
     fs: {
-      allow: [resolve(__dirname, "..")],
+      allow: [resolve(import.meta.dirname, "..")],
     },
   },
   preview: {
@@ -18,8 +18,8 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        app: resolve(__dirname, "index.html"),
-        hud: resolve(__dirname, "hud.html"),
+        app: resolve(import.meta.dirname, "index.html"),
+        hud: resolve(import.meta.dirname, "hud.html"),
       },
     },
   },
