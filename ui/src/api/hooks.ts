@@ -24,7 +24,11 @@ import type {
   RealignSession,
   SettingsMap,
   SettingsPatch,
+  TeachCommitResponse,
+  TeachLevelResponse,
   TeachSession,
+  TeachSpotResponse,
+  TeachVerb,
   UpdateState,
 } from "./types";
 
@@ -200,6 +204,23 @@ export function useMappings() {
   return useQuery({ queryKey: queryKeys.mappings, queryFn: () => api.get<Mapping[]>("/api/v1/mappings") });
 }
 
+export function usePatchMapping() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Partial<Mapping> }) =>
+      api.patch<Mapping>(`/api/v1/mappings/${id}`, patch),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.mappings }),
+  });
+}
+
+export function useDeleteMapping() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/api/v1/mappings/${id}`),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.mappings }),
+  });
+}
+
 export function useTestMapping(id: string) {
   return useMutation({ mutationFn: () => api.post<ActionOutcome>(`/api/v1/mappings/${id}/test`) });
 }
@@ -231,6 +252,44 @@ export function useStartTeach() {
   return useMutation({
     mutationFn: (body: { camera_id: string; target: Record<string, string>; anchor_id?: string }) =>
       api.post<TeachSession>("/api/v1/teach", body),
+  });
+}
+
+export function useTeachSpot(sessionId?: string) {
+  return useMutation({
+    mutationFn: () => api.post<TeachSpotResponse>(`/api/v1/teach/${sessionId}/spot`),
+  });
+}
+
+export function useTeachCurrentLevel(sessionId?: string) {
+  return useMutation({
+    mutationFn: (body: { level: number }) =>
+      api.post<TeachLevelResponse>(`/api/v1/teach/${sessionId}/levels/use-current`, body),
+  });
+}
+
+export function useTeachLevelTest(sessionId?: string) {
+  return useMutation({
+    mutationFn: (body: { level: number }) =>
+      api.post<ActionOutcome>(`/api/v1/teach/${sessionId}/levels/test`, body),
+  });
+}
+
+export function useCommitTeach(sessionId?: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name?: string; verbs: TeachVerb[] }) =>
+      api.post<TeachCommitResponse>(`/api/v1/teach/${sessionId}/commit`, body),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: queryKeys.anchors() });
+      client.invalidateQueries({ queryKey: queryKeys.mappings });
+    },
+  });
+}
+
+export function useCancelTeach(sessionId?: string) {
+  return useMutation({
+    mutationFn: () => api.post<void>(`/api/v1/teach/${sessionId}/cancel`),
   });
 }
 

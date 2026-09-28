@@ -239,6 +239,14 @@ export interface EventStreamState {
     verbs: Array<{ gesture_id: string; label: string }>;
   };
   suppression?: { gesture_id: string; reason: SuppressionReason; ts: string };
+  teach?: {
+    session_id: string;
+    phase: "aiming" | "capturing" | "captured" | "error" | string;
+    ray_jitter_deg?: number | null;
+    confidence?: number | null;
+    hint?: string | null;
+    updatedAt: string;
+  };
   place?: {
     camera_id: string;
     place_id: string;

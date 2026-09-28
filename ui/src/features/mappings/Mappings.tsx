@@ -2,8 +2,10 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   useAnchors,
+  useDeleteMapping,
   useGestures,
   useMappings,
+  usePatchMapping,
   usePatchSettings,
   useSettings,
   useTestMapping,
@@ -16,6 +18,7 @@ import {
   GlassPanel,
   ListRow,
   SegmentedControl,
+  Select,
   SliderDial,
   Switch,
   Tabs,
@@ -39,6 +42,7 @@ const targetedVerbActions: Array<{ label: string; action: Action; description: s
     description: "Fan level taught from HA state",
   },
   { label: "Off", action: { kind: "verb", verb: "off" }, description: "fan.turn_off for selected fan" },
+  { label: "On", action: { kind: "verb", verb: "on" }, description: "fan.turn_on for selected fan" },
   { label: "Toggle", action: { kind: "verb", verb: "toggle" }, description: "Domain default toggle" },
   {
     label: "Dial percentage",
@@ -73,11 +77,21 @@ function mappingTone(mapping: Mapping) {
   return "success";
 }
 
-function mappingSentence(mapping: Mapping) {
+function mappingTargetLabel(mapping: Mapping, anchors: ReturnType<typeof useAnchors>["data"]) {
+  return (
+    mapping.target_label ??
+    anchors?.find((anchor) => anchor.id === mapping.anchor_id)?.name ??
+    mapping.target_domain ??
+    mapping.anchor_id ??
+    "device"
+  );
+}
+
+function mappingSentence(mapping: Mapping, targetLabel?: string) {
   if (mapping.target_mode === "global") {
     return `${mapping.gesture_name ?? mapping.gesture_id} (${mapping.hand} hand) → ${mapping.name.split("→").at(-1)?.trim() ?? "Action"}`;
   }
-  return `Point at ${mapping.target_label ?? "device"} + ${mapping.gesture_name ?? mapping.gesture_id} → ${mapping.name.split("→").at(-1)?.trim() ?? "Action"}`;
+  return `Point at ${targetLabel ?? "device"} + ${mapping.gesture_name ?? mapping.gesture_id} → ${mapping.name.split("→").at(-1)?.trim() ?? "Action"}`;
 }
 
 function mappingDescription(mapping: Mapping) {
@@ -85,14 +99,96 @@ function mappingDescription(mapping: Mapping) {
   return `${mapping.mode} · ${camera}${mapping.sensitive ? " · sensitive" : ""}`;
 }
 
-function MappingRow({ mapping }: { mapping: Mapping }) {
+function actionKey(action: Action) {
+  if (action.kind === "verb") {
+    return action.verb === "level_set" ? `level_set:${action.level ?? 1}` : action.verb;
+  }
+  if (action.kind === "dial") return `dial:${action.property}`;
+  return `${action.domain}.${action.service}`;
+}
+
+function actionLabelFor(mapping: Mapping) {
+  return (
+    targetedVerbActions
+      .find((option) => actionKey(option.action) === actionKey(mapping.action))
+      ?.label.replace(/\s+·.+$/, "") ??
+    mapping.name.split("→").at(-1)?.trim() ??
+    "Action"
+  );
+}
+
+function targetOptions(anchors: ReturnType<typeof useAnchors>["data"], mapping: Mapping) {
+  const anchorItems =
+    anchors?.map((anchor) => ({
+      value: `anchor:${anchor.id}`,
+      label: `Device · ${anchor.name}`,
+    })) ?? [];
+  const domainItems = ["fan", "light", "media_player", "cover", mapping.target_domain]
+    .filter((domain): domain is string => Boolean(domain))
+    .filter((domain, index, domains) => domains.indexOf(domain) === index)
+    .map((domain) => ({ value: `domain:${domain}`, label: `Selected ${domain.replace(/_/g, " ")}` }));
+  return [...anchorItems, ...domainItems];
+}
+
+function targetValueFor(mapping: Mapping) {
+  if (mapping.target_mode === "anchor" && mapping.anchor_id) return `anchor:${mapping.anchor_id}`;
+  return `domain:${mapping.target_domain ?? "fan"}`;
+}
+
+function targetPatch(value: string): Partial<Mapping> {
+  const [kind, id] = value.split(":", 2);
+  if (kind === "anchor") {
+    return { target_mode: "anchor", anchor_id: id };
+  }
+  return { target_mode: "domain", target_domain: id };
+}
+
+function MappingRow({
+  mapping,
+  targetLabel,
+  anchors,
+}: {
+  mapping: Mapping;
+  targetLabel?: string;
+  anchors?: ReturnType<typeof useAnchors>["data"];
+}) {
   const test = useTestMapping(mapping.id);
+  const patchMapping = usePatchMapping();
+  const deleteMapping = useDeleteMapping();
+  const [editing, setEditing] = useState(false);
+  const canEditTarget = mapping.target_mode !== "global";
+  const options = targetOptions(anchors, mapping);
+  const actionValue = actionKey(mapping.action);
+
+  function patchAction(value: string) {
+    const option = targetedVerbActions.find((item) => actionKey(item.action) === value);
+    if (!option) return;
+    patchMapping.mutate({
+      id: mapping.id,
+      patch: {
+        action: option.action,
+        name: `${targetLabel ?? "Device"} + ${mapping.gesture_name ?? mapping.gesture_id} → ${option.label.replace(/\s+·.+$/, "").toLowerCase()}`,
+      },
+    });
+  }
+
+  function patchTarget(value: string) {
+    const selected = options.find((option) => option.value === value);
+    patchMapping.mutate({
+      id: mapping.id,
+      patch: {
+        ...targetPatch(value),
+        name: `${selected?.label.replace(/^Device · |^Selected /, "") ?? targetLabel ?? "Device"} + ${mapping.gesture_name ?? mapping.gesture_id} → ${actionLabelFor(mapping).toLowerCase()}`,
+      },
+    });
+  }
+
   return (
     <article className="mapping-row">
       <div className="mapping-row-main">
         <GestureGlyph name={mapping.gesture_id} animated={false} />
         <div>
-          <strong>{mappingSentence(mapping)}</strong>
+          <strong>{mappingSentence(mapping, targetLabel)}</strong>
           <span>{mappingDescription(mapping)}</span>
         </div>
       </div>
@@ -100,19 +196,62 @@ function MappingRow({ mapping }: { mapping: Mapping }) {
         <Badge tone={mappingTone(mapping)}>{mapping.enabled ? "enabled" : "off"}</Badge>
         <Badge tone="accent">{mapping.mode}</Badge>
         {mapping.sensitive ? <Badge tone="warning">Sensitive</Badge> : null}
+        <Switch
+          checked={mapping.enabled}
+          aria-label={`Enable ${mapping.name}`}
+          onCheckedChange={(enabled) => patchMapping.mutate({ id: mapping.id, patch: { enabled } })}
+        />
         <Button variant="ghost" size="sm" loading={test.isPending} onClick={() => test.mutate()}>
           Test
         </Button>
+        {canEditTarget ? (
+          <Button variant="secondary" size="sm" onClick={() => setEditing((value) => !value)}>
+            {editing ? "Done" : "Edit"}
+          </Button>
+        ) : null}
+        <Button
+          variant="danger"
+          size="sm"
+          loading={deleteMapping.isPending}
+          onClick={() => deleteMapping.mutate(mapping.id)}
+        >
+          Delete
+        </Button>
       </div>
+      {editing && canEditTarget ? (
+        <div className="mapping-edit-row">
+          <div className="compact-field">
+            <span>Target</span>
+            <Select
+              value={targetValueFor(mapping)}
+              onValueChange={patchTarget}
+              label="Mapping target"
+              items={options}
+            />
+          </div>
+          <div className="compact-field">
+            <span>Action</span>
+            <Select
+              value={actionValue}
+              onValueChange={patchAction}
+              label="Mapping action"
+              items={targetedVerbActions.map((option) => ({
+                value: actionKey(option.action),
+                label: option.label,
+              }))}
+            />
+          </div>
+        </div>
+      ) : null}
       {test.data?.message ? <p className="inline-result">{test.data.message}</p> : null}
     </article>
   );
 }
 
-function groupTargetedMappings(mappings: Mapping[]) {
+function groupTargetedMappings(mappings: Mapping[], anchors: ReturnType<typeof useAnchors>["data"]) {
   const groups = new Map<string, Mapping[]>();
   for (const mapping of mappings.filter((item) => item.target_mode !== "global")) {
-    const key = mapping.target_label ?? mapping.anchor_id ?? "Device";
+    const key = mappingTargetLabel(mapping, anchors);
     groups.set(key, [...(groups.get(key) ?? []), mapping]);
   }
   return [...groups.entries()];
@@ -149,7 +288,8 @@ function GesturePicker({
 
 export function MappingsRoute() {
   const mappings = useMappings();
-  const targetedGroups = groupTargetedMappings(mappings.data ?? []);
+  const anchors = useAnchors();
+  const targetedGroups = groupTargetedMappings(mappings.data ?? [], anchors.data);
   const globalMappings = (mappings.data ?? []).filter((mapping) => mapping.target_mode === "global");
   return (
     <section className="feature-screen mappings-screen" aria-labelledby="screen-title">
@@ -178,7 +318,12 @@ export function MappingsRoute() {
               </div>
               <div className="mapping-list">
                 {group.map((mapping) => (
-                  <MappingRow key={mapping.id} mapping={mapping} />
+                  <MappingRow
+                    key={mapping.id}
+                    mapping={mapping}
+                    targetLabel={target}
+                    anchors={anchors.data}
+                  />
                 ))}
               </div>
             </GlassPanel>
@@ -195,7 +340,7 @@ export function MappingsRoute() {
             </div>
             <div className="mapping-list">
               {globalMappings.map((mapping) => (
-                <MappingRow key={mapping.id} mapping={mapping} />
+                <MappingRow key={mapping.id} mapping={mapping} anchors={anchors.data} />
               ))}
             </div>
           </GlassPanel>

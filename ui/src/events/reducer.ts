@@ -342,7 +342,22 @@ export function eventReducer(state: EventStreamState, action: EventStreamAction)
     case "capture.progress":
     case "gesture.end":
     case "disarmed":
+      return mark(state, message.ts);
     case "teach.progress":
+      return mark(
+        {
+          ...state,
+          teach: {
+            session_id: message.session_id,
+            phase: message.phase,
+            ray_jitter_deg: message.ray_jitter_deg,
+            confidence: message.confidence,
+            hint: message.hint,
+            updatedAt: message.ts,
+          },
+        },
+        message.ts,
+      );
     case "resync":
       return mark(state, message.ts);
     default:

@@ -1597,8 +1597,14 @@ impl TeachGateway for EngineApp {
             .ok_or_else(|| {
                 ApiProblem::validation("teach_session_not_found", "teach session not found")
             })?;
-        let camera_id = CameraId::from_str(&session.camera_id)
-            .map_err(|err| ApiProblem::validation("bad_camera_id", err.to_string()))?;
+        let camera_id = match CameraId::from_str(&session.camera_id) {
+            Ok(id) => id,
+            Err(err) if self.runtime.dev => {
+                tracing::warn!(camera_id = %session.camera_id, error = %err, "using synthetic camera id for dev teach session");
+                CameraId::new()
+            }
+            Err(err) => return Err(ApiProblem::validation("bad_camera_id", err.to_string())),
+        };
         let place = self.ensure_place(camera_id)?;
         let existing = self
             .targeting

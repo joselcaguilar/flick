@@ -1829,11 +1829,73 @@ async fn teach_commit(
     Path(session_id): Path<String>,
     Json(request): Json<TeachCommitRequest>,
 ) -> Result<Json<TeachCommitResponse>, ApiProblem> {
-    state
-        .teach
-        .commit(&session_id, request)
-        .await
-        .map(json_response)
+    let requested_verbs = request.verbs.clone();
+    let mut response = state.teach.commit(&session_id, request).await?;
+    let anchors = {
+        let mut anchors = state.anchors.lock().unwrap_or_else(|err| err.into_inner());
+        anchors.insert(response.anchor.id.clone(), response.anchor.clone());
+        anchors.clone()
+    };
+    let created_mappings = requested_verbs
+        .into_iter()
+        .enumerate()
+        .map(|(index, verb)| {
+            mapping_from_create(
+                MappingCreate {
+                    name: teach_mapping_name(&response.anchor.name, &verb),
+                    gesture_id: verb.gesture_id,
+                    hand: "any".to_owned(),
+                    allow_two_hands: false,
+                    camera_ids: Vec::new(),
+                    target_mode: TargetModeDto::Anchor,
+                    anchor_id: Some(response.anchor.id.clone()),
+                    target_domain: None,
+                    mode: "tap".to_owned(),
+                    hold_ms: None,
+                    repeat_ms: None,
+                    cooldown_ms: Some(600),
+                    require_armed: false,
+                    active_hours: None,
+                    action: verb.action,
+                    sensitive_ack: response.anchor.sensitive_ack,
+                    confirm_gesture_id: None,
+                    feedback: None,
+                    sort_order: Some(index as i64),
+                },
+                &anchors,
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    response.mapping_ids = created_mappings
+        .iter()
+        .map(|mapping| mapping.id.clone())
+        .collect();
+    let all_mappings = {
+        let mut mappings = state.mappings.lock().unwrap_or_else(|err| err.into_inner());
+        for mapping in created_mappings {
+            mappings.insert(mapping.id.clone(), mapping);
+        }
+        mappings.values().cloned().collect::<Vec<_>>()
+    };
+    state.config_sync.mappings_changed(all_mappings).await?;
+    Ok(json_response(response))
+}
+
+fn teach_mapping_name(anchor_name: &str, verb: &TeachVerb) -> String {
+    let action = match &verb.action {
+        ActionDto::Verb { verb, level } if verb == "level_set" => {
+            format!("speed {}", level.unwrap_or(1))
+        }
+        ActionDto::Verb { verb, .. } => verb.replace('_', " "),
+        ActionDto::CallService {
+            domain, service, ..
+        } => format!("{domain}.{service}"),
+        ActionDto::Dial { property, .. } => format!("dial {property}"),
+    };
+    format!(
+        "{anchor_name} + {} → {action}",
+        verb.gesture_id.replace("builtin.", "")
+    )
 }
 
 #[utoipa::path(post, path = "/api/v1/teach/{session_id}/cancel", responses((status = 204)))]
