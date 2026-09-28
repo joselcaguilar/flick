@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSCameraUsageDescription</key>
+  <string>Flick uses the camera to recognize your hand gestures. Video never leaves this Mac.</string>
+  <key>NSCameraUseContinuityCameraDeviceType</key>
+  <true/>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>Flick connects to Home Assistant and your cameras on your local network.</string>
+  <key>NSBonjourServices</key>
+  <array>
+    <string>_home-assistant._tcp</string>
+  </array>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.utilities</string>
+</dict>
+</plist>

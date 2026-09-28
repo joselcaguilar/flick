@@ -1,0 +1,19 @@
+{
+  "name": "@flick/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "prepare-sidecar": "node ./scripts/prepare-sidecar.mjs",
+    "prepare-dist": "node ./scripts/prepare-dist.mjs",
+    "dev:placeholder": "node ./scripts/dev-placeholder.mjs",
+    "prepare-dev": "pnpm run prepare-sidecar && pnpm run dev:placeholder",
+    "prepare-build": "pnpm run prepare-sidecar && pnpm run prepare-dist"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.9.6"
+  }
+}
