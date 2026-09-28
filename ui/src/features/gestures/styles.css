@@ -50,8 +50,25 @@
 
 .gesture-toolbar-actions {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 0.55rem;
+}
+
+.gesture-export-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--flick-accent-blue) 32%, var(--flick-border));
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--flick-accent-blue) 12%, transparent);
+  padding: 0.75rem;
+}
+
+.gesture-export-bar strong,
+.gesture-export-bar span {
+  display: block;
 }
 
 .visually-hidden-file {
@@ -103,6 +120,7 @@
 
 .gesture-card {
   display: grid;
+  grid-template-rows: auto auto auto minmax(3.15rem, 1fr) auto;
   gap: 0.8rem;
   border: 1px solid var(--flick-border);
   border-radius: var(--radius-xl);
@@ -123,9 +141,10 @@
 }
 
 .gesture-select {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.45rem;
+  inline-size: max-content;
   color: var(--flick-muted);
   font-size: 0.78rem;
   font-weight: 700;
@@ -133,16 +152,15 @@
 
 .gesture-card-main {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 2.8rem minmax(0, 1fr);
   gap: 0.75rem;
-  align-items: center;
+  align-items: start;
 }
 
 .gesture-card-title {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  flex-wrap: wrap;
+  display: grid;
+  gap: 0.3rem;
+  min-inline-size: 0;
 }
 
 .gesture-card h3,
@@ -153,9 +171,13 @@
 .gesture-card h3 {
   font-size: 1.05rem;
   letter-spacing: -0.025em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .gesture-meta-row,
+.gesture-badge-row,
 .gesture-quality,
 .gesture-card-footer {
   display: flex;
@@ -177,8 +199,9 @@
 
 .gesture-card-footer {
   justify-content: space-between;
+  margin-block-start: auto;
   border-block-start: 1px solid var(--flick-border);
-  padding-block-start: 0.75rem;
+  padding: 0.75rem 0 0;
   font-weight: 750;
 }
 

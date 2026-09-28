@@ -17,6 +17,49 @@ function gestureType(gesture: Gesture) {
   return gesture.kind === "static" ? "static" : "motion";
 }
 
+const gestureTypeLabels: Record<ReturnType<typeof gestureType>, string> = {
+  static: "Static",
+  motion: "Motion",
+  "two-hand": "Two-hand",
+};
+
+const gestureDescriptions: Record<string, string> = {
+  "builtin.circle_cw":
+    "Draw a clockwise circle to step the selected fan or light upward with a deliberate motion.",
+  "builtin.circle_ccw":
+    "Draw a counter-clockwise circle to step a selected device down without reaching for a remote.",
+  "builtin.two_hand_separate":
+    "Move both hands apart to stop the selected fan, media player or other safe mapped device.",
+  "builtin.thumb_up": "A steady thumbs-up for quick global confirmations like toggling a light.",
+  "builtin.thumb_down": "A steady thumbs-down for safe negative actions such as turning a scene off.",
+  "builtin.open_palm": "Open palm is easy to hold and works well as an arm, pause or confirmation gesture.",
+  "builtin.point": "Pointing selects taught devices before a second gesture decides the action.",
+  "custom.rock": "Your local rock-on pose, tuned for scene shortcuts and low-confusion static control.",
+  "motion.zorro": "A sharp Z-shaped motion for expressive commands that should not collide with circles.",
+  "motion.two_hand_stop_custom":
+    "A softer two-hand stop motion for rooms where the built-in stop feels too strict.",
+};
+
+function sourceLabel(gesture: Gesture) {
+  return gesture.source === "builtin" ? "Built-in" : "Custom";
+}
+
+function handLabel(gesture: Gesture) {
+  const hand = gesture.hand_constraint ?? "any";
+  if (hand === "left") return "Left hand";
+  if (hand === "right") return "Right hand";
+  return (gesture.hands_required ?? 1) > 1 ? "Two hands" : "Any hand";
+}
+
+function gestureDescription(gesture: Gesture) {
+  return (
+    gestureDescriptions[gesture.id] ??
+    `${handLabel(gesture)} ${gestureTypeLabels[gestureType(gesture)].toLowerCase()} gesture with ${
+      gesture.used_by ?? 0
+    } mapping${(gesture.used_by ?? 0) === 1 ? "" : "s"}.`
+  );
+}
+
 function toneForGesture(gesture: Gesture) {
   const type = gestureType(gesture);
   if (type === "static") return "accent" as const;
@@ -30,44 +73,50 @@ function GestureCard({
   onCheckedChange,
   onToggle,
   pending,
+  exportMode,
 }: {
   gesture: Gesture;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
   onToggle: (gesture: Gesture) => void;
   pending: boolean;
+  exportMode: boolean;
 }) {
   const type = gestureType(gesture);
   const tuned =
     gesture.source === "builtin" && ["builtin.circle_cw", "builtin.two_hand_separate"].includes(gesture.id);
   return (
     <article className="gesture-card" data-disabled={!gesture.enabled}>
-      <label className="gesture-select">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(event) => onCheckedChange(event.target.checked)}
-        />
-        <span>Select for export</span>
-      </label>
+      {exportMode ? (
+        <label className="gesture-select">
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={(event) => onCheckedChange(event.target.checked)}
+          />
+          <span>Add to export</span>
+        </label>
+      ) : null}
       <div className="gesture-card-main">
         <GestureGlyph name={gesture.icon} animated />
-        <div>
-          <div className="gesture-card-title">
-            <h3>{gesture.name}</h3>
-            <TypeChip>{type}</TypeChip>
-          </div>
-          <p>
-            {gesture.hand_constraint ?? "any"} hand · {gesture.used_by ?? 0} mapping
-            {(gesture.used_by ?? 0) === 1 ? "" : "s"}
+        <div className="gesture-card-title">
+          <h3>{gesture.name}</h3>
+          <p className="gesture-meta-row">
+            <span>{handLabel(gesture)}</span>
+            <span aria-hidden="true">·</span>
+            <span>
+              {gesture.used_by ?? 0} mapping{(gesture.used_by ?? 0) === 1 ? "" : "s"}
+            </span>
           </p>
         </div>
       </div>
-      <div className="gesture-meta-row">
-        <Badge tone={toneForGesture(gesture)}>{gesture.source}</Badge>
-        {tuned ? <Badge tone="warning">tuned in v4</Badge> : null}
+      <div className="gesture-badge-row">
+        <TypeChip>{gestureTypeLabels[type]}</TypeChip>
+        <Badge tone={toneForGesture(gesture)}>{sourceLabel(gesture)}</Badge>
+        {tuned ? <Badge tone="warning">Tuned in v4</Badge> : null}
         {gesture.sample_count ? <Badge tone="neutral">{gesture.sample_count} takes</Badge> : null}
       </div>
+      <p className="gesture-fallback-note">{gestureDescription(gesture)}</p>
       {gesture.source === "custom" ? (
         <div className="gesture-quality">
           <span>Accuracy {gesture.accuracy == null ? "—" : asPercent(gesture.accuracy)}</span>
@@ -75,9 +124,7 @@ function GestureCard({
             Distinctiveness {gesture.distinctiveness == null ? "—" : asPercent(gesture.distinctiveness)}
           </span>
         </div>
-      ) : (
-        <p className="gesture-fallback-note">Animated glyph · static fallback under Reduce Motion.</p>
-      )}
+      ) : null}
       <div className="gesture-card-footer">
         <span>{gesture.enabled ? "Enabled" : "Disabled"}</span>
         <Switch
@@ -99,6 +146,7 @@ function GestureSection({
   onSelect,
   onToggle,
   pending,
+  exportMode,
 }: {
   title: string;
   description: string;
@@ -107,6 +155,7 @@ function GestureSection({
   onSelect: (id: string, checked: boolean) => void;
   onToggle: (gesture: Gesture) => void;
   pending: boolean;
+  exportMode: boolean;
 }) {
   return (
     <GlassPanel className="gestures-section">
@@ -126,6 +175,7 @@ function GestureSection({
             onCheckedChange={(checked) => onSelect(gesture.id, checked)}
             onToggle={onToggle}
             pending={pending}
+            exportMode={exportMode}
           />
         ))}
       </div>
@@ -143,6 +193,7 @@ export function GesturesLibraryRoute() {
   const [selected, setSelected] = useState<Set<string>>(
     new Set(["builtin.circle_cw", "builtin.two_hand_separate"]),
   );
+  const [exportMode, setExportMode] = useState(false);
   const [packStatus, setPackStatus] = useState<string | null>(null);
   const allGestures = gestures.data ?? [];
   const builtIns = useMemo(
@@ -178,6 +229,7 @@ export function GesturesLibraryRoute() {
     link.click();
     URL.revokeObjectURL(url);
     setPackStatus(`Exported ${selected.size} gesture${selected.size === 1 ? "" : "s"} as .flickpack.json.`);
+    setExportMode(false);
   }
 
   async function importPack(event: ChangeEvent<HTMLInputElement>) {
@@ -210,17 +262,12 @@ export function GesturesLibraryRoute() {
 
       <GlassPanel className="gesture-toolbar">
         <div>
-          <strong>{selected.size} selected</strong>
-          <span>Choose gestures for a portable .flickpack.json.</span>
+          <strong>Gesture packs</strong>
+          <span>Import packs, or enter selection mode only when exporting a portable .flickpack.json.</span>
         </div>
         <div className="gesture-toolbar-actions">
-          <Button
-            variant="primary"
-            onClick={exportSelected}
-            disabled={selected.size === 0}
-            loading={exportPack.isPending}
-          >
-            Export selected
+          <Button variant="secondary" onClick={() => setExportMode(true)} disabled={exportMode}>
+            Select for export
           </Button>
           <Button
             variant="secondary"
@@ -243,6 +290,28 @@ export function GesturesLibraryRoute() {
         </div>
       </GlassPanel>
 
+      {exportMode ? (
+        <GlassPanel className="gesture-export-bar" aria-label="Gesture export selection">
+          <div>
+            <strong>{selected.size} selected for export</strong>
+            <span>Select only the gestures you want in this pack.</span>
+          </div>
+          <div className="gesture-toolbar-actions">
+            <Button
+              variant="primary"
+              onClick={exportSelected}
+              disabled={selected.size === 0}
+              loading={exportPack.isPending}
+            >
+              Export
+            </Button>
+            <Button variant="ghost" onClick={() => setExportMode(false)}>
+              Cancel
+            </Button>
+          </div>
+        </GlassPanel>
+      ) : null}
+
       {packStatus ? (
         <p className="gestures-status" role="status">
           {packStatus}
@@ -257,6 +326,7 @@ export function GesturesLibraryRoute() {
         onSelect={setSelectedGesture}
         onToggle={(gesture) => void toggleGesture(gesture)}
         pending={patchGesture.isPending}
+        exportMode={exportMode}
       />
 
       <GestureSection
@@ -267,6 +337,7 @@ export function GesturesLibraryRoute() {
         onSelect={setSelectedGesture}
         onToggle={(gesture) => void toggleGesture(gesture)}
         pending={patchGesture.isPending}
+        exportMode={exportMode}
       />
 
       {gestures.isLoading ? (

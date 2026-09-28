@@ -16,7 +16,11 @@ export function Select({
     <SelectPrimitive.Root value={value} onValueChange={onValueChange}>
       <SelectPrimitive.Trigger className="ui-select" aria-label={label}>
         <SelectPrimitive.Value />
-        <SelectPrimitive.Icon>⌄</SelectPrimitive.Icon>
+        <SelectPrimitive.Icon className="ui-select-chevron">
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <path d="m4 6 4 4 4-4" />
+          </svg>
+        </SelectPrimitive.Icon>
       </SelectPrimitive.Trigger>
       <SelectPrimitive.Portal>
         <SelectPrimitive.Content className="flick-glass ui-select-content" position="popper" sideOffset={8}>

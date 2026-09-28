@@ -7,6 +7,7 @@ import type {
   Anchor,
   Camera,
   CameraAvailable,
+  CameraStatus,
   CaptureSession,
   ClassifierReport,
   EngineStatus,
@@ -21,6 +22,7 @@ import type {
   ModelPack,
   MotionTake,
   Place,
+  PreviewTicket,
   RealignSession,
   SettingsMap,
   SettingsPatch,
@@ -137,6 +139,33 @@ export function useCamerasAvailable() {
 
 export function useCameras() {
   return useQuery({ queryKey: queryKeys.cameras, queryFn: () => api.get<Camera[]>("/api/v1/cameras") });
+}
+
+export function useCreateCamera() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      name: string;
+      kind: string;
+      device_ref?: string | null;
+      url_redacted?: string | null;
+    }) => api.post<Camera>("/api/v1/cameras", body),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.cameras }),
+  });
+}
+
+export function useStartCamera() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post<CameraStatus>(`/api/v1/cameras/${id}/start`, {}),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.status }),
+  });
+}
+
+export function useCameraPreviewTicket() {
+  return useMutation({
+    mutationFn: (id: string) => api.post<PreviewTicket>(`/api/v1/cameras/${id}/preview-ticket`, {}),
+  });
 }
 
 export function useGestures() {
