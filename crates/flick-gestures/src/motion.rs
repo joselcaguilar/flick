@@ -250,7 +250,9 @@ impl MotionTrack {
             let dy = latest.palm.y - first.palm.y;
             let net = dx.hypot(dy);
             let palm_units = net / latest.palm_size.max(1.0e-4);
-            if palm_units < config.swipe_min_palm || straightness(&self.samples) < config.swipe_straightness {
+            if palm_units < config.swipe_min_palm
+                || straightness(&self.samples) < config.swipe_straightness
+            {
                 continue;
             }
             let open_count = self.samples.iter().filter(|sample| sample.open_palm).count();
@@ -348,13 +350,19 @@ impl MotionTrack {
         }
         let turns = signed_turns(&recent, centroid);
         let full_turns = if turns >= 300.0 {
-            (turns / 360.0).floor() as i32 + 1
+            (turns / 360.0).round() as i32
         } else if turns <= -300.0 {
-            (turns / 360.0).ceil() as i32 - 1
+            (turns / 360.0).round() as i32
         } else {
             0
         };
-        if full_turns == 0 || full_turns == self.circle_last_turn {
+        if full_turns == 0 {
+            if turns.abs() < 120.0 {
+                self.circle_last_turn = 0;
+            }
+            return None;
+        }
+        if full_turns == self.circle_last_turn {
             return None;
         }
         self.circle_last_turn = full_turns;

@@ -195,7 +195,6 @@ fn builtin_replay_mappings() -> Vec<GestureMapping> {
         BuiltinGesture::ThumbDown,
         BuiltinGesture::Victory,
         BuiltinGesture::ILoveYou,
-        BuiltinGesture::Point,
         BuiltinGesture::SwipeLeft,
         BuiltinGesture::SwipeRight,
         BuiltinGesture::SwipeUp,
@@ -217,16 +216,31 @@ fn builtin_replay_mappings() -> Vec<GestureMapping> {
         if matches!(gesture, BuiltinGesture::TwoHandSeparate) {
             mapping.allow_two_hands = true;
         }
+        if matches!(
+            gesture,
+            BuiltinGesture::ThumbUp
+                | BuiltinGesture::ThumbDown
+                | BuiltinGesture::SwipeLeft
+                | BuiltinGesture::SwipeRight
+                | BuiltinGesture::SwipeUp
+                | BuiltinGesture::SwipeDown
+                | BuiltinGesture::CircleCw
+                | BuiltinGesture::CircleCcw
+                | BuiltinGesture::TwoHandSeparate
+        ) {
+            mapping.target_mode = TargetMode::Either;
+        }
         mappings.push(mapping);
     }
     let mut dial = GestureMapping::tap(GestureId::Builtin(BuiltinGesture::PinchDial));
     dial.mode = TriggerMode::Dial;
     dial.cooldown_ms = 0;
     dial.allow_two_hands = true;
+    dial.target_mode = TargetMode::Either;
     mappings.push(dial);
 
     let mut circle_any = GestureMapping::tap(GestureId::Builtin(BuiltinGesture::CircleAny));
-    circle_any.target_mode = TargetMode::Global;
+    circle_any.target_mode = TargetMode::Either;
     circle_any.cooldown_ms = 700;
     mappings.push(circle_any);
     mappings

@@ -243,54 +243,96 @@ impl TriggerFsmSet {
         }
 
         for (track_id, candidates) in &by_track {
-            let Some(candidate) = choose_candidate(candidates, self.config.conflict_margin) else {
-                if let Some(first) = candidates.first() {
-                    result.suppressed.push(SuppressedCandidate {
-                        gesture_id: first.gesture_id,
-                        track_id: *track_id,
-                        reason: SuppressionReason::Ambiguous,
-                    });
-                }
-                continue;
-            };
-
-            if self.update_pause(frame.captured_at, &candidate) {
-                continue;
-            }
-            if self.update_arm(frame.captured_at, &candidate) {
-                continue;
-            }
-            if self.paused {
-                result.suppressed.push(suppressed(&candidate, SuppressionReason::Paused));
-                continue;
-            }
-
-            let (mapping, target) = match self.resolve_mapping(&candidate, visible_hands, selection)
+            if let Some(control_candidate) =
+                choose_candidate(candidates, self.config.conflict_margin)
             {
-                Ok((mapping, target)) => (mapping.clone(), target),
-                Err(reason) => {
-                    result.suppressed.push(suppressed(&candidate, reason));
+                if self.update_pause(frame.captured_at, &control_candidate) {
                     continue;
                 }
-            };
-            if mapping.require_armed && !self.is_armed(frame.captured_at) {
-                result.suppressed.push(suppressed(&candidate, SuppressionReason::NotArmed));
+                if self.update_arm(frame.captured_at, &control_candidate) {
+                    continue;
+                }
+            }
+            if self.paused {
+                if let Some(candidate) = choose_candidate(candidates, self.config.conflict_margin) {
+                    result
+                        .suppressed
+                        .push(suppressed(&candidate, SuppressionReason::Paused));
+                }
                 continue;
             }
 
+            let mut resolved = Vec::new();
+            let mut suppressed_candidates = Vec::new();
+            for candidate in candidates {
+                let (mapping, target) =
+                    match self.resolve_mapping(candidate, visible_hands, selection) {
+                        Ok((mapping, target)) => (mapping.clone(), target),
+                        Err(reason) => {
+                            suppressed_candidates.push(suppressed(candidate, reason));
+                            continue;
+                        }
+                    };
+                if mapping.require_armed && !self.is_armed(frame.captured_at) {
+                    suppressed_candidates.push(suppressed(candidate, SuppressionReason::NotArmed));
+                    continue;
+                }
+                resolved.push(ResolvedCandidate {
+                    candidate: candidate.clone(),
+                    mapping,
+                    target,
+                });
+            }
+
+            let Some(resolved_candidate) = choose_resolved(&resolved, self.config.conflict_margin)
+            else {
+                if resolved.is_empty() {
+                    if let Some(suppression) = most_relevant_suppression(&suppressed_candidates) {
+                        result.suppressed.push(suppression.clone());
+                    }
+                } else if let Some(first) = resolved.first() {
+                    result.suppressed.push(suppressed(
+                        &first.candidate,
+                        SuppressionReason::Ambiguous,
+                    ));
+                }
+                if let Some(track) = self.tracks.get_mut(track_id) {
+                    result.events.extend(track.update_absent(
+                        frame.camera_id,
+                        frame.captured_at,
+                        &self.config,
+                    ));
+                }
+                continue;
+            };
+
             let track = self.tracks.entry(*track_id).or_default();
+            if track.active_gesture_id().is_some_and(|gesture_id| {
+                gesture_id != resolved_candidate.candidate.gesture_id
+            }) {
+                result.events.extend(track.update_absent(
+                    frame.camera_id,
+                    frame.captured_at,
+                    &self.config,
+                ));
+                if track.has_active() {
+                    continue;
+                }
+            }
             let produced = track.update_candidate(
                 frame.camera_id,
                 frame.captured_at,
-                &candidate,
-                &mapping,
-                target,
+                &resolved_candidate.candidate,
+                &resolved_candidate.mapping,
+                resolved_candidate.target,
                 &self.config,
             );
             match produced {
                 TrackProduced::Events(events) => result.events.extend(events),
                 TrackProduced::Suppressed(reason) => {
-                    result.suppressed.push(suppressed(&candidate, reason));
+                    result
+                        .suppressed
+                        .push(suppressed(&resolved_candidate.candidate, reason));
                 }
                 TrackProduced::None => {}
             }
@@ -392,6 +434,13 @@ impl TriggerFsmSet {
     }
 }
 
+#[derive(Debug, Clone)]
+struct ResolvedCandidate {
+    candidate: GestureCandidate,
+    mapping: GestureMapping,
+    target: Option<AnchorId>,
+}
+
 #[derive(Debug, Clone, Default)]
 struct TrackState {
     votes: VecDeque<Vote>,
@@ -402,6 +451,14 @@ struct TrackState {
 }
 
 impl TrackState {
+    fn active_gesture_id(&self) -> Option<GestureId> {
+        self.active.as_ref().map(|active| active.gesture_id)
+    }
+
+    fn has_active(&self) -> bool {
+        self.active.is_some()
+    }
+
     fn update_candidate(
         &mut self,
         camera_id: CameraId,
@@ -650,6 +707,40 @@ fn choose_candidate(
         }
     }
     Some(best)
+}
+
+fn choose_resolved(
+    candidates: &[ResolvedCandidate],
+    conflict_margin: f32,
+) -> Option<ResolvedCandidate> {
+    let mut sorted = candidates.to_vec();
+    sorted.sort_by(|left, right| {
+        right
+            .candidate
+            .confidence
+            .total_cmp(&left.candidate.confidence)
+    });
+    let best = sorted.first()?.clone();
+    if let Some(second) = sorted.get(1) {
+        if second.candidate.gesture_id != best.candidate.gesture_id
+            && best.candidate.confidence - second.candidate.confidence < conflict_margin
+        {
+            return None;
+        }
+    }
+    Some(best)
+}
+
+fn most_relevant_suppression(candidates: &[SuppressedCandidate]) -> Option<&SuppressedCandidate> {
+    candidates
+        .iter()
+        .find(|candidate| {
+            !matches!(
+                candidate.reason,
+                SuppressionReason::NoMapping | SuppressionReason::NoTarget
+            )
+        })
+        .or_else(|| candidates.first())
 }
 
 fn make_event(
