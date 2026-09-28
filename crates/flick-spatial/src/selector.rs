@@ -1,6 +1,9 @@
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use flick_core::{AnchorId, AnchorStatus, CameraId, FaceKeypoints, HandFrame, HandObservation, SelectionState, TargetSelector};
+use flick_core::{
+    AnchorId, AnchorStatus, CameraId, FaceKeypoints, HandFrame, HandObservation, SelectionState,
+    TargetSelector,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -157,7 +160,10 @@ impl TargetSelectorImpl {
     pub fn set_anchors(&mut self, anchors: Vec<Anchor>) {
         self.anchors = anchors;
         if let Some(selected) = self.selected.as_ref()
-            && !self.anchors.iter().any(|anchor| anchor.id == selected.anchor_id)
+            && !self
+                .anchors
+                .iter()
+                .any(|anchor| anchor.id == selected.anchor_id)
         {
             self.selected = None;
             self.hover = None;
@@ -215,7 +221,10 @@ impl TargetSelectorImpl {
         if candidate.ambiguous {
             self.events.push(TargetEvent::Ambiguous {
                 camera_id: hands.camera_id,
-                anchor_ids: [candidate.anchor_id, candidate.runner_up_anchor_id.unwrap_or(candidate.anchor_id)],
+                anchor_ids: [
+                    candidate.anchor_id,
+                    candidate.runner_up_anchor_id.unwrap_or(candidate.anchor_id),
+                ],
             });
             self.hover = None;
             return self.selected_state_or(SelectionState::Aiming);
@@ -253,7 +262,11 @@ impl TargetSelectorImpl {
             .hands
             .iter()
             .filter(|hand| hand.presence >= 0.5 && is_point_pose(hand))
-            .max_by(|a, b| a.presence.partial_cmp(&b.presence).unwrap_or(std::cmp::Ordering::Equal))
+            .max_by(|a, b| {
+                a.presence
+                    .partial_cmp(&b.presence)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
     }
 
     fn observe_point_pose(&mut self, track_id: u32, now: Instant) {
@@ -376,7 +389,7 @@ impl TargetSelectorImpl {
             });
         }
         if progress >= 1.0 {
-                if let Some(previous) = self.selected.as_ref() {
+            if let Some(previous) = self.selected.as_ref() {
                 self.events.push(TargetEvent::Cleared {
                     camera_id,
                     anchor_id: previous.anchor_id,

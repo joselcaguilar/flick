@@ -7,8 +7,10 @@ use thiserror::Error;
 
 use crate::{
     CameraIntrinsics,
-    math::{Mat3, Mat6, Vec3, Vec6, a3, median, nearest_rotation, rotation_from_scaled_axis,
-           scaled_axis_from_rotation, unit_or_z, v3},
+    math::{
+        Mat3, Mat6, Vec3, Vec6, a3, median, nearest_rotation, rotation_from_scaled_axis,
+        scaled_axis_from_rotation, unit_or_z, v3,
+    },
 };
 
 /// Current ray/triangulation estimator version.
@@ -153,7 +155,11 @@ impl RayEstimator {
         Self {
             intrinsics,
             origin_filter: OneEuroVec3::new(settings.min_cutoff, settings.beta, settings.d_cutoff),
-            direction_filter: OneEuroVec3::new(settings.min_cutoff, settings.beta, settings.d_cutoff),
+            direction_filter: OneEuroVec3::new(
+                settings.min_cutoff,
+                settings.beta,
+                settings.d_cutoff,
+            ),
             samples: VecDeque::with_capacity(32),
             settings,
         }
@@ -181,7 +187,9 @@ impl RayEstimator {
         let pose = estimate_hand_pose(hand, &self.intrinsics)?;
         let raw = self.raw_ray(hand, &pose, face)?;
         let origin = self.origin_filter.filter(v3(raw.origin), at);
-        let direction = self.direction_filter.filter(unit_or_z(v3(raw.direction)), at);
+        let direction = self
+            .direction_filter
+            .filter(unit_or_z(v3(raw.direction)), at);
         let filtered = PointingRay {
             origin: a3(origin),
             direction: a3(unit_or_z(direction)),
@@ -258,7 +266,11 @@ impl RayEstimator {
         Some(Vec3::new(chosen[0] * depth, chosen[1] * depth, depth))
     }
 
-    fn push_and_median(&mut self, ray: PointingRay, at: std::time::Instant) -> Result<PointingRay, RayEstimateError> {
+    fn push_and_median(
+        &mut self,
+        ray: PointingRay,
+        at: std::time::Instant,
+    ) -> Result<PointingRay, RayEstimateError> {
         if self.samples.len() == 32 {
             let _ = self.samples.pop_front();
         }
@@ -308,7 +320,11 @@ impl RayEstimator {
             direction,
             source,
             estimator_version: DEFAULT_ESTIMATOR_VERSION.to_owned(),
-            reprojection_error_px: if len == 0 { 0.0 } else { reprojection / len as f32 },
+            reprojection_error_px: if len == 0 {
+                0.0
+            } else {
+                reprojection / len as f32
+            },
         }
     }
 }
@@ -348,7 +364,10 @@ impl OneEuroVec3 {
             self.dx.reset(Vec3::zeros());
             return value;
         };
-        let dt = at.duration_since(last).as_secs_f32().clamp(1.0 / 240.0, 1.0);
+        let dt = at
+            .duration_since(last)
+            .as_secs_f32()
+            .clamp(1.0 / 240.0, 1.0);
         self.last = Some(at);
         let previous = self.x.value.unwrap_or(value);
         let derivative = (value - previous) / dt;
@@ -383,7 +402,10 @@ fn alpha(cutoff: f32, dt: f32) -> f32 {
     1.0 / (1.0 + tau / dt.max(1.0e-4))
 }
 
-fn estimate_hand_pose(hand: &HandObservation, intrinsics: &CameraIntrinsics) -> Result<HandPose, RayEstimateError> {
+fn estimate_hand_pose(
+    hand: &HandObservation,
+    intrinsics: &CameraIntrinsics,
+) -> Result<HandPose, RayEstimateError> {
     let pose = solve_pose_dlt_lm(&hand.world, &hand.image, intrinsics)?;
     let mut camera_landmarks = [[0.0_f32; 3]; 21];
     for (idx, point) in hand.world.iter().enumerate() {
@@ -454,9 +476,7 @@ fn solve_pose_dlt_lm(
         return Err(RayEstimateError::PoseSolveFailed);
     }
     let p = v_t.row(v_t.nrows() - 1);
-    let mut m = Matrix3::new(
-        p[0], p[1], p[2], p[4], p[5], p[6], p[8], p[9], p[10],
-    );
+    let mut m = Matrix3::new(p[0], p[1], p[2], p[4], p[5], p[6], p[8], p[9], p[10]);
     let mut t = Vector3::new(p[3], p[7], p[11]);
     let scale = ((m.row(0).norm() + m.row(1).norm() + m.row(2).norm()) / 3.0).max(1.0e-6);
     m /= scale;
@@ -474,7 +494,9 @@ fn solve_pose_dlt_lm(
         return Err(RayEstimateError::PoseSolveFailed);
     };
     let mut params = Vec6::zeros();
-    params.fixed_rows_mut::<3>(0).copy_from(&scaled_axis_from_rotation(rotation));
+    params
+        .fixed_rows_mut::<3>(0)
+        .copy_from(&scaled_axis_from_rotation(rotation));
     params.fixed_rows_mut::<3>(3).copy_from(&t);
     params = refine_pose(params, world, image, intrinsics);
     let rotation = rotation_from_scaled_axis(params.fixed_rows::<3>(0).into_owned());
@@ -482,7 +504,13 @@ fn solve_pose_dlt_lm(
     Ok(PoseSolution {
         rotation,
         translation,
-        reprojection_error_px: reprojection_error_px(rotation, translation, world, image, intrinsics),
+        reprojection_error_px: reprojection_error_px(
+            rotation,
+            translation,
+            world,
+            image,
+            intrinsics,
+        ),
     })
 }
 

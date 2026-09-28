@@ -46,7 +46,9 @@ pub(crate) fn angle_deg(a: Vec3, b: Vec3) -> f32 {
 
 #[must_use]
 pub(crate) fn rotation_from_scaled_axis(axis: Vec3) -> Mat3 {
-    UnitQuaternion::from_scaled_axis(axis).to_rotation_matrix().into_inner()
+    UnitQuaternion::from_scaled_axis(axis)
+        .to_rotation_matrix()
+        .into_inner()
 }
 
 #[must_use]

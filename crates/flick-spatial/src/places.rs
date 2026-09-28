@@ -100,15 +100,15 @@ impl PlaceMatcher {
         let Some((best_id, best_similarity)) = best else {
             return PlaceMatch::NeedsRealign { similarity: 0.0 };
         };
-        if let Some(active_id) = self.active {
-            if let Some(active_place) = self.places.iter().find(|place| place.id == active_id) {
-                let active_similarity = cosine_384(&active_place.scene_signature, current);
-                if active_similarity >= self.settings.threshold {
-                    return PlaceMatch::Ok {
-                        place_id: active_id,
-                        similarity: active_similarity,
-                    };
-                }
+        if let Some(active_id) = self.active
+            && let Some(active_place) = self.places.iter().find(|place| place.id == active_id)
+        {
+            let active_similarity = cosine_384(&active_place.scene_signature, current);
+            if active_similarity >= self.settings.threshold {
+                return PlaceMatch::Ok {
+                    place_id: active_id,
+                    similarity: active_similarity,
+                };
             }
         }
         if best_similarity >= self.settings.threshold {
@@ -210,7 +210,12 @@ pub fn realign(pairs: &[RealignPair]) -> Result<RealignResult, RealignError> {
     let rotation = u * fix * v_t;
     let residual = pairs
         .iter()
-        .map(|pair| angle_deg(rotation * unit_or_z(v3(pair.old_direction)), v3(pair.new_direction)))
+        .map(|pair| {
+            angle_deg(
+                rotation * unit_or_z(v3(pair.old_direction)),
+                v3(pair.new_direction),
+            )
+        })
         .sum::<f32>()
         / pairs.len() as f32;
     Ok(RealignResult {
@@ -223,7 +228,7 @@ pub fn realign(pairs: &[RealignPair]) -> Result<RealignResult, RealignError> {
     })
 }
 
-mod signature_serde {
+pub(crate) mod signature_serde {
     use serde::{Deserialize, Serialize, de};
 
     pub fn serialize<S>(value: &[f32; 384], serializer: S) -> Result<S::Ok, S::Error>
@@ -239,7 +244,10 @@ mod signature_serde {
     {
         let values = Vec::<f32>::deserialize(deserializer)?;
         if values.len() != 384 {
-            return Err(de::Error::invalid_length(values.len(), &"384 float scene-signature values"));
+            return Err(de::Error::invalid_length(
+                values.len(),
+                &"384 float scene-signature values",
+            ));
         }
         let mut out = [0.0_f32; 384];
         out.copy_from_slice(&values);
@@ -273,7 +281,14 @@ fn mat_to_array(matrix: Matrix3<f32>) -> [[f32; 3]; 3] {
 
 fn array_to_mat(array: [[f32; 3]; 3]) -> Matrix3<f32> {
     Matrix3::new(
-        array[0][0], array[0][1], array[0][2], array[1][0], array[1][1], array[1][2],
-        array[2][0], array[2][1], array[2][2],
+        array[0][0],
+        array[0][1],
+        array[0][2],
+        array[1][0],
+        array[1][1],
+        array[1][2],
+        array[2][0],
+        array[2][1],
+        array[2][2],
     )
 }

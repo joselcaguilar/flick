@@ -1,11 +1,14 @@
 use std::time::{Duration, Instant};
 
-use flick_core::{AnchorId, AnchorStatus, CameraId, FaceKeypoints, HandFrame, HandObservation, Handedness, RectF, SelectionState, StageTimings};
+use flick_core::{
+    Action, ActionTarget, AnchorId, AnchorStatus, CameraId, FaceKeypoints, HandFrame,
+    HandObservation, Handedness, RectF, SelectionState, StageTimings, Verb,
+};
 use flick_spatial::{
-    Anchor, AnchorGeometry, CameraIntrinsics, DominantEye, PointingRay, RayEstimator,
-    RayEstimatorSettings, RayModel, RaySource, RealignPair, TargetSelectorImpl,
-    TargetSelectorSettings, TeachObservation, TeachSession, TeachTarget, angular_error_deg,
-    realign,
+    Anchor, AnchorGeometry, CameraIntrinsics, PointingRay, RayEstimator, RayEstimatorSettings,
+    RayModel, RaySource, RealignPair, TargetEntityState, TargetSelectorImpl,
+    TargetSelectorSettings, TeachObservation, TeachSession, TeachTarget, VerbParams, realign,
+    resolve_verb,
 };
 use nalgebra::{Matrix3, Unit, UnitQuaternion, Vector3};
 use proptest::prelude::*;
@@ -118,7 +121,13 @@ fn target_selector_fsm_table_selects_and_expires() -> Result<(), String> {
     let anchor_id = AnchorId::new();
     let origin = Vector3::new(0.0, 0.0, 0.8);
     let direction = Vector3::new(0.0, -0.12, 1.0).normalize();
-    let anchor = test_anchor(anchor_id, "Fan", origin + direction * 2.0, "fan.ventilador_dormitorio", "fan");
+    let anchor = test_anchor(
+        anchor_id,
+        "Fan",
+        origin + direction * 2.0,
+        "fan.ventilador_dormitorio",
+        "fan",
+    );
     let mut settings = TargetSelectorSettings::default();
     settings.ray.model = RayModel::Finger;
     let mut selector = TargetSelectorImpl::new(intrinsics.clone(), vec![anchor], settings);
@@ -135,25 +144,28 @@ fn target_selector_fsm_table_selects_and_expires() -> Result<(), String> {
         let frame = if ms == 5000 {
             empty_frame(camera_id, start + Duration::from_millis(ms))
         } else {
-            frame_for_direction(camera_id, &intrinsics, origin, direction, start + Duration::from_millis(ms))?
+            frame_for_direction(
+                camera_id,
+                &intrinsics,
+                origin,
+                direction,
+                start + Duration::from_millis(ms),
+            )?
         };
-        if ms == 250 {
-            if let Some(hand) = frame.hands.first() {
-                let mut estimator = RayEstimator::new(intrinsics.clone(), RayEstimatorSettings { model: RayModel::Finger, ..RayEstimatorSettings::default() });
-                match estimator.estimate(hand, None, start + Duration::from_millis(ms)) {
-                    Ok(ray) => {
-                        let rd = Vector3::new(ray.direction[0], ray.direction[1], ray.direction[2]);
-                        eprintln!("debug ray angle {} source {:?} reproj {}", angle_deg(rd, direction), ray.source, ray.reprojection_error_px);
-                    }
-                    Err(err) => eprintln!("debug ray err {err}"),
-                }
-            }
-        }
         let state = selector.update(&frame, None);
         match expected {
-            "idle" => assert!(matches!(state, SelectionState::Idle), "state at {ms}ms was {state:?}"),
-            "hover" => assert!(matches!(state, SelectionState::Hover { anchor_id: id, .. } if id == anchor_id), "state at {ms}ms was {state:?}"),
-            "selected" => assert!(matches!(state, SelectionState::Selected { anchor_id: id, .. } if id == anchor_id), "state at {ms}ms was {state:?}"),
+            "idle" => assert!(
+                matches!(state, SelectionState::Idle),
+                "state at {ms}ms was {state:?}"
+            ),
+            "hover" => assert!(
+                matches!(state, SelectionState::Hover { anchor_id: id, .. } if id == anchor_id),
+                "state at {ms}ms was {state:?}"
+            ),
+            "selected" => assert!(
+                matches!(state, SelectionState::Selected { anchor_id: id, .. } if id == anchor_id),
+                "state at {ms}ms was {state:?}"
+            ),
             other => return Err(format!("unknown expected state {other}")),
         }
     }
@@ -171,22 +183,43 @@ fn lock_scenario_circling_after_selection_never_reselects() -> Result<(), String
     let yaw25 = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), 25.0_f32.to_radians());
     let lamp_direction = yaw25 * fan_direction;
     let anchors = vec![
-        test_anchor(fan_id, "Ventilador Dormitorio", origin + fan_direction * 2.0, "fan.ventilador_dormitorio", "fan"),
-        test_anchor(lamp_id, "Lock test lamp", origin + lamp_direction * 2.0, "light.lock_test", "light"),
+        test_anchor(
+            fan_id,
+            "Ventilador Dormitorio",
+            origin + fan_direction * 2.0,
+            "fan.ventilador_dormitorio",
+            "fan",
+        ),
+        test_anchor(
+            lamp_id,
+            "Lock test lamp",
+            origin + lamp_direction * 2.0,
+            "light.lock_test",
+            "light",
+        ),
     ];
     let mut settings = TargetSelectorSettings::default();
     settings.ray.model = RayModel::Finger;
     let mut selector = TargetSelectorImpl::new(intrinsics.clone(), anchors, settings);
     let start = Instant::now();
     for ms in [0_u64, 250, 500, 800] {
-        let frame = frame_for_direction(camera_id, &intrinsics, origin, fan_direction, start + Duration::from_millis(ms))?;
+        let frame = frame_for_direction(
+            camera_id,
+            &intrinsics,
+            origin,
+            fan_direction,
+            start + Duration::from_millis(ms),
+        )?;
         let _state = selector.update(&frame, None);
     }
     assert_eq!(selector.selected(), Some(fan_id));
 
     for step in 0..36_u64 {
         let phase = step as f32 / 36.0 * std::f32::consts::TAU;
-        let blended = (fan_direction + lamp_direction * (0.8 * phase.sin().max(0.0)) + Vector3::new(0.10 * phase.cos(), 0.08 * phase.sin(), 0.0)).normalize();
+        let blended = (fan_direction
+            + lamp_direction * (0.8 * phase.sin().max(0.0))
+            + Vector3::new(0.10 * phase.cos(), 0.08 * phase.sin(), 0.0))
+        .normalize();
         let frame = frame_for_direction(
             camera_id,
             &intrinsics,
@@ -200,7 +233,130 @@ fn lock_scenario_circling_after_selection_never_reselects() -> Result<(), String
     Ok(())
 }
 
-fn test_anchor(id: AnchorId, name: &str, position: Vector3<f32>, entity_id: &str, domain: &str) -> Anchor {
+#[test]
+fn ambiguity_suppresses_selection_when_two_anchors_share_margin() -> Result<(), String> {
+    let intrinsics = CameraIntrinsics::sane_default(1280, 720);
+    let camera_id = CameraId::new();
+    let fan_id = AnchorId::new();
+    let lamp_id = AnchorId::new();
+    let origin = Vector3::new(0.0, 0.0, 0.8);
+    let center = Vector3::new(0.0, -0.08, 1.0).normalize();
+    let yaw_left = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), -2.0_f32.to_radians());
+    let yaw_right = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), 2.0_f32.to_radians());
+    let anchors = vec![
+        test_anchor(
+            fan_id,
+            "Fan",
+            origin + (yaw_left * center) * 2.0,
+            "fan.ventilador_dormitorio",
+            "fan",
+        ),
+        test_anchor(
+            lamp_id,
+            "Lamp",
+            origin + (yaw_right * center) * 2.0,
+            "light.lamp",
+            "light",
+        ),
+    ];
+    let mut settings = TargetSelectorSettings::default();
+    settings.ray.model = RayModel::Finger;
+    let mut selector = TargetSelectorImpl::new(intrinsics.clone(), anchors, settings);
+    let start = Instant::now();
+
+    for ms in [0_u64, 250, 550, 900] {
+        let frame = frame_for_direction(
+            camera_id,
+            &intrinsics,
+            origin,
+            center,
+            start + Duration::from_millis(ms),
+        )?;
+        let state = selector.update(&frame, None);
+        if ms >= 250 {
+            assert!(
+                matches!(state, SelectionState::Aiming),
+                "state at {ms}ms was {state:?}"
+            );
+        }
+    }
+
+    assert_eq!(selector.selected(), None);
+    assert!(
+        selector
+            .take_events()
+            .iter()
+            .any(|event| matches!(event, flick_spatial::TargetEvent::Ambiguous { anchor_ids, .. } if anchor_ids.contains(&fan_id) && anchor_ids.contains(&lamp_id))),
+        "expected ambiguous target event",
+    );
+    Ok(())
+}
+
+#[test]
+fn owner_fan_verbs_resolve_to_speed_one_and_off() -> Result<(), String> {
+    let fan_id = AnchorId::new();
+    let mut anchor = test_anchor(
+        fan_id,
+        "Ventilador Dormitorio",
+        Vector3::new(0.0, 0.0, 2.0),
+        "fan.ventilador_dormitorio",
+        "fan",
+    );
+    anchor.verb_params = VerbParams { levels: vec![1] };
+    let state = TargetEntityState {
+        entity_id: "fan.ventilador_dormitorio".to_owned(),
+        state: Some("on".to_owned()),
+        supported_features: Some(53),
+        percentage: Some(1.0),
+        percentage_step: Some(1.0),
+        brightness_pct: None,
+        temperature: None,
+        target_temp_step: None,
+    };
+
+    let speed_one = resolve_verb(&anchor, Verb::LevelSet, Some(1), Some(&state))
+        .map_err(|err| err.to_string())?;
+    assert_eq!(
+        speed_one,
+        Action::CallService {
+            domain: "fan".to_owned(),
+            service: "turn_on".to_owned(),
+            target: ActionTarget {
+                entity_id: Some(vec!["fan.ventilador_dormitorio".to_owned()]),
+                device_id: None,
+                area_id: None,
+            },
+            data: serde_json::json!({ "percentage": 1 }),
+            preset: None,
+        }
+    );
+
+    let stop =
+        resolve_verb(&anchor, Verb::Stop, None, Some(&state)).map_err(|err| err.to_string())?;
+    assert_eq!(
+        stop,
+        Action::CallService {
+            domain: "fan".to_owned(),
+            service: "turn_off".to_owned(),
+            target: ActionTarget {
+                entity_id: Some(vec!["fan.ventilador_dormitorio".to_owned()]),
+                device_id: None,
+                area_id: None,
+            },
+            data: serde_json::json!({}),
+            preset: None,
+        }
+    );
+    Ok(())
+}
+
+fn test_anchor(
+    id: AnchorId,
+    name: &str,
+    position: Vector3<f32>,
+    entity_id: &str,
+    domain: &str,
+) -> Anchor {
     Anchor {
         id,
         name: name.to_owned(),
@@ -211,6 +367,7 @@ fn test_anchor(id: AnchorId, name: &str, position: Vector3<f32>, entity_id: &str
             covariance: [[0.0; 3]; 3],
         },
         uncertainty_deg: 0.5,
+        verb_params: VerbParams::default(),
         status: AnchorStatus::Ok,
         estimator_version: "test.estimator".to_owned(),
     }
@@ -249,8 +406,12 @@ fn synthetic_hand_with_tip(
     direction: Vector3<f32>,
 ) -> Result<HandObservation, String> {
     let world = hand_world();
-    let canonical = Vector3::new(0.0, -1.0, 0.0);
-    let rotation = rotation_between(canonical, direction);
+    let finger_axis = Vector3::new(
+        world[8][0] - world[5][0],
+        world[8][1] - world[5][1],
+        world[8][2] - world[5][2],
+    );
+    let rotation = rotation_between(finger_axis, direction);
     let translation = tip - rotation * Vector3::new(world[8][0], world[8][1], world[8][2]);
     projected_hand(intrinsics, world, rotation, translation)
 }
@@ -261,8 +422,12 @@ fn synthetic_hand(
     direction: Vector3<f32>,
 ) -> Result<HandObservation, String> {
     let world = hand_world();
-    let canonical = Vector3::new(0.0, -1.0, 0.0);
-    let rotation = rotation_between(canonical, direction);
+    let finger_axis = Vector3::new(
+        world[8][0] - world[5][0],
+        world[8][1] - world[5][1],
+        world[8][2] - world[5][2],
+    );
+    let rotation = rotation_between(finger_axis, direction);
     let mcp_world = Vector3::new(world[5][0], world[5][1], world[5][2]);
     let translation = mcp_origin - rotation * mcp_world;
     projected_hand(intrinsics, world, rotation, translation)
@@ -289,12 +454,20 @@ fn projected_hand(
         presence: 0.99,
         image,
         world,
-        bbox: RectF { x: 0.0, y: 0.0, w: 1.0, h: 1.0 },
+        bbox: RectF {
+            x: 0.0,
+            y: 0.0,
+            w: 1.0,
+            h: 1.0,
+        },
         embedding: None,
     })
 }
 
-fn synthetic_face(intrinsics: &CameraIntrinsics, eye_center: Vector3<f32>) -> Result<FaceKeypoints, String> {
+fn synthetic_face(
+    intrinsics: &CameraIntrinsics,
+    eye_center: Vector3<f32>,
+) -> Result<FaceKeypoints, String> {
     let ipd = 0.063;
     let left = eye_center + Vector3::new(-ipd * 0.5, 0.0, 0.0);
     let right = eye_center + Vector3::new(ipd * 0.5, 0.0, 0.0);
@@ -307,7 +480,10 @@ fn synthetic_face(intrinsics: &CameraIntrinsics, eye_center: Vector3<f32>) -> Re
     let mut points = [[0.0_f32; 2]; 6];
     points[0] = left_image;
     points[1] = right_image;
-    Ok(FaceKeypoints { points, confidence: Some(0.99) })
+    Ok(FaceKeypoints {
+        points,
+        confidence: Some(0.99),
+    })
 }
 
 fn hand_world() -> [[f32; 3]; 21] {

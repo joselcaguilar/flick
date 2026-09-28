@@ -1,10 +1,10 @@
 use flick_core::{AnchorId, AnchorKind, AnchorStatus};
 use nalgebra::Matrix3;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de, ser::SerializeMap};
 use thiserror::Error;
 
 use crate::{
-    PointingRay,
+    PointingRay, VerbParams,
     math::{Mat3, Vec3, a3, angle_deg as vec_angle_deg, unit_or_z, v3},
 };
 
@@ -12,8 +12,7 @@ const PARALLEL_FALLBACK_DEG: f32 = 5.0;
 const DISTINCTIVENESS_WARN_DEG: f32 = 15.0;
 
 /// Target bound to a taught anchor.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case", tag = "kind", content = "id")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TeachTarget {
     /// Home Assistant entity id.
     Entity(String),
@@ -21,6 +20,54 @@ pub enum TeachTarget {
     Device(String),
     /// Home Assistant area id.
     Area(String),
+}
+
+impl Serialize for TeachTarget {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(1))?;
+        match self {
+            Self::Entity(entity_id) => map.serialize_entry("entity_id", entity_id)?,
+            Self::Device(device_id) => map.serialize_entry("device_id", device_id)?,
+            Self::Area(area_id) => map.serialize_entry("area_id", area_id)?,
+        }
+        map.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for TeachTarget {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct TargetJson {
+            entity_id: Option<String>,
+            device_id: Option<String>,
+            area_id: Option<String>,
+        }
+
+        let target = TargetJson::deserialize(deserializer)?;
+        let present = target.entity_id.iter().count()
+            + target.device_id.iter().count()
+            + target.area_id.iter().count();
+        if present != 1 {
+            return Err(de::Error::custom(
+                "target must contain exactly one of entity_id, device_id or area_id",
+            ));
+        }
+        if let Some(entity_id) = target.entity_id {
+            Ok(Self::Entity(entity_id))
+        } else if let Some(device_id) = target.device_id {
+            Ok(Self::Device(device_id))
+        } else if let Some(area_id) = target.area_id {
+            Ok(Self::Area(area_id))
+        } else {
+            unreachable!("present count was validated")
+        }
+    }
 }
 
 /// Spatial representation of a taught device.
@@ -71,6 +118,8 @@ pub struct Anchor {
     pub geometry: AnchorGeometry,
     /// Angular uncertainty used to widen hover tolerance.
     pub uncertainty_deg: f32,
+    /// Per-anchor targeted verb parameters such as taught fan levels.
+    pub verb_params: VerbParams,
     /// Current persistence status.
     pub status: AnchorStatus,
     /// Ray/triangulation version that produced this anchor.
@@ -271,7 +320,11 @@ fn build_anchor(
         target,
         domain,
         geometry,
-        uncertainty_deg: quality.residual_deg.max(mean_jitter(observations)).clamp(1.0, 20.0),
+        uncertainty_deg: quality
+            .residual_deg
+            .max(mean_jitter(observations))
+            .clamp(1.0, 20.0),
+        verb_params: VerbParams::default(),
         status: AnchorStatus::Ok,
         estimator_version,
     };
@@ -283,7 +336,9 @@ fn build_anchor(
     })
 }
 
-fn triangulate(observations: &[TeachObservation]) -> Result<(AnchorGeometry, AnchorQuality), TeachingError> {
+fn triangulate(
+    observations: &[TeachObservation],
+) -> Result<(AnchorGeometry, AnchorQuality), TeachingError> {
     let mut a = Mat3::zeros();
     let mut b = Vec3::zeros();
     for obs in observations {
@@ -321,7 +376,10 @@ fn triangulate(observations: &[TeachObservation]) -> Result<(AnchorGeometry, Anc
     ))
 }
 
-fn direction_anchor(observations: &[TeachObservation], max_sep: f32) -> (AnchorGeometry, AnchorQuality) {
+fn direction_anchor(
+    observations: &[TeachObservation],
+    max_sep: f32,
+) -> (AnchorGeometry, AnchorQuality) {
     let mut direction = Vec3::zeros();
     let mut origin = Vec3::zeros();
     for obs in observations {
@@ -355,8 +413,12 @@ fn direction_anchor(observations: &[TeachObservation], max_sep: f32) -> (AnchorG
 #[must_use]
 pub fn angular_error_deg(anchor: &Anchor, ray: &PointingRay) -> f32 {
     match &anchor.geometry {
-        AnchorGeometry::Point3d { position, .. } => vec_angle_deg(v3(ray.direction), v3(*position) - v3(ray.origin)),
-        AnchorGeometry::Direction { direction, .. } => vec_angle_deg(v3(ray.direction), v3(*direction)),
+        AnchorGeometry::Point3d { position, .. } => {
+            vec_angle_deg(v3(ray.direction), v3(*position) - v3(ray.origin))
+        }
+        AnchorGeometry::Direction { direction, .. } => {
+            vec_angle_deg(v3(ray.direction), v3(*direction))
+        }
     }
 }
 
@@ -365,7 +427,9 @@ pub fn angular_error_deg(anchor: &Anchor, ray: &PointingRay) -> f32 {
 pub fn score_anchor(anchor: &Anchor, ray: &PointingRay) -> AnchorScore {
     let theta = angular_error_deg(anchor, ray);
     let sigma = anchor.uncertainty_deg.max(4.0);
-    let score = (-(theta * theta) / (2.0 * sigma * sigma)).exp().clamp(0.0, 1.0);
+    let score = (-(theta * theta) / (2.0 * sigma * sigma))
+        .exp()
+        .clamp(0.0, 1.0);
     AnchorScore {
         angular_error_deg: theta,
         score,
@@ -429,7 +493,10 @@ fn max_pairwise_ray_angle(observations: &[TeachObservation]) -> f32 {
         for j in (i + 1)..observations.len() {
             max_angle = f32::max(
                 max_angle,
-                vec_angle_deg(v3(observations[i].ray.direction), v3(observations[j].ray.direction)),
+                vec_angle_deg(
+                    v3(observations[i].ray.direction),
+                    v3(observations[j].ray.direction),
+                ),
             );
         }
     }

@@ -23,22 +23,34 @@
 mod anchors;
 mod intrinsics;
 mod math;
+mod persistence;
 mod places;
 mod ray;
 mod selector;
+mod verbs;
 
 pub use anchors::{
     Anchor, AnchorGeometry, AnchorQuality, AnchorScore, DistinctivenessWarning, RayObservation,
     TeachObservation, TeachSession, TeachTarget, TeachingError, TeachingOutcome, angular_error_deg,
     recompute_anchor,
 };
-pub use intrinsics::{CameraFov, CameraIntrinsics, IntrinsicsSource, DEFAULT_INTRINSICS_VERSION, FOV_TABLE};
+pub use intrinsics::{
+    CameraFov, CameraIntrinsics, DEFAULT_INTRINSICS_VERSION, FOV_TABLE, IntrinsicsSource,
+};
+pub use persistence::{
+    AnchorObservationRecord, AnchorRecord, InMemoryTargetingStore, PlaceRecord, PlaceStatus,
+    StoredIntrinsics, TargetingStore, TargetingStoreError,
+};
 pub use places::{
     PlaceDescriptor, PlaceMatch, PlaceMatcher, PlaceMatcherSettings, RealignError, RealignPair,
     RealignResult, Similarity, Transform3, needs_realign, realign,
 };
 pub use ray::{
-    DominantEye, HandPose, PointingRay, RayEstimateError, RayEstimator, RayEstimatorSettings,
-    RayModel, RaySource, DEFAULT_ESTIMATOR_VERSION,
+    DEFAULT_ESTIMATOR_VERSION, DominantEye, HandPose, PointingRay, RayEstimateError, RayEstimator,
+    RayEstimatorSettings, RayModel, RaySource,
 };
 pub use selector::{Spatial, TargetEvent, TargetSelectorImpl, TargetSelectorSettings};
+pub use verbs::{
+    TargetEntityState, VerbParams, VerbResolutionError, default_dial_property,
+    resolve_targeted_action, resolve_verb,
+};

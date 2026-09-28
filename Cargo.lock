@@ -1415,6 +1415,7 @@ dependencies = [
  "nalgebra",
  "proptest",
  "serde",
+ "serde_json",
  "smallvec",
  "thiserror",
  "tracing",
