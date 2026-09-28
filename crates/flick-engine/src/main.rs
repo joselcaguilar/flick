@@ -2,9 +2,17 @@ use std::{
     io::{self, BufRead},
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
+    sync::Arc,
 };
 
-use axum::{Json, Router, routing::get};
+use axum::{
+    Json, Router,
+    extract::{Request, State},
+    http::{HeaderMap, StatusCode, header},
+    middleware::{self, Next},
+    response::Response,
+    routing::get,
+};
 use clap::{Parser, Subcommand};
 use flick_engine::{config, logging};
 use serde::Serialize;
@@ -110,6 +118,11 @@ struct UpdatesResponse {
     busy_reason: Option<String>,
 }
 
+#[derive(Clone)]
+struct SidecarState {
+    token: Arc<str>,
+}
+
 async fn run_sidecar(runtime: config::RuntimeConfig) -> anyhow::Result<()> {
     let token = read_sidecar_token()?;
     tracing::info!(
@@ -127,9 +140,13 @@ async fn run_sidecar(runtime: config::RuntimeConfig) -> anyhow::Result<()> {
         TcpListener::bind(SocketAddr::new(bind_ip, runtime.bootstrap.engine.port)).await?;
     let port = listener.local_addr()?.port();
 
+    let state = SidecarState {
+        token: Arc::from(token),
+    };
     let app = Router::new()
         .route("/health", get(health))
-        .route("/updates", get(updates));
+        .route("/updates", get(updates))
+        .route_layer(middleware::from_fn_with_state(state, require_sidecar_auth));
 
     println!(
         "{}",
@@ -142,7 +159,6 @@ async fn run_sidecar(runtime: config::RuntimeConfig) -> anyhow::Result<()> {
     tracing::info!(port, "sidecar HTTP API ready");
 
     axum::serve(listener, app).await?;
-    drop(token);
     Ok(())
 }
 
@@ -164,4 +180,47 @@ async fn health() -> Json<HealthResponse<'static>> {
 
 async fn updates() -> Json<UpdatesResponse> {
     Json(UpdatesResponse { busy_reason: None })
+}
+
+async fn require_sidecar_auth(
+    State(state): State<SidecarState>,
+    headers: HeaderMap,
+    request: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    if !is_loopback_host(&headers) || !is_allowed_origin(&headers) || !has_token(&headers, &state) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    Ok(next.run(request).await)
+}
+
+fn is_loopback_host(headers: &HeaderMap) -> bool {
+    let Some(host) = headers
+        .get(header::HOST)
+        .and_then(|value| value.to_str().ok())
+    else {
+        return false;
+    };
+    host.starts_with("127.0.0.1:") || host.starts_with("localhost:") || host.starts_with("[::1]:")
+}
+
+fn is_allowed_origin(headers: &HeaderMap) -> bool {
+    let Some(origin) = headers
+        .get(header::ORIGIN)
+        .and_then(|value| value.to_str().ok())
+    else {
+        return true;
+    };
+    origin == "http://localhost:5173"
+        || origin == "http://127.0.0.1:5173"
+        || origin == "tauri://localhost"
+        || origin == "http://tauri.localhost"
+}
+
+fn has_token(headers: &HeaderMap, state: &SidecarState) -> bool {
+    let expected = format!("Bearer {}", state.token);
+    headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value == expected)
 }

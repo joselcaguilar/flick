@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -17,11 +17,15 @@ const rustc = execFileSync('rustc', ['-vV'], { cwd: repoRoot, encoding: 'utf8' }
 const host = rustc.split('\n').find((line) => line.startsWith('host: '))?.slice('host: '.length).trim();
 if (!host) throw new Error('could not determine Rust host triple');
 
-run('cargo', ['build', '-p', 'flick-engine', ...(release ? ['--release'] : [])]);
-
 const exe = process.platform === 'win32' ? '.exe' : '';
 const profile = release ? 'release' : 'debug';
 const source = join(repoRoot, 'target', profile, `flick-engine${exe}`);
+if (existsSync(source)) {
+  rmSync(source, { force: true });
+}
+
+run('cargo', ['build', '-p', 'flick-engine', ...(release ? ['--release'] : [])]);
+
 if (!existsSync(source)) throw new Error(`engine binary missing at ${source}`);
 
 const outDir = join(srcTauri, 'binaries');

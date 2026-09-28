@@ -29,7 +29,7 @@ use tauri_plugin_updater::UpdaterExt;
 use tokio::{sync::Mutex as AsyncMutex, time};
 use url::Url;
 
-const SIDECAR_NAME: &str = "binaries/flick-engine";
+const SIDECAR_NAME: &str = "flick-engine";
 const UPDATE_STATE_FILE: &str = "update_state.json";
 
 #[derive(Clone)]
