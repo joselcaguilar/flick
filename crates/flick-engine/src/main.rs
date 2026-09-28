@@ -90,5 +90,11 @@ fn api_token(sidecar: bool, dev: bool) -> anyhow::Result<String> {
     if dev {
         return Ok("dev-token".to_owned());
     }
-    Ok(env::var("FLICK_API_TOKEN").unwrap_or_else(|_| "headless-token".to_owned()))
+    env::var("FLICK_TOKEN")
+        .or_else(|_| env::var("FLICK_API_TOKEN"))
+        .map_err(|_| anyhow::anyhow!("headless mode requires FLICK_TOKEN"))
+        .and_then(|token| {
+            anyhow::ensure!(!token.is_empty(), "headless mode requires FLICK_TOKEN");
+            Ok(token)
+        })
 }

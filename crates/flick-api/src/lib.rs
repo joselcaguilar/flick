@@ -41,6 +41,7 @@ use futures::{SinkExt, Stream, StreamExt, stream};
 use image::{ColorType, codecs::jpeg::JpegEncoder, imageops::FilterType};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
+use subtle::ConstantTimeEq;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::sync::broadcast;
 use tower_http::cors::{AllowOrigin, CorsLayer};
@@ -365,7 +366,7 @@ fn check_bearer(state: &ApiState, headers: &HeaderMap) -> Result<(), ApiProblem>
         ));
     };
     let expected = format!("Bearer {}", state.config.token);
-    if value == expected {
+    if constant_time_eq(value, &expected) {
         Ok(())
     } else {
         Err(ApiProblem::unauthorized(
@@ -373,6 +374,10 @@ fn check_bearer(state: &ApiState, headers: &HeaderMap) -> Result<(), ApiProblem>
             "Bearer token is invalid",
         ))
     }
+}
+
+fn constant_time_eq(left: &str, right: &str) -> bool {
+    left.as_bytes().ct_eq(right.as_bytes()).into()
 }
 
 /// Local API error rendered as RFC 9457 `application/problem+json`.
@@ -1804,7 +1809,9 @@ async fn ws_events(
         .unwrap_or_default();
     let has_v1 = protocols.split(',').any(|item| item.trim() == "flick.v1");
     let bearer = format!("bearer.{}", state.config.token);
-    let has_token = protocols.split(',').any(|item| item.trim() == bearer);
+    let has_token = protocols
+        .split(',')
+        .any(|item| constant_time_eq(item.trim(), &bearer));
     if !has_v1 || !has_token {
         return Err(ApiProblem::unauthorized(
             "bad_ws_token",

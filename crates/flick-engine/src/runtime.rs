@@ -2,6 +2,7 @@
 
 use std::{
     collections::{BTreeMap, HashMap},
+    io::Read,
     net::SocketAddr,
     path::{Path, PathBuf},
     str::FromStr,
@@ -136,7 +137,7 @@ pub async fn serve(runtime: RuntimeConfig, token: String) -> anyhow::Result<()> 
         app.start_replay("").await?;
     }
     axum::serve(listener, app_router)
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(shutdown_signal(runtime.sidecar))
         .await
         .context("API server failed")
 }
@@ -1569,13 +1570,33 @@ fn now_rfc3339() -> String {
         .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_owned())
 }
 
-async fn shutdown_signal() {
+async fn shutdown_signal(watch_stdin: bool) {
+    let stdin_eof = async move {
+        if watch_stdin {
+            let _ = tokio::task::spawn_blocking(wait_stdin_eof).await;
+        } else {
+            std::future::pending::<()>().await;
+        }
+
+        fn wait_stdin_eof() {
+            let mut stdin = std::io::stdin();
+            let mut buffer = [0_u8; 128];
+            loop {
+                match stdin.read(&mut buffer) {
+                    Ok(0) | Err(_) => break,
+                    Ok(_) => {}
+                }
+            }
+        }
+    };
+    tokio::pin!(stdin_eof);
     #[cfg(unix)]
     {
         let mut sigterm =
             tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).ok();
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {},
+            _ = &mut stdin_eof => {},
             _ = async {
                 if let Some(signal) = &mut sigterm {
                     signal.recv().await;
@@ -1587,6 +1608,9 @@ async fn shutdown_signal() {
     }
     #[cfg(not(unix))]
     {
-        let _ = tokio::signal::ctrl_c().await;
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {},
+            _ = &mut stdin_eof => {},
+        }
     }
 }
