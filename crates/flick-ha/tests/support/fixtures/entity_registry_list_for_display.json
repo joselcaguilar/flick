@@ -1,0 +1,6 @@
+{
+  "entities": [
+    {"ei":"fan.ventilador_dormitorio","di":"dev_fan","ai":null,"en":"Ventilador dormitorio"},
+    {"ei":"light.bed_light","di":"dev_light","ai":"bedroom","en":"Bed Light"}
+  ]
+}
