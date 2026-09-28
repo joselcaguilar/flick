@@ -21,27 +21,27 @@
       <stop offset=".68" stop-color="#FFFFFF" stop-opacity=".08"/>
       <stop offset="1" stop-color="#FFFFFF" stop-opacity=".28"/>
     </linearGradient>
-    <linearGradient id="finger" x1="286" y1="762" x2="675" y2="246" gradientUnits="userSpaceOnUse">
+    <linearGradient id="finger" x1="330" y1="704" x2="709" y2="322" gradientUnits="userSpaceOnUse">
       <stop stop-color="#F8FBFF"/>
       <stop offset=".58" stop-color="#DBEAFF"/>
       <stop offset="1" stop-color="#FFFFFF"/>
     </linearGradient>
-    <linearGradient id="arc" x1="662" y1="208" x2="844" y2="656" gradientUnits="userSpaceOnUse">
+    <linearGradient id="arc" x1="728" y1="206" x2="894" y2="428" gradientUnits="userSpaceOnUse">
       <stop stop-color="#00A2FF"/>
-      <stop offset=".45" stop-color="#006DFF"/>
+      <stop offset=".48" stop-color="#006DFF"/>
       <stop offset="1" stop-color="#6D5DF7"/>
     </linearGradient>
     <filter id="icon-shadow" x="54" y="62" width="916" height="938" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
       <feDropShadow dx="0" dy="34" stdDeviation="46" flood-color="#000000" flood-opacity=".42"/>
       <feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#001D5B" flood-opacity=".2"/>
     </filter>
-    <filter id="foreground-glow" x="150" y="152" width="650" height="724" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+    <filter id="foreground-glow" x="198" y="194" width="734" height="664" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
       <feDropShadow dx="0" dy="26" stdDeviation="28" flood-color="#000000" flood-opacity=".34"/>
-      <feDropShadow dx="0" dy="0" stdDeviation="34" flood-color="#006DFF" flood-opacity=".34"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="36" flood-color="#006DFF" flood-opacity=".34"/>
       <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#FFFFFF" flood-opacity=".7"/>
     </filter>
-    <filter id="arc-glow" x="574" y="132" width="364" height="604" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
-      <feDropShadow dx="0" dy="0" stdDeviation="22" flood-color="#006DFF" flood-opacity=".55"/>
+    <filter id="arc-glow" x="660" y="132" width="304" height="364" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="0" stdDeviation="22" flood-color="#006DFF" flood-opacity=".56"/>
     </filter>
   </defs>
   <g filter="url(#icon-shadow)">
@@ -52,15 +52,16 @@
     <path d="M196 251c89-71 214-106 330-92 115 14 223 77 287 174" stroke="#FFFFFF" stroke-opacity=".14" stroke-width="2"/>
     <path d="M182 744c104 84 256 123 407 90 96-20 181-68 250-139" stroke="#FFFFFF" stroke-opacity=".12" stroke-width="2"/>
   </g>
-  <g stroke-linecap="round" stroke-linejoin="round">
-    <g filter="url(#foreground-glow)">
-      <path d="M232 784c153-173 306-348 460-512" stroke="url(#finger)" stroke-width="96"/>
-      <path d="M690 273c-40 12-72 39-95 76" stroke="#FFFFFF" stroke-width="14" opacity=".52"/>
-    </g>
-    <g filter="url(#arc-glow)">
-      <path d="M674 224c121 54 193 177 180 309-8 78-43 149-96 202" stroke="url(#arc)" stroke-width="68"/>
-      <path d="M732 302c50 53 75 124 67 198" stroke="#DCEBFF" stroke-width="21" opacity=".9"/>
-      <path d="M804 701l-45 36 57 10" stroke="url(#arc)" stroke-width="34"/>
-    </g>
+  <g filter="url(#foreground-glow)">
+    <path
+      d="M324 710c-61-62-58-159 8-219l227-207c65-59 166-56 225 7 60 63 56 159-9 219L548 717c-66 60-166 56-224-7Z"
+      fill="url(#finger)"
+    />
+    <path d="M690 295c-46 12-84 40-112 82" stroke="#FFFFFF" stroke-width="18" stroke-linecap="round" opacity=".5"/>
+  </g>
+  <g filter="url(#arc-glow)" stroke-linecap="round">
+    <path d="M753 238c63 30 106 88 119 158" stroke="url(#arc)" stroke-width="54"/>
+    <path d="M814 169c84 49 139 135 151 230" stroke="url(#arc)" stroke-width="34" opacity=".9"/>
+    <circle cx="872" cy="250" r="30" fill="#6D5DF7"/>
   </g>
 </svg>

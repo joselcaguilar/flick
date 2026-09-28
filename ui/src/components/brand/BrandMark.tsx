@@ -1,7 +1,7 @@
 import { useId } from "react";
 import { cn } from "../../lib/utils";
 
-export type BrandMarkVariant = "tile" | "glyph";
+export type BrandMarkVariant = "tile" | "glyph-only" | "glyph";
 
 export interface BrandMarkProps {
   className?: string;
@@ -41,12 +41,12 @@ export function BrandMark({
           <stop offset=".52" stopColor="#0B1020" />
           <stop offset="1" stopColor="#17112D" />
         </linearGradient>
-        <linearGradient id={`${id}-finger`} x1="18" y1="50" x2="45" y2="14" gradientUnits="userSpaceOnUse">
+        <linearGradient id={`${id}-finger`} x1="20" y1="48" x2="46" y2="21" gradientUnits="userSpaceOnUse">
           <stop stopColor="#F8FBFF" />
           <stop offset=".64" stopColor="#DCEBFF" />
           <stop offset="1" stopColor="#FFFFFF" />
         </linearGradient>
-        <linearGradient id={`${id}-arc`} x1="43" y1="13" x2="57" y2="50" gradientUnits="userSpaceOnUse">
+        <linearGradient id={`${id}-arc`} x1="46" y1="13" x2="61" y2="29" gradientUnits="userSpaceOnUse">
           <stop stopColor="#00A2FF" />
           <stop offset=".48" stopColor="#006DFF" />
           <stop offset="1" stopColor="#6D5DF7" />
@@ -58,15 +58,19 @@ export function BrandMark({
           <rect x="6.5" y="6.5" width="51" height="51" rx="14.5" stroke="white" strokeOpacity=".2" />
         </>
       ) : null}
-      <g strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14.6 51 44.2 17.2" stroke={`url(#${id}-finger)`} strokeWidth="6.2" />
-        <path d="M44.2 17.3c-2.7.8-4.9 2.7-6.4 5.1" stroke="#FFFFFF" strokeWidth="1.3" opacity=".6" />
+      <g strokeLinecap="round">
         <path
-          d="M44 17c7.8 3 13 10.4 13 18.9 0 5-1.9 9.6-5 13.2"
-          stroke={`url(#${id}-arc)`}
-          strokeWidth="5"
+          d="M20.3 47c-3.7-3.8-3.5-9.6.5-13.2l13.9-12.6c4-3.6 10.1-3.4 13.6.4 3.6 3.8 3.4 9.6-.5 13.2L33.9 47.4c-4 3.6-10.1 3.4-13.6-.4Z"
+          fill={`url(#${id}-finger)`}
         />
-        <path d="M47.5 22.2c4.2 3.4 6.7 8.6 6.7 14.2" stroke="#DCEBFF" strokeWidth="1.6" opacity=".88" />
+        <path d="M42.6 22c-2.8.8-5.1 2.5-6.8 5.1" stroke="#FFFFFF" strokeWidth="1.5" opacity=".55" />
+        <path d="M49 16c3.8 1.8 6.4 5.3 7.2 9.5" stroke={`url(#${id}-arc)`} strokeWidth="4" />
+        <path
+          d="M53 11.5c5.3 3 8.8 8.4 9.5 14.4"
+          stroke={`url(#${id}-arc)`}
+          strokeWidth="2.3"
+          opacity=".88"
+        />
       </g>
     </svg>
   );
