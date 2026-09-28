@@ -377,6 +377,7 @@ async fn run_connected(
     state: &mut SessionState,
 ) -> DisconnectReason {
     resubscribe_all(&mut ws, config, state).await;
+    subscribe_registry_invalidations(&mut ws, config, state).await;
     flush_queued_calls(&mut ws, config, queued_calls, state).await;
 
     let mut ping = tokio::time::interval(config.ping_interval);
@@ -635,6 +636,28 @@ async fn resubscribe_all(ws: &mut Ws, config: &HaConnectionConfig, state: &mut S
         .collect();
     for entity_id in entities {
         let _ = send_subscribe(ws, config, state, entity_id, None).await;
+    }
+}
+
+async fn subscribe_registry_invalidations(
+    ws: &mut Ws,
+    config: &HaConnectionConfig,
+    state: &mut SessionState,
+) {
+    for event_type in [
+        "entity_registry_updated",
+        "device_registry_updated",
+        "area_registry_updated",
+    ] {
+        let _ = send_payload(
+            ws,
+            config,
+            state,
+            json!({ "type": "subscribe_events", "event_type": event_type }),
+            PendingKind::Unsubscribe,
+            None,
+        )
+        .await;
     }
 }
 
