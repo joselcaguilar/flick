@@ -67,11 +67,14 @@ function RoomSketch({ anchors }: { anchors: Anchor[] }) {
   return (
     <div className="room-sketch" role="img" aria-label={anchors.map((anchor) => anchor.name).join(", ")}>
       <span className="camera-dot">Camera</span>
-      {anchors.map((anchor, index) => (
-        <i key={anchor.id} style={{ rotate: `${index * 32 - 28}deg` }}>
-          <b>{anchor.name}</b>
-        </i>
-      ))}
+      {anchors.map((anchor, index) => {
+        const angle = index * 32 - 28;
+        return (
+          <i key={anchor.id} style={{ rotate: `${angle}deg` }} data-side={angle < 0 ? "start" : "end"}>
+            <b style={{ rotate: `${-angle}deg` }}>{anchor.name}</b>
+          </i>
+        );
+      })}
     </div>
   );
 }
@@ -239,8 +242,7 @@ export function DevicesRoute() {
     <section className="feature-screen devices-screen" aria-labelledby="screen-title">
       <header className="operate-header">
         <div>
-          <p className="route-path">Devices</p>
-          <h1 id="screen-title">Taught devices</h1>
+          <h1 id="screen-title">Devices</h1>
           <p>Point at real objects once, then use reusable gestures like circle or two-hand stop.</p>
         </div>
         <Link className="ui-button ui-button-primary ui-button-md" to="/devices/teach">
@@ -431,7 +433,6 @@ export function TeachDeviceRoute() {
     <section className="feature-screen teach-screen" aria-labelledby="screen-title">
       <header className="operate-header">
         <div>
-          <p className="route-path">Devices / Teach</p>
           <h1 id="screen-title">Teach a device</h1>
           <p>
             Pick the Home Assistant target, capture two pointing spots, teach fine fan levels and test the
@@ -719,7 +720,6 @@ export function PlacesRoute() {
     <section className="feature-screen" aria-labelledby="screen-title">
       <header className="operate-header">
         <div>
-          <p className="route-path">Devices / Places</p>
           <h1 id="screen-title">Places</h1>
           <p>Places keep taught anchors tied to a stable camera view without storing camera images.</p>
         </div>
@@ -753,7 +753,6 @@ export function RealignRoute() {
     <section className="feature-screen teach-screen" aria-labelledby="screen-title">
       <header className="operate-header">
         <div>
-          <p className="route-path">Devices / Re-align</p>
           <h1 id="screen-title">Re-align devices</h1>
           <p>Your camera moved, so pointing pauses until two known devices confirm the new pose.</p>
         </div>

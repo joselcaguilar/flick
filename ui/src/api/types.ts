@@ -14,7 +14,8 @@ export type Domain =
   | "script"
   | string;
 export type ThemeMode = "system" | "light" | "dark";
-export type ThemeChoice = ThemeMode | "high-contrast";
+export type LightThemeId = "light" | "light_high_contrast" | "light_colorblind";
+export type DarkThemeId = "dark" | "dark_dimmed" | "dark_high_contrast";
 export type HaState = "disconnected" | "connecting" | "ready" | "auth_failed" | string;
 export type CameraState = "starting" | "running" | "idle" | "reconnecting" | "error" | "stopped" | string;
 export type EngineMode = "watching" | "idle" | "paused" | "restarting" | "error";
@@ -54,7 +55,8 @@ export type SettingsMap = {
   };
   "feedback.sounds"?: { enabled: boolean; volume: number };
   "ui.theme"?: ThemeMode;
-  "ui.high_contrast"?: boolean;
+  "ui.light_theme"?: LightThemeId;
+  "ui.dark_theme"?: DarkThemeId;
   "debug.log_suppressed"?: boolean;
   "onboarding.completed"?: boolean;
   "gestures.params"?: Record<string, unknown>;

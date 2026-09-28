@@ -129,7 +129,7 @@ export function HudCapsule({ liveState }: { liveState: HudState }) {
 
   return (
     <main className="hud-stage" aria-live="polite">
-      <section className="flick-glass hud-capsule" data-state={hud.state} data-tone={stateTone(hud.state)}>
+      <section className="hud-capsule" data-state={hud.state} data-tone={stateTone(hud.state)}>
         <span className="hud-icon" aria-hidden="true">
           <HudIcon hud={hud} />
         </span>

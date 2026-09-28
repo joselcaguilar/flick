@@ -256,9 +256,8 @@ export function OnboardingRoute() {
 
   return (
     <section className="onboarding-route" aria-labelledby="screen-title">
-      <div className="onboarding-hero">
-        <p className="route-path">Onboarding / First run</p>
-        <h1 id="screen-title">Zero to first flick in minutes.</h1>
+      <div className="page-header">
+        <h1 id="screen-title">Set up Flick</h1>
         <p>
           Connect the camera, prove a gesture works, then decide whether Home Assistant should receive real
           actions or whether Flick should stay in demo mode.

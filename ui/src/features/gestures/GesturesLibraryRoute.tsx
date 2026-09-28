@@ -158,7 +158,7 @@ function GestureSection({
   exportMode: boolean;
 }) {
   return (
-    <GlassPanel className="gestures-section">
+    <section className="gestures-section">
       <div className="gestures-section-heading">
         <div>
           <Badge tone="accent">{gestures.length} gestures</Badge>
@@ -179,7 +179,7 @@ function GestureSection({
           />
         ))}
       </div>
-    </GlassPanel>
+    </section>
   );
 }
 
@@ -251,9 +251,8 @@ export function GesturesLibraryRoute() {
 
   return (
     <section className="gestures-route" aria-labelledby="screen-title">
-      <div className="gestures-hero">
-        <p className="route-path">Gestures / Library</p>
-        <h1 id="screen-title">Every flick Flick understands.</h1>
+      <div className="page-header">
+        <h1 id="screen-title">Gestures</h1>
         <p>
           Built-ins work without training. Custom gestures keep their takes, quality and thresholds local, and
           packs share gestures without Home Assistant identifiers.

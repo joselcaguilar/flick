@@ -45,7 +45,7 @@ Local-first, low-latency gesture control built specifically for Home Assistant:
 
 ## Brand Commitments
 - Name: **Flick**. The product speaks in short, human, jargon-free copy ("hand points", not "landmarks").
-- No visual identity is committed yet. It will be established in DESIGN.md by a dedicated design task.
+- Visual identity (owner-pinned): **GitHub Primer canon, played straight** — professional and enterprise, matching the GitHub Copilot app. Mona Sans for UI, Monaspace Neon for code and IDs, and GitHub's six themes (Light, Light high contrast, Light Protanopia & Deuteranopia, Dark, Dark dimmed, Dark high contrast) plus "Sync with system". The owner rejected Liquid Glass as "too much": no blur, glass or decorative gradients. DESIGN.md holds the system.
 
 ## Evidence on Hand
 - Product and engineering spec: `docs/spec/` (README + 00–11).

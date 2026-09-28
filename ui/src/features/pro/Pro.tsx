@@ -14,7 +14,6 @@ export function ProRoute() {
     <section className="feature-screen pro-screen" aria-labelledby="screen-title">
       <header className="operate-header">
         <div>
-          <p className="route-path">Pro</p>
           <h1 id="screen-title">Core today. Pro later.</h1>
           <p>
             Flick stays local-first. Pro features will add optional setup assistance and larger-home

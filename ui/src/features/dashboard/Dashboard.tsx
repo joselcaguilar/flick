@@ -1,14 +1,22 @@
 import { Link } from "react-router-dom";
-import { useActivity, useStatus, useUpdates } from "../../api/hooks";
+import {
+  useActivity,
+  useCameraPreviewTicket,
+  useCameras,
+  useInstallUpdate,
+  useStatus,
+  useUpdates,
+} from "../../api/hooks";
 import { ConfidenceMeter, DevicePill, PreviewCanvas } from "../../components/domain";
 import { Badge, Button, GlassPanel, Kbd, ListRow, Skeleton } from "../../components/ui";
 import { useEventStore } from "../../events/store";
-import { useLiveHands } from "../../events/useLiveHands";
+import { useActiveCamera, useCameraLive, useLiveHands } from "../../events/useLiveHands";
 import { formatTime } from "../../lib/utils";
 
 function statusLabel(status?: string | null) {
   if (!status) return "Unknown";
-  return status.replace(/_/g, " ");
+  const label = status.replace(/_/g, " ");
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 function statusTone(status?: string | null): "neutral" | "accent" | "success" | "warning" | "danger" {
@@ -43,28 +51,36 @@ export function DashboardRoute() {
   const updates = useUpdates();
   const activity = useActivity("?limit=10");
   const eventState = useEventStore();
-  const liveHands = useLiveHands();
+  const installUpdate = useInstallUpdate();
+  const cameras = useCameras();
+  const active = useActiveCamera();
+  const camera = useCameraLive(active.id);
+  const running = camera?.state === "running";
+  const preview = useCameraPreviewTicket(active.id, running);
+  const liveHands = useLiveHands(active.id);
   const engine = status.data;
-  const camera = engine?.cameras[0];
+  const cameraName =
+    cameras.data?.find((item) => item.id === active.id)?.name ??
+    cameras.data?.[0]?.name ??
+    (active.id ? "Camera" : "No camera yet");
+  const target = eventState.selectedTarget;
+  const candidate = eventState.candidate;
   const inference =
     engine?.inference_ms_p95 ?? engine?.stages.find((stage) => stage.stage === "inference")?.p95_ms;
   const updateReady =
     updates.data?.app.state === "ready" || eventState.updates.some((update) => update.kind === "app");
+  const updateVersion = updates.data?.app.available;
 
   return (
     <section className="dashboard-shell" aria-labelledby="screen-title">
       <header className="operate-header">
         <div>
-          <p className="route-path">Home / Dashboard</p>
           <h1 id="screen-title">Dashboard</h1>
-          <p>Live camera, targeting status and recent Home Assistant outcomes.</p>
+          <p>What Flick sees, what it selected, and what Home Assistant did.</p>
         </div>
         <div className="header-actions">
-          <Button variant="primary" size="sm">
-            Pause 15 min
-          </Button>
-          <Link className="ui-button ui-button-secondary ui-button-sm" to="/devices/teach">
-            Teach device
+          <Link className="ui-button ui-button-primary ui-button-md" to="/devices/teach">
+            Teach a device
           </Link>
         </div>
       </header>
@@ -82,32 +98,57 @@ export function DashboardRoute() {
             <GlassPanel className="preview-panel dashboard-preview-panel">
               <div className="preview-header">
                 <div>
-                  <span>Live preview</span>
-                  <strong>{camera?.name ?? camera?.camera_id ?? "MacBook Camera"}</strong>
+                  <span>{cameraName}</span>
+                  <strong>Live preview</strong>
                 </div>
-                <Badge tone="success">{camera?.fps ?? 0} fps</Badge>
+                {running ? (
+                  <Badge tone="success">{Math.round(camera?.fps ?? 0)} fps</Badge>
+                ) : (
+                  <Badge>{statusLabel(camera?.state ?? "stopped")}</Badge>
+                )}
               </div>
-              <PreviewCanvas
-                alt="Mock camera preview with hand skeleton overlay"
-                hands={liveHands?.hands}
-                ray={liveHands?.ray}
-              />
-              <div className="preview-overlay-card">
-                <DevicePill
-                  name={eventState.selectedTarget?.name ?? "Ventilador dormitorio"}
-                  domain={eventState.selectedTarget?.domain ?? "fan"}
-                  detail={eventState.selectedTarget ? "selected · 4 s" : "ray steady"}
+              <div className="dashboard-stage">
+                <PreviewCanvas
+                  src={running ? preview.data?.src : undefined}
+                  alt={
+                    !running
+                      ? "Camera is off"
+                      : preview.data?.src
+                        ? "Live camera preview with hand tracking"
+                        : "Connecting to the camera…"
+                  }
+                  hands={running ? liveHands?.hands : []}
+                  ray={running ? liveHands?.ray : undefined}
                 />
-                <ConfidenceMeter value={eventState.candidate?.confidence ?? 0.88} label="Ray steady" />
+                {running && (target || candidate) ? (
+                  <div className="preview-overlay-card">
+                    {target ? (
+                      <DevicePill name={target.name} domain={target.domain} detail="selected" />
+                    ) : (
+                      <span>Point at a device to select it</span>
+                    )}
+                    {candidate ? (
+                      <ConfidenceMeter
+                        value={candidate.confidence}
+                        label={candidate.gesture_id.replace("builtin.", "")}
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
+              {running ? null : (
+                <p className="camera-note">
+                  The camera is off. <Link to="/cameras">Start it from Cameras</Link> to see what Flick sees.
+                </p>
+              )}
             </GlassPanel>
           )}
 
           <GlassPanel className="activity-panel dashboard-activity-panel">
             <div className="panel-heading">
               <div>
-                <span>Recent activity</span>
-                <strong>What Flick did</strong>
+                <span>Last 10 gestures and their Home Assistant results</span>
+                <strong>Recent activity</strong>
               </div>
               <Link to="/activity">View all</Link>
             </div>
@@ -122,7 +163,7 @@ export function DashboardRoute() {
                 />
               ))}
               {!activity.isLoading && !activity.data?.items.length ? (
-                <p>No gestures yet. Try a flick to see it here.</p>
+                <p className="empty-note">No gestures yet. Try a flick and it shows up here.</p>
               ) : null}
             </div>
           </GlassPanel>
@@ -133,13 +174,13 @@ export function DashboardRoute() {
             <StatusTile
               label="Camera"
               value={statusLabel(camera?.state)}
-              detail={camera?.camera_permission ?? "authorized"}
+              detail={camera?.camera_permission ?? engine?.camera_permission ?? undefined}
               tone={statusTone(camera?.state)}
             />
             <StatusTile
               label="Home Assistant"
               value={statusLabel(engine?.ha.state)}
-              detail={engine?.ha.ha_version ?? "2026.9"}
+              detail={engine?.ha.ha_version ? `HA ${engine.ha.ha_version}` : undefined}
               tone={statusTone(engine?.ha.state)}
             />
             <StatusTile
@@ -150,18 +191,26 @@ export function DashboardRoute() {
             />
             <StatusTile
               label="Place"
-              value={engine?.place?.name ?? "Bedroom desk"}
-              detail={statusLabel(engine?.place?.state ?? "ok")}
-              tone={statusTone(engine?.place?.state ?? "ok")}
+              value={engine?.place?.name ?? "Not set"}
+              detail={engine?.place ? statusLabel(engine.place.state) : "Teach a device to set one"}
+              tone={statusTone(engine?.place?.state)}
             />
           </section>
 
           {updateReady ? (
             <GlassPanel className="update-banner dashboard-update-banner">
               <Badge tone="warning">Update ready</Badge>
-              <span>Flick 1.3 is ready — restart to update.</span>
-              <Button size="sm" variant="ghost">
-                Restart
+              <span>
+                {updateVersion
+                  ? `Flick ${updateVersion} is ready to install.`
+                  : "An update is ready to install."}
+              </span>
+              <Button
+                size="sm"
+                loading={installUpdate.isPending}
+                onClick={() => void installUpdate.mutateAsync({ kind: "app" })}
+              >
+                Restart to update
               </Button>
             </GlassPanel>
           ) : null}
@@ -169,17 +218,18 @@ export function DashboardRoute() {
           <GlassPanel className="quick-actions dashboard-quick-actions">
             <div className="panel-heading">
               <div>
-                <span>Quick actions</span>
-                <strong>Common command paths</strong>
+                <span>
+                  Or press <Kbd>⌘K</Kbd> anywhere
+                </span>
+                <strong>Quick actions</strong>
               </div>
-              <Kbd>⌘K</Kbd>
             </div>
             <div className="quick-action-row">
-              <Link className="ui-button ui-button-primary ui-button-md" to="/mappings/new">
+              <Link className="ui-button ui-button-secondary ui-button-md" to="/mappings/new">
                 Add mapping
               </Link>
-              <Link className="ui-button ui-button-secondary ui-button-md" to="/devices/teach">
-                Teach a device
+              <Link className="ui-button ui-button-secondary ui-button-md" to="/gestures">
+                Record a gesture
               </Link>
               <Link className="ui-button ui-button-secondary ui-button-md" to="/cameras">
                 Camera status

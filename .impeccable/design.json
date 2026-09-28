@@ -1,133 +1,334 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-28T17:21:11+02:00",
+  "generatedAt": "2026-09-29T01:36:08.715+02:00",
   "title": "Design System: Flick",
   "extensions": {
     "colorMeta": {
-      "accent-blue": {
+      "bg": {
+        "role": "neutral",
+        "displayName": "Theme Background",
+        "canonical": "var(--flick-bg)",
+        "tonalRamp": [
+          "#010409",
+          "#0d1117",
+          "#151b23",
+          "#212830",
+          "#e6eaef",
+          "#f6f8fa",
+          "#ffffff",
+          "#ffffff"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Primer Surface",
+        "canonical": "var(--flick-surface)",
+        "tonalRamp": [
+          "#010409",
+          "#0d1117",
+          "#151b23",
+          "#212830",
+          "#f6f8fa",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff"
+        ]
+      },
+      "surface-elevated": {
+        "role": "neutral",
+        "displayName": "Elevated Surface",
+        "canonical": "var(--flick-surface-elevated)",
+        "tonalRamp": [
+          "#151b23",
+          "#212830",
+          "#2a313c",
+          "#262c36",
+          "#eff2f5",
+          "#f6f8fa",
+          "#ffffff",
+          "#ffffff"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Theme Text",
+        "canonical": "var(--flick-text)",
+        "tonalRamp": [
+          "#010409",
+          "#1f2328",
+          "#393f46",
+          "#59636e",
+          "#9198a1",
+          "#d1d7e0",
+          "#f0f6fc",
+          "#ffffff"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Text",
+        "canonical": "var(--flick-muted)",
+        "tonalRamp": [
+          "#393f46",
+          "#59636e",
+          "#656c76",
+          "#818b98",
+          "#9198a1",
+          "#b7bdc8",
+          "#d1d7e0",
+          "#f0f6fc"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Primer Border",
+        "canonical": "var(--flick-border)",
+        "tonalRamp": [
+          "#3d444d",
+          "#454c54",
+          "#656c76",
+          "#818b98",
+          "#b7bdc8",
+          "#d1d9e0",
+          "#e6eaef",
+          "#eff2f5"
+        ]
+      },
+      "accent-emphasis": {
         "role": "primary",
-        "displayName": "Command Blue",
-        "canonical": "#006DFF",
+        "displayName": "Accent Emphasis Blue",
+        "canonical": "var(--flick-accent-emphasis)",
         "tonalRamp": [
-          "#07172A",
-          "#0E3156",
-          "#185486",
-          "#2B7ECC",
-          "#006DFF",
-          "#66A8FF",
-          "#CFE3FF",
-          "#EEF7FF"
+          "#023b95",
+          "#0349b4",
+          "#0969da",
+          "#1f6feb",
+          "#316dca",
+          "#409eff",
+          "#74b9ff",
+          "#ddf4ff"
         ]
       },
-      "accent-violet": {
-        "role": "secondary",
-        "displayName": "Violet Beam",
-        "canonical": "#6D5DF7",
+      "accent-muted": {
+        "role": "primary",
+        "displayName": "Accent Muted Fill",
+        "canonical": "var(--flick-accent-muted)",
         "tonalRamp": [
-          "#1A1038",
-          "#332061",
-          "#5639A2",
-          "#775AE1",
-          "#6D5DF7",
-          "#C4B2FF",
-          "#E5DCFF",
-          "#F7F3FF"
+          "#388bfd1a",
+          "#4184e41a",
+          "#5cacff1a",
+          "#54aeff66",
+          "#ddf4ff",
+          "#dff7ff",
+          "#eff8ff",
+          "#ffffff"
         ]
       },
-      "dark-glass": {
-        "role": "material",
-        "displayName": "Dark Liquid Glass",
-        "canonical": "rgba(22, 25, 34, 0.62)",
+      "on-accent": {
+        "role": "primary",
+        "displayName": "On Accent",
+        "canonical": "var(--flick-on-accent)",
         "tonalRamp": [
-          "#090B10",
-          "#11141C",
-          "#171B25",
-          "#242A38",
-          "#3A4357",
-          "#6F7A91",
-          "#AEB7CA",
-          "#F6F8FF"
+          "#010409",
+          "#1f2328",
+          "#393f46",
+          "#59636e",
+          "#b7bdc8",
+          "#d1d7e0",
+          "#f0f6fc",
+          "#ffffff"
         ]
       },
-      "light-glass": {
-        "role": "material",
-        "displayName": "Light Liquid Glass",
-        "canonical": "rgba(255, 255, 255, 0.68)",
+      "success-emphasis": {
+        "role": "semantic",
+        "displayName": "Success Emphasis",
+        "canonical": "var(--flick-success-emphasis)",
         "tonalRamp": [
-          "#10131A",
-          "#5B6475",
-          "#9CA6B8",
-          "#D9E0EC",
-          "#EEF2F8",
-          "#F5F7FB",
-          "#FFFFFF",
-          "#FFFFFF"
+          "#024c1a",
+          "#055d20",
+          "#1a7f37",
+          "#1f883d",
+          "#238636",
+          "#28d751",
+          "#dafbe1",
+          "#d2fedb"
+        ]
+      },
+      "attention-emphasis": {
+        "role": "semantic",
+        "displayName": "Attention Emphasis",
+        "canonical": "var(--flick-attention-emphasis)",
+        "tonalRamp": [
+          "#603700",
+          "#744500",
+          "#966600",
+          "#9a6700",
+          "#c69026",
+          "#d29922",
+          "#fff8c5",
+          "#fcf7be"
+        ]
+      },
+      "danger-emphasis": {
+        "role": "semantic",
+        "displayName": "Danger Emphasis",
+        "canonical": "var(--flick-danger-emphasis)",
+        "tonalRamp": [
+          "#86061d",
+          "#a0111f",
+          "#bc4c00",
+          "#cf222e",
+          "#da3633",
+          "#ff6a69",
+          "#ff9492",
+          "#ffebe9"
+        ]
+      },
+      "stage-bg": {
+        "role": "signature",
+        "displayName": "Always-Dark Camera Stage",
+        "canonical": "#0d1117",
+        "tonalRamp": [
+          "#010409",
+          "#0d1117",
+          "#151b23",
+          "#212830",
+          "#3d444d",
+          "#656c76",
+          "#9198a1",
+          "#f0f6fc"
+        ]
+      },
+      "stage-text": {
+        "role": "signature",
+        "displayName": "Stage Text",
+        "canonical": "#f0f6fc",
+        "tonalRamp": [
+          "#010409",
+          "#0d1117",
+          "#3d444d",
+          "#656c76",
+          "#9198a1",
+          "#b7bdc8",
+          "#d1d7e0",
+          "#f0f6fc"
+        ]
+      },
+      "focus": {
+        "role": "accessibility",
+        "displayName": "Focus Ring",
+        "canonical": "var(--flick-focus)",
+        "tonalRamp": [
+          "#023b95",
+          "#0349b4",
+          "#0969da",
+          "#1f6feb",
+          "#316dca",
+          "#409eff",
+          "#74b9ff",
+          "#ddf4ff"
         ]
       }
     },
     "typographyMeta": {
       "display": {
         "displayName": "Display",
-        "purpose": "Prototype framing and rare product statements."
+        "purpose": "Rare high-level framing; most app screens use Headline instead."
       },
       "headline": {
         "displayName": "Headline",
-        "purpose": "Screen and flow titles."
+        "purpose": "Page titles and first-viewport headings."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Box, section, row, and panel headings."
       },
       "body": {
         "displayName": "Body",
-        "purpose": "Native operational copy."
+        "purpose": "Operational copy, rows, settings descriptions, and buttons."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Badges, metadata, captions, and compact status labels."
       },
       "mono": {
-        "displayName": "Geist Mono",
-        "purpose": "Entity IDs, shortcuts and diagnostics only."
+        "displayName": "Monaspace Neon",
+        "purpose": "Home Assistant entity IDs, shortcuts, versions, and diagnostics only."
       },
       "hud-title": {
         "displayName": "HUD Title",
-        "purpose": "Desktop glass overlay text at 3 m."
+        "purpose": "Glanceable desktop overlay result title."
+      },
+      "hud-body": {
+        "displayName": "HUD Body",
+        "purpose": "Secondary HUD feedback text."
       }
     },
     "shadows": [
       {
-        "name": "glass-float",
-        "value": "0 24px 80px rgba(0,0,0,.34), inset 0 1px rgba(255,255,255,.18)",
-        "purpose": "Floating sidebar, toolbar, command palette and HUD."
+        "name": "small-control",
+        "value": "var(--flick-shadow-small)",
+        "purpose": "Subtle Primer control relief in themes that need it."
+      },
+      {
+        "name": "overlay",
+        "value": "var(--flick-shadow-overlay)",
+        "purpose": "Floating layers only: menus, popovers, dialogs, sheets, toasts, command palette, HUD."
       },
       {
         "name": "preview-depth",
-        "value": "0 32px 120px rgba(0,0,0,.38)",
-        "purpose": "Live preview hero."
+        "value": "none",
+        "purpose": "Camera previews stay flat; the dark stage provides focus."
       }
     ],
     "motion": [
       {
-        "name": "fast-native",
-        "value": "160ms cubic-bezier(0.16, 1, 0.3, 1)",
-        "purpose": "Controls and row selection."
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.2, 0, 0, 1)",
+        "purpose": "Default state transitions."
+      },
+      {
+        "name": "ease-fluid",
+        "value": "cubic-bezier(0.33, 1, 0.68, 1)",
+        "purpose": "Chevron rotation and small float-in motion."
+      },
+      {
+        "name": "fast",
+        "value": "120ms",
+        "purpose": "Control, hover, and focus changes."
       },
       {
         "name": "panel",
-        "value": "220ms cubic-bezier(0.2,0,0,1)",
-        "purpose": "Palette/sheet movement."
+        "value": "200ms",
+        "purpose": "Panel-level transitions."
       },
       {
-        "name": "reduce-motion",
-        "value": "1ms and static bars",
-        "purpose": "Accessibility fallback."
+        "name": "dwell",
+        "value": "500ms",
+        "purpose": "Selection/dwell feedback."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "1ms",
+        "purpose": "Reduced motion collapses animations and transitions to static state changes."
       }
     ],
     "breakpoints": [
       {
-        "name": "phone",
-        "value": "360px"
-      },
-      {
-        "name": "tablet",
-        "value": "760px"
-      },
-      {
-        "name": "desktop",
+        "name": "wide-settings",
         "value": "1120px"
+      },
+      {
+        "name": "sidebar-collapse",
+        "value": "980px"
+      },
+      {
+        "name": "mobile",
+        "value": "720px"
+      },
+      {
+        "name": "compact-onboarding",
+        "value": "560px"
       }
     ]
   },
@@ -136,71 +337,154 @@
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "Compact pro action with command-blue gradient.",
-      "html": "<button class=\"ds-primary\">Teach a device <kbd>\u2318T</kbd></button>",
-      "css": ".ds-primary{min-height:44px;border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:10px 16px;background:linear-gradient(135deg,#006DFF,#6D5DF7);color:#fff;font-family:var(--font-sans);font-weight:650;box-shadow:0 16px 44px rgba(77,163,255,.28),inset 0 1px rgba(255,255,255,.38);transition:transform 160ms cubic-bezier(.16,1,.3,1)}.ds-primary:hover{transform:translateY(-1px)}.ds-primary:focus-visible{outline:3px solid var(--flick-focus);outline-offset:3px}.ds-primary kbd{font-family:var(--font-mono);font-size:12px;margin-left:8px;opacity:.86}"
+      "description": "The one primary action treatment for a screen or Box.",
+      "html": "<button class=\"ds-btn-primary\">Retry</button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;height:32px;border:1px solid transparent;border-radius:6px;background:var(--flick-accent-emphasis);color:var(--flick-on-accent);padding:0 12px;font-family:var(--font-sans);font-size:14px;font-weight:500;line-height:1;box-shadow:var(--flick-shadow-small);cursor:pointer;transition:background 120ms cubic-bezier(.2,0,0,1),border-color 120ms cubic-bezier(.2,0,0,1)}.ds-btn-primary:hover,.ds-btn-primary:active{background:color-mix(in srgb,var(--flick-accent-emphasis) 88%,var(--flick-text));color:var(--flick-on-accent)}.ds-btn-primary:focus-visible{outline:2px solid var(--flick-focus);outline-offset:2px}"
     },
     {
-      "name": "Glass Panel",
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Default Primer action button for ordinary operations.",
+      "html": "<button class=\"ds-btn-secondary\">Pause 15 min</button>",
+      "css": ".ds-btn-secondary{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;height:32px;border:1px solid var(--flick-btn-border);border-radius:6px;background:var(--flick-btn-bg);color:var(--flick-text);padding:0 12px;font-family:var(--font-sans);font-size:14px;font-weight:500;line-height:1;box-shadow:var(--flick-shadow-small);cursor:pointer;transition:background 120ms cubic-bezier(.2,0,0,1),border-color 120ms cubic-bezier(.2,0,0,1)}.ds-btn-secondary:hover{background:var(--flick-btn-hover)}.ds-btn-secondary:active{background:var(--flick-btn-active)}.ds-btn-secondary:focus-visible{outline:2px solid var(--flick-focus);outline-offset:2px}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Low-emphasis action inside dense Boxes and floating layers.",
+      "html": "<button class=\"ds-btn-ghost\">Close</button>",
+      "css": ".ds-btn-ghost{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;height:32px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--flick-text);padding:0 12px;font-family:var(--font-sans);font-size:14px;font-weight:500;line-height:1;box-shadow:none;cursor:pointer;transition:background 120ms cubic-bezier(.2,0,0,1)}.ds-btn-ghost:hover{background:var(--flick-neutral-muted)}.ds-btn-ghost:focus-visible{outline:2px solid var(--flick-focus);outline-offset:2px}"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Primer text input with opaque fill and inset relief.",
+      "html": "<label class=\"ds-field\"><span>Instance URL</span><input class=\"ds-input\" value=\"http://homeassistant.local:8123\" /></label>",
+      "css": ".ds-field{display:grid;gap:6px;color:var(--flick-muted);font-family:var(--font-sans);font-size:12px;font-weight:600}.ds-input{height:32px;border:1px solid var(--flick-border);border-radius:6px;background:var(--flick-bg);color:var(--flick-text);padding:0 12px;font:400 14px/1.5 var(--font-sans);box-shadow:inset 0 1px 0 0 var(--flick-neutral-subtle)}.ds-input:focus-visible{border-color:var(--flick-focus);outline:1px solid var(--flick-focus);outline-offset:-2px}"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Compact semantic label for status and metadata.",
+      "html": "<span class=\"ds-badge ds-badge-success\">ready</span>",
+      "css": ".ds-badge{display:inline-flex;align-items:center;height:20px;border:1px solid var(--flick-border);border-radius:999px;padding:0 7px;color:var(--flick-muted);font-family:var(--font-sans);font-size:12px;font-weight:500;line-height:1;white-space:nowrap}.ds-badge:hover{background:var(--flick-neutral-subtle)}.ds-badge:focus-visible{outline:2px solid var(--flick-focus);outline-offset:2px}.ds-badge-success{border-color:currentColor;color:var(--flick-accent-mint)}"
+    },
+    {
+      "name": "Box With Divided Rows",
       "kind": "card",
-      "refersTo": "glass-panel",
-      "description": "Liquid material with opaque fallback.",
-      "html": "<section class=\"ds-glass flick-glass\">Ventilador dormitorio selected</section>",
-      "css": ".ds-glass{border:1px solid var(--flick-border);border-radius:32px;padding:20px;color:var(--flick-text);box-shadow:var(--flick-shadow-glass);background:var(--flick-material-opaque)}@supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.ds-glass{background:var(--flick-material-glass);backdrop-filter:blur(28px) saturate(1.55);-webkit-backdrop-filter:blur(28px) saturate(1.55)}}"
+      "refersTo": "box",
+      "description": "Canonical surface pattern: one Box, many divided rows.",
+      "html": "<section class=\"ds-box\"><div class=\"ds-row\"><strong>Engine</strong><span>running</span></div><div class=\"ds-row\"><strong>Home Assistant</strong><span>ready</span></div></section>",
+      "css": ".ds-box{display:grid;border:1px solid var(--flick-border);border-radius:12px;background:var(--flick-surface);color:var(--flick-text);padding:0;font-family:var(--font-sans);overflow:hidden}.ds-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px 16px}.ds-row+.ds-row{border-top:1px solid var(--flick-border-muted)}.ds-row:hover{background:var(--flick-neutral-subtle)}.ds-row strong{font-size:14px;font-weight:600}.ds-row span{color:var(--flick-muted);font-size:12px}"
     },
     {
-      "name": "Command Row",
+      "name": "Sidebar Navigation Row",
+      "kind": "nav",
+      "refersTo": "navigation-row",
+      "description": "Dense Primer navigation row with active neutral fill and optional shortcut.",
+      "html": "<a class=\"ds-nav-row ds-active\" href=\"#\"><span>Dashboard</span><kbd>1</kbd></a>",
+      "css": ".ds-nav-row{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:32px;border-radius:6px;color:var(--flick-text);text-decoration:none;padding:4px 8px;font-family:var(--font-sans);font-size:14px}.ds-nav-row:hover{background:var(--flick-neutral-subtle)}.ds-nav-row.ds-active{background:var(--flick-neutral-muted);font-weight:600}.ds-nav-row:focus-visible{outline:2px solid var(--flick-focus);outline-offset:2px}.ds-nav-row kbd{border:1px solid var(--flick-border);border-bottom-width:2px;border-radius:4px;background:var(--flick-bg-subtle);color:var(--flick-muted);padding:1px 5px;font-family:var(--font-mono);font-size:11px;line-height:1}"
+    },
+    {
+      "name": "Command Palette Row",
       "kind": "custom",
       "refersTo": "command-row",
-      "description": "Keyboard-first action row.",
-      "html": "<div class=\"ds-command\"><span>Teach a device</span><kbd>\u2318T</kbd></div>",
-      "css": ".ds-command{display:flex;align-items:center;justify-content:space-between;gap:16px;border-radius:18px;padding:12px 14px;background:color-mix(in srgb,var(--flick-accent-blue) 14%,transparent);color:var(--flick-text);font-family:var(--font-sans);font-weight:650}.ds-command kbd{font-family:var(--font-mono);font-size:12px;color:var(--flick-muted)}"
+      "description": "Keyboard-first command result row with active neutral fill.",
+      "html": "<button class=\"ds-command-row\"><strong>Teach Ventilador dormitorio</strong><small>Open the point-to-select teach flow.</small><kbd>T</kbd></button>",
+      "css": ".ds-command-row{width:100%;display:flex;align-items:center;gap:12px;border:0;border-radius:6px;background:var(--flick-neutral-muted);color:var(--flick-text);padding:8px;text-align:left;font-family:var(--font-sans);cursor:pointer}.ds-command-row:hover{background:var(--flick-neutral-subtle)}.ds-command-row:focus-visible{outline:2px solid var(--flick-focus);outline-offset:2px}.ds-command-row strong,.ds-command-row small{display:block}.ds-command-row strong{font-size:14px;font-weight:600}.ds-command-row small{flex:1;color:var(--flick-muted);font-size:12px}.ds-command-row kbd{border:1px solid var(--flick-border);border-bottom-width:2px;border-radius:4px;background:var(--flick-bg-subtle);color:var(--flick-muted);padding:1px 5px;font-family:var(--font-mono);font-size:11px;line-height:1}"
+    },
+    {
+      "name": "Camera Stage",
+      "kind": "custom",
+      "refersTo": "camera-stage",
+      "description": "Always-dark live preview stage with readable placeholder and overlay plate.",
+      "html": "<figure class=\"ds-stage\"><figcaption><strong>Camera preview</strong><span>Local camera only</span></figcaption></figure>",
+      "css": ".ds-stage{position:relative;display:grid;place-items:center;aspect-ratio:16/10;margin:0;border-radius:8px;background:#0d1117;color:#f0f6fc;font-family:var(--font-sans);overflow:hidden}.ds-stage figcaption{display:grid;gap:4px;border:1px solid #3d444d;border-radius:8px;background:#0d1117e6;padding:8px 12px;text-align:center}.ds-stage strong{font-size:14px;font-weight:600}.ds-stage span{color:#9198a1;font-size:12px}.ds-stage:focus-visible{outline:2px solid var(--flick-focus);outline-offset:2px}"
     },
     {
       "name": "HUD Capsule",
       "kind": "custom",
-      "refersTo": "hud-glass",
-      "description": "Desktop-only floating glass result capsule.",
-      "html": "<aside class=\"ds-hud flick-glass\"><strong>Ventilador dormitorio</strong><span>selected \u00b7 4 s</span></aside>",
-      "css": ".ds-hud{width:380px;min-height:104px;border-radius:40px;border:1px solid var(--flick-border);padding:20px 24px;color:var(--flick-text);box-shadow:var(--flick-shadow-glass);background:var(--flick-material-opaque)}.ds-hud strong{display:block;font-size:22px;line-height:1.08}.ds-hud span{display:block;margin-top:4px;font-size:20px;line-height:1.25}.high-contrast .ds-hud{background:#000;color:#fff;border-color:#fff;backdrop-filter:none}"
+      "refersTo": "hud-capsule",
+      "description": "Desktop overlay feedback capsule with state icon and progress.",
+      "html": "<aside class=\"ds-hud\"><i>✓</i><div><strong>Ventilador dormitorio</strong><span>Done</span><b><em></em></b></div></aside>",
+      "css": ".ds-hud{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:14px;width:min(380px,calc(100vw - 32px));min-height:88px;border:1px solid var(--flick-border);border-radius:12px;background:var(--flick-surface-elevated);color:var(--flick-text);box-shadow:var(--flick-shadow-overlay);padding:14px 16px;font-family:var(--font-sans)}.ds-hud i{display:grid;place-items:center;width:44px;height:44px;border-radius:8px;background:var(--flick-success-emphasis);color:#fff;font-style:normal;font-size:20px;font-weight:600}.ds-hud strong{display:block;font-size:20px;line-height:1.2;font-weight:600}.ds-hud span{display:block;margin-top:4px;color:var(--flick-muted);font-size:15px}.ds-hud b{display:block;overflow:hidden;height:6px;margin-top:8px;border-radius:999px;background:var(--flick-neutral-muted)}.ds-hud em{display:block;width:70%;height:100%;border-radius:inherit;background:var(--flick-accent-emphasis)}"
     }
   ],
   "narrative": {
-    "northStar": "Liquid Command Remote",
-    "overview": "A Raycast-like pro utility for local gesture control, rendered in dark-first macOS-style Liquid Glass with first-class light and high-contrast variants.",
+    "northStar": "Primer Operations Console",
+    "overview": "Flick's shipped interface is a GitHub-grade operations console for the home. The chrome is calm, flat, and Primer-native; the live camera stage is the only area allowed to feel vivid because it is the evidence surface. The app refuses consumer smart-home tiles, decorative gradients, blur, and Liquid Glass.\n\nThe system is professional before it is expressive: Mona Sans, Monaspace Neon, GitHub's six selectable themes, opaque Boxes, divided lists, one action blue, and semantic status colors. Screens tell the same story every time: status at a glance, what Flick sees and did, then one primary action.",
     "keyCharacteristics": [
-      "Dark-first glass workspace with polished light mode.",
-      "Command palette and visible shortcuts.",
-      "Live preview is the hero.",
-      "Hairline alpha borders and inner highlights.",
-      "Desktop-only glass HUD with opaque fallbacks."
+      "Mona Sans for interface text and Monaspace Neon for entity IDs, shortcuts, and diagnostics.",
+      "Six GitHub themes selected by `data-theme`, with independent light/dark choices and system sync.",
+      "1px borders, flat opaque fills, 6px controls, 12px Boxes, and no nested-card stacks.",
+      "Accent-emphasis blue is the primary action color; semantic state colors are text-redundant.",
+      "The camera preview stage stays dark in every theme so video and overlays read consistently."
     ],
     "rules": [
       {
-        "name": "The Glass Has a Job Rule",
-        "body": "Glass appears for persistent navigation, preview overlays, command surfaces and HUD only.",
+        "name": "The Blue Is the Action Rule",
+        "body": "Primary actions use `accent-emphasis`; do not switch primary buttons to success green or introduce a second brand accent.",
         "section": "colors"
       },
       {
-        "name": "The Native First Rule",
-        "body": "Never bundle SF; rely on the platform stack, with Inter and Geist Mono as local fallbacks.",
+        "name": "The Camera Owns Vividness Rule",
+        "body": "Keep surrounding chrome quiet and tokenized; visual energy belongs to the live preview, state overlays, and semantic feedback.",
+        "section": "colors"
+      },
+      {
+        "name": "The Colorblind Semantics Rule",
+        "body": "State must be carried by label, icon, and placement as well as color; colorblind themes deliberately remap success and danger.",
+        "section": "colors"
+      },
+      {
+        "name": "The Mona-First Rule",
+        "body": "Mona Sans is the product voice; do not fall back to Inter, Geist, or decorative display fonts for new surfaces.",
         "section": "typography"
       },
       {
-        "name": "The Opaque Fallback Rule",
-        "body": "Any use of blur/saturation must have an opaque background in @supports not (backdrop-filter) and prefers-reduced-transparency.",
+        "name": "The Mono Means Machine Rule",
+        "body": "Monaspace Neon is reserved for values that behave like identifiers or shortcuts, never for headings or flavor.",
+        "section": "typography"
+      },
+      {
+        "name": "The Box-Then-Row Rule",
+        "body": "Use one bordered Box with divided rows before creating new cards; nesting cards inside cards is off-world.",
+        "section": "layout"
+      },
+      {
+        "name": "The First Viewport Rule",
+        "body": "Lead with status, then the live preview, then one primary action; do not open with marketing tiles or feature cards.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat Until Floating Rule",
+        "body": "If a surface is part of the page, it is flat; if it floats above the page, it may use the overlay shadow.",
         "section": "elevation"
+      },
+      {
+        "name": "The Six And Twelve Rule",
+        "body": "Controls are 6px; Boxes are 12px. Do not bring back 24px+ liquid rounding.",
+        "section": "shapes"
       }
     ],
     "dos": [
-      "Do make dark mode primary and light mode equally crafted.",
-      "Do show \u2318K, shortcuts and command-palette affordances on desktop.",
-      "Do provide opaque fallbacks for glass materials."
+      "Do build new screens from Primer Boxes, divided rows, one primary action, and semantic status labels.",
+      "Do consume `--flick-*` tokens so all six GitHub themes and system sync keep working.",
+      "Do keep the camera stage dark across every theme.",
+      "Do use accent-emphasis blue for primary actions and focus, not success green.",
+      "Do pair status color with text, icon, tone, or placement for accessibility.",
+      "Do preserve reduced-motion behavior by shortening animation to static state changes."
     ],
     "donts": [
-      "Don't revive Sightline Cue Desk or gridded cue boards.",
-      "Don't ship flat boxy cards, stock shadcn or neon gamer HUDs.",
-      "Don't bundle SF or load fonts/icons from a runtime CDN."
+      "Don't reintroduce Liquid Glass, backdrop blur, translucent panels, decorative gradients, or oversized rounded corners.",
+      "Don't use consumer smart-home tiles, nested card decks, or marketing feature grids inside the app shell.",
+      "Don't replace Mona Sans / Monaspace Neon with Inter, Geist, SF-only, or novelty fonts.",
+      "Don't make ordinary page Boxes float with shadows; reserve overlay shadow for actual floating layers.",
+      "Don't ban the room-sketch grid-line `linear-gradient`; it is a functional blueprint pattern, not decoration."
     ]
   }
 }

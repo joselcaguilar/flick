@@ -157,9 +157,8 @@ export function ActivityRoute() {
 
   return (
     <section className="activity-route" aria-labelledby="screen-title">
-      <div className="activity-hero">
-        <p className="route-path">Activity / Why didn't it fire?</p>
-        <h1 id="screen-title">Every outcome, explainable.</h1>
+      <div className="page-header">
+        <h1 id="screen-title">Activity</h1>
         <p>
           See fired actions, suppressed gestures and the detect → dispatch → Home Assistant latency chain.
           Debug mode logs one plain-English reason per suppressed candidate.

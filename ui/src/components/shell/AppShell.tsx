@@ -7,7 +7,6 @@ import { restartEventStream, startEventStream } from "../../events/client";
 import { useEventStore } from "../../events/store";
 import { isMacApp } from "../../platform/tauri";
 import { routes } from "../../routes/routes";
-import { useTheme } from "../../theme";
 import { BrandMark } from "../brand/BrandMark";
 import { Button, Kbd, Sheet, useToast } from "../ui";
 import { CommandPalette } from "./CommandPalette";
@@ -54,7 +53,6 @@ export function AppShell() {
   const pause = usePauseEngine();
   const resume = useResumeEngine();
   const { show } = useToast();
-  const theme = useTheme();
   const navRoutes = useMemo(() => routes.filter((route) => route.nav), []);
   const mobileRoutes = useMemo(() => routes.filter((route) => route.mobile), []);
   const shellOverride = new URLSearchParams(location.search).get("shell");
@@ -134,12 +132,12 @@ export function AppShell() {
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
-      <aside className="flick-glass shell-sidebar" aria-label="Primary navigation">
+      <aside className="shell-sidebar" aria-label="Primary navigation">
         {macShell ? (
           <div className="mac-sidebar-drag-inset" data-tauri-drag-region aria-hidden="true" />
         ) : null}
         <Link className="brand-mark" to="/">
-          <BrandMark className="brand-mark-slot" size={44} decorative />
+          <BrandMark className="brand-mark-slot" size={24} decorative />
           <strong>Flick</strong>
         </Link>
         <nav aria-label="Main navigation">
@@ -150,10 +148,6 @@ export function AppShell() {
             </NavLink>
           ))}
         </nav>
-        <button className="sidebar-command" type="button" onClick={() => setPaletteOpen(true)}>
-          <span>Command palette</span>
-          <Kbd>⌘K</Kbd>
-        </button>
         <div className="sidebar-live-status" data-tone={live.tone}>
           <i aria-hidden="true" />
           <div>
@@ -163,7 +157,7 @@ export function AppShell() {
         </div>
       </aside>
 
-      <header className="flick-glass shell-toolbar">
+      <header className="shell-toolbar">
         {macShell ? <div className="toolbar-drag-region" data-tauri-drag-region aria-hidden="true" /> : null}
         <div className="toolbar-left">
           <button
@@ -178,34 +172,24 @@ export function AppShell() {
           <StatusIndicator label="HA" value={haValue} />
         </div>
         <div className="toolbar-actions">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={togglePause}
-            loading={pause.isPending || resume.isPending}
-          >
+          <Button size="sm" onClick={togglePause} loading={pause.isPending || resume.isPending}>
             {status.data?.paused ? "Resume" : "Pause 15 min"}
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => theme.cycleMode()}>
-            Theme: {theme.mode}
-          </Button>
-          <Button
-            variant={theme.highContrast ? "primary" : "ghost"}
-            size="sm"
-            onClick={() => theme.setHighContrast(!theme.highContrast)}
+          <button
+            className="toolbar-search"
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            aria-label="Open command palette"
           >
-            High contrast
-          </Button>
-          <Button variant="primary" size="sm" onClick={() => setPaletteOpen(true)}>
-            ⌘K
-          </Button>
+            <span>Jump to…</span>
+            <Kbd>⌘K</Kbd>
+          </button>
         </div>
       </header>
 
       <main id="main-content" className="shell-content" data-route={location.pathname}>
-        {macShell ? <div className="content-drag-region" data-tauri-drag-region aria-hidden="true" /> : null}
         {engineRecoverable ? (
-          <section className="engine-recovery-banner flick-glass" role="alert" aria-live="polite">
+          <section className="engine-recovery-banner" role="alert" aria-live="polite">
             <div>
               <strong>Engine unreachable</strong>
               <span>
@@ -220,7 +204,7 @@ export function AppShell() {
         <Outlet />
       </main>
 
-      <nav className="flick-glass mobile-tabs" aria-label="Mobile navigation">
+      <nav className="mobile-tabs" aria-label="Mobile navigation">
         {mobileRoutes.map((route) => (
           <NavLink key={route.path} to={route.path} end={route.path === "/"}>
             <span>{route.shortTitle ?? route.title}</span>

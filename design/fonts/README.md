@@ -1,25 +1,19 @@
 # Flick bundled fonts
 
-Flick uses native platform typography first. On macOS the app should render **SF Pro** through `system-ui` / `-apple-system`; SF is not bundled. Offline fallbacks are bundled for Windows/Linux and for accessibility settings.
+Flick matches the GitHub Copilot app: **Mona Sans** for interface text and **Monaspace Neon** for code-like values. Both are bundled and loaded from local files; nothing is fetched from a network or CDN at runtime.
 
-## Default fallback: Inter
-- Files: `Inter-Variable.ttf`, `Inter-Italic-Variable.ttf`
-- Source: Google Fonts repository, `ofl/inter`
-  - https://github.com/google/fonts/tree/main/ofl/inter
-- License: SIL Open Font License 1.1 (`Inter-OFL.txt`)
-- Runtime: local file only; no CDN.
+## Interface: Mona Sans (variable weight)
+- Files: `MonaSans-Latin-Variable.woff2`, `MonaSans-Latin-Italic-Variable.woff2`, `MonaSans-LatinExt-Variable.woff2`, `MonaSans-LatinExt-Italic-Variable.woff2`
+- Source: https://github.com/github/mona-sans (Fontsource `@fontsource-variable/mona-sans` 5.3.0, `wght` axis subsets)
+- License: SIL Open Font License 1.1 (`MonaSans-OFL.txt`)
 
-## Monospace: Geist Mono
-- Files: `GeistMono-Variable.ttf`, `GeistMono-Italic-Variable.ttf`
-- Source: Google Fonts repository, `ofl/geistmono`
-  - https://github.com/google/fonts/tree/main/ofl/geistmono
-- License: SIL Open Font License 1.1 (`GeistMono-OFL.txt`)
-- Use: Home Assistant entity IDs, shortcuts, keycaps and technical diagnostics only.
+## Code and identifiers: Monaspace Neon
+- Files: `MonaspaceNeon-Latin-400.woff2`, `-500`, `-600`
+- Source: https://github.com/githubnext/monaspace (Fontsource `@fontsource/monaspace-neon` 5.3.0)
+- License: SIL Open Font License 1.1 (`MonaspaceNeon-OFL.txt`)
+- Use: Home Assistant entity IDs, keyboard shortcuts and diagnostics only.
 
 ## Accessibility setting: Atkinson Hyperlegible
-- Files: `AtkinsonHyperlegible-*.ttf` retained as an optional **Hyperlegible font** setting.
-- Source: Google Fonts repository, `ofl/atkinsonhyperlegible`
-  - https://github.com/google/fonts/tree/main/ofl/atkinsonhyperlegible
+- Files: `AtkinsonHyperlegible-*.ttf`, kept for an optional **Hyperlegible font** setting.
+- Source: https://github.com/google/fonts/tree/main/ofl/atkinsonhyperlegible
 - License: SIL Open Font License 1.1 (`OFL.txt`)
-
-No bundled font is fetched at runtime from a network or CDN.

@@ -21,18 +21,20 @@ export function SegmentedControl<T extends string>({
   return (
     <fieldset className={cn("ui-segmented", className)}>
       <legend>{label}</legend>
-      {segments.map((segment) => (
-        <label key={segment.value}>
-          <input
-            type="radio"
-            name={label}
-            value={segment.value}
-            checked={segment.value === value}
-            onChange={() => onChange(segment.value)}
-          />
-          <span>{segment.label}</span>
-        </label>
-      ))}
+      <div className="ui-segmented-options">
+        {segments.map((segment) => (
+          <label key={segment.value}>
+            <input
+              type="radio"
+              name={label}
+              value={segment.value}
+              checked={segment.value === value}
+              onChange={() => onChange(segment.value)}
+            />
+            <span>{segment.label}</span>
+          </label>
+        ))}
+      </div>
     </fieldset>
   );
 }

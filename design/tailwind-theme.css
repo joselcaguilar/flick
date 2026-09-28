@@ -1,29 +1,64 @@
+/*
+ * Flick design tokens: GitHub Primer canon, matching the GitHub Copilot app.
+ * Six Primer themes are selected through [data-theme] on <html>; see ui/src/theme.tsx.
+ * Surfaces are opaque. No blur, no gradients, no glass.
+ */
+
 @font-face {
-  font-family: "Inter";
-  src: url("./fonts/Inter-Variable.ttf") format("truetype");
-  font-weight: 100 900;
+  font-family: "Mona Sans";
+  src: url("./fonts/MonaSans-Latin-Variable.woff2") format("woff2-variations");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Mona Sans";
+  src: url("./fonts/MonaSans-LatinExt-Variable.woff2") format("woff2-variations");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Mona Sans";
+  src: url("./fonts/MonaSans-Latin-Italic-Variable.woff2") format("woff2-variations");
+  font-weight: 200 900;
+  font-style: italic;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Mona Sans";
+  src: url("./fonts/MonaSans-LatinExt-Italic-Variable.woff2") format("woff2-variations");
+  font-weight: 200 900;
+  font-style: italic;
+  font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Monaspace Neon";
+  src: url("./fonts/MonaspaceNeon-Latin-400.woff2") format("woff2");
+  font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
-  font-family: "Inter";
-  src: url("./fonts/Inter-Italic-Variable.ttf") format("truetype");
-  font-weight: 100 900;
-  font-style: italic;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Geist Mono";
-  src: url("./fonts/GeistMono-Variable.ttf") format("truetype");
-  font-weight: 100 900;
+  font-family: "Monaspace Neon";
+  src: url("./fonts/MonaspaceNeon-Latin-500.woff2") format("woff2");
+  font-weight: 500;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
-  font-family: "Geist Mono";
-  src: url("./fonts/GeistMono-Italic-Variable.ttf") format("truetype");
-  font-weight: 100 900;
-  font-style: italic;
+  font-family: "Monaspace Neon";
+  src: url("./fonts/MonaspaceNeon-Latin-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
   font-display: swap;
 }
 @font-face {
@@ -42,27 +77,28 @@
 }
 
 @theme {
-  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Geist Mono", "Cascadia Mono", monospace;
+  --font-sans: "Mona Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  --font-mono: "Monaspace Neon", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --color-background: var(--flick-bg);
   --color-foreground: var(--flick-text);
   --color-surface: var(--flick-surface);
   --color-surface-elevated: var(--flick-surface-elevated);
   --color-muted: var(--flick-muted);
   --color-border: var(--flick-border);
-  --color-primary: var(--flick-accent-blue);
-  --color-primary-foreground: #ffffff;
+  --color-primary: var(--flick-accent-emphasis);
+  --color-primary-foreground: var(--flick-on-accent);
   --color-violet: var(--flick-accent-violet);
   --color-success: var(--flick-accent-mint);
   --color-warning: var(--flick-accent-amber);
   --color-danger: var(--flick-accent-red);
   --color-focus: var(--flick-focus);
-  --radius-xs: 0.5rem;
-  --radius-sm: 0.75rem;
-  --radius-md: 1.125rem;
-  --radius-lg: 1.5rem;
-  --radius-xl: 2rem;
-  --radius-2xl: 2.5rem;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 12px;
+  --radius-control: 6px;
   --radius-pill: 999px;
   --spacing-1: 0.25rem;
   --spacing-2: 0.5rem;
@@ -74,169 +110,409 @@
   --spacing-10: 2.5rem;
   --spacing-12: 3rem;
   --spacing-16: 4rem;
-  --text-display: clamp(2.5rem, 5vw, 4.75rem);
-  --text-headline: clamp(1.75rem, 3vw, 3rem);
-  --text-title: 1.125rem;
-  --text-body: 1rem;
-  --text-small: 0.875rem;
-  --text-label: 0.8125rem;
-  --text-hud-title: 1.375rem;
-  --text-hud-body: 1.25rem;
-  --shadow-glass-float: var(--flick-shadow-glass);
-  --shadow-preview-depth: var(--flick-shadow-preview);
-  --ease-fluid: cubic-bezier(0.16, 1, 0.3, 1);
+  --text-display: 2rem;
+  --text-headline: 1.75rem;
+  --text-title: 1rem;
+  --text-body: 0.875rem;
+  --text-small: 0.75rem;
+  --text-label: 0.75rem;
+  --text-hud-title: 1.25rem;
+  --text-hud-body: 0.9375rem;
+  --shadow-glass-float: var(--flick-shadow-overlay);
+  --shadow-preview-depth: none;
+  --ease-fluid: cubic-bezier(0.33, 1, 0.68, 1);
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --animate-fast: 160ms;
-  --animate-panel: 220ms;
+  --animate-fast: 120ms;
+  --animate-panel: 200ms;
   --animate-dwell: 500ms;
 }
 
 :root {
-  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Geist Mono", "Cascadia Mono", monospace;
-  --radius-xs: 0.5rem;
-  --radius-sm: 0.75rem;
-  --radius-md: 1.125rem;
-  --radius-lg: 1.5rem;
-  --radius-xl: 2rem;
-  --radius-2xl: 2.5rem;
+  --font-sans: "Mona Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  --font-mono: "Monaspace Neon", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 12px;
+  --radius-control: 6px;
   --radius-pill: 999px;
-  --text-display: clamp(2.5rem, 5vw, 4.75rem);
-  --text-headline: clamp(1.75rem, 3vw, 3rem);
-  --text-title: 1.125rem;
-  --text-body: 1rem;
-  --text-small: 0.875rem;
-  --text-label: 0.8125rem;
-  --text-hud-title: 1.375rem;
-  --text-hud-body: 1.25rem;
-  --ease-fluid: cubic-bezier(0.16, 1, 0.3, 1);
+  --text-display: 2rem;
+  --text-headline: 1.75rem;
+  --text-title: 1rem;
+  --text-body: 0.875rem;
+  --text-small: 0.75rem;
+  --text-label: 0.75rem;
+  --text-hud-title: 1.25rem;
+  --text-hud-body: 0.9375rem;
+  --control-height: 2rem;
+  --control-height-sm: 1.75rem;
+  --control-height-lg: 2.5rem;
+  --ease-fluid: cubic-bezier(0.33, 1, 0.68, 1);
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --animate-fast: 160ms;
-  --animate-panel: 220ms;
+  --animate-fast: 120ms;
+  --animate-panel: 200ms;
   --animate-dwell: 500ms;
-  color-scheme: light dark;
-  --flick-accent-blue: #006DFF;
-  --flick-accent-violet: #6D5DF7;
-  --flick-accent-mint: #4EE6B8;
-  --flick-accent-amber: #FFB84D;
-  --flick-accent-red: #FF5D6C;
-  --flick-focus: #64B5FF;
-}
-
-:root, [data-theme="light"] {
-  color-scheme: light;
-  --flick-bg: #F5F7FB;
-  --flick-bg-rgb: 245 247 251;
-  --flick-surface: #FFFFFF;
-  --flick-surface-elevated: #EEF2F8;
-  --flick-text: #10131A;
-  --flick-muted: #5B6475;
-  --flick-border: rgba(17, 24, 39, 0.12);
-  --flick-border-strong: rgba(17, 24, 39, 0.2);
-  --flick-material-glass: rgba(255, 255, 255, 0.68);
-  --flick-material-glass-strong: rgba(255, 255, 255, 0.86);
-  --flick-material-opaque: rgba(255, 255, 255, 0.98);
-  --flick-specular: rgba(255, 255, 255, 0.92);
-  --flick-vibrant-text: #0B1020;
-  --flick-wallpaper-a: #DCE8FF;
-  --flick-wallpaper-b: #F7ECFF;
-  --flick-shadow-glass: 0 24px 70px rgba(31, 41, 55, 0.16), inset 0 1px rgba(255, 255, 255, 0.82);
-  --flick-shadow-preview: 0 32px 100px rgba(31, 41, 55, 0.18);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --flick-bg: #090B10;
-    --flick-bg-rgb: 9 11 16;
-    --flick-surface: #11141C;
-    --flick-surface-elevated: #171B25;
-    --flick-text: #F6F8FF;
-    --flick-muted: #AEB7CA;
-    --flick-border: rgba(255, 255, 255, 0.14);
-    --flick-border-strong: rgba(255, 255, 255, 0.24);
-    --flick-material-glass: rgba(22, 25, 34, 0.62);
-    --flick-material-glass-strong: rgba(26, 30, 42, 0.78);
-    --flick-material-opaque: rgba(17, 20, 28, 0.98);
-    --flick-specular: rgba(255, 255, 255, 0.18);
-    --flick-vibrant-text: #FFFFFF;
-    --flick-wallpaper-a: #0D1220;
-    --flick-wallpaper-b: #20143A;
-    --flick-shadow-glass: 0 24px 80px rgba(0, 0, 0, 0.34), inset 0 1px rgba(255, 255, 255, 0.18);
-    --flick-shadow-preview: 0 32px 120px rgba(0, 0, 0, 0.38);
-  }
-}
-
-[data-theme="dark"], .dark {
-  color-scheme: dark;
-  --flick-bg: #090B10;
-  --flick-bg-rgb: 9 11 16;
-  --flick-surface: #11141C;
-  --flick-surface-elevated: #171B25;
-  --flick-text: #F6F8FF;
-  --flick-muted: #AEB7CA;
-  --flick-border: rgba(255, 255, 255, 0.14);
-  --flick-border-strong: rgba(255, 255, 255, 0.24);
-  --flick-material-glass: rgba(22, 25, 34, 0.62);
-  --flick-material-glass-strong: rgba(26, 30, 42, 0.78);
-  --flick-material-opaque: rgba(17, 20, 28, 0.98);
-  --flick-specular: rgba(255, 255, 255, 0.18);
-  --flick-vibrant-text: #FFFFFF;
-  --flick-wallpaper-a: #0D1220;
-  --flick-wallpaper-b: #20143A;
-  --flick-shadow-glass: 0 24px 80px rgba(0, 0, 0, 0.34), inset 0 1px rgba(255, 255, 255, 0.18);
-  --flick-shadow-preview: 0 32px 120px rgba(0, 0, 0, 0.38);
-}
-
-[data-theme="high-contrast"], .high-contrast {
-  color-scheme: dark;
-  --flick-bg: #000000;
-  --flick-bg-rgb: 0 0 0;
-  --flick-surface: #000000;
-  --flick-surface-elevated: #000000;
-  --flick-text: #FFFFFF;
-  --flick-muted: #FFFFFF;
-  --flick-border: #FFFFFF;
-  --flick-border-strong: #FFFFFF;
-  --flick-material-glass: #000000;
-  --flick-material-glass-strong: #000000;
-  --flick-material-opaque: #000000;
-  --flick-specular: #FFFFFF;
-  --flick-vibrant-text: #FFFFFF;
-  --flick-accent-blue: #00C8FF;
-  --flick-accent-violet: #D7B8FF;
-  --flick-accent-mint: #00FF9D;
-  --flick-accent-amber: #FFFF00;
-  --flick-accent-red: #FF6B6B;
-  --flick-focus: #FFFF00;
+  /* The camera stage stays dark in every theme so video reads as video. */
+  --flick-stage: #0d1117;
+  --flick-stage-text: #f0f6fc;
+  --flick-stage-muted: #9198a1;
+  --flick-specular: transparent;
   --flick-shadow-glass: none;
   --flick-shadow-preview: none;
 }
 
-@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .flick-glass {
-    background: var(--flick-material-glass);
-    -webkit-backdrop-filter: blur(28px) saturate(1.55);
-    backdrop-filter: blur(28px) saturate(1.55);
+/* Light (default, also used before the theme script runs). */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --flick-bg: #ffffff;
+  --flick-bg-rgb: 255 255 255;
+  --flick-bg-subtle: #f6f8fa;
+  --flick-bg-inset: #f6f8fa;
+  --flick-sidebar: #f6f8fa;
+  --flick-surface: #ffffff;
+  --flick-surface-elevated: #ffffff;
+  --flick-text: #1f2328;
+  --flick-muted: #59636e;
+  --flick-vibrant-text: #1f2328;
+  --flick-border: #d1d9e0;
+  --flick-border-muted: #d1d9e0b3;
+  --flick-border-strong: #818b98;
+  --flick-btn-bg: #f6f8fa;
+  --flick-btn-hover: #eff2f5;
+  --flick-btn-active: #e6eaef;
+  --flick-btn-border: #d1d9e0;
+  --flick-neutral-muted: #818b981f;
+  --flick-neutral-subtle: #818b980f;
+  --flick-accent-blue: #0969da;
+  --flick-accent-emphasis: #0969da;
+  --flick-accent-muted: #ddf4ff;
+  --flick-accent-border: #54aeff66;
+  --flick-on-accent: #ffffff;
+  --flick-accent-mint: #1a7f37;
+  --flick-success-emphasis: #1f883d;
+  --flick-success-muted: #dafbe1;
+  --flick-accent-amber: #9a6700;
+  --flick-attention-emphasis: #9a6700;
+  --flick-attention-muted: #fff8c5;
+  --flick-accent-red: #d1242f;
+  --flick-danger-emphasis: #cf222e;
+  --flick-danger-muted: #ffebe9;
+  --flick-accent-violet: #8250df;
+  --flick-done-muted: #fbefff;
+  --flick-focus: #0969da;
+  --flick-material-glass: #ffffff;
+  --flick-material-glass-strong: #ffffff;
+  --flick-material-opaque: #ffffff;
+  --flick-wallpaper-a: #ffffff;
+  --flick-wallpaper-b: #ffffff;
+  --flick-shadow-small: 0 1px 1px 0 #1f23280a, 0 1px 2px 0 #1f232808;
+  --flick-shadow-overlay: 0 0 0 1px #d1d9e080, 0 6px 12px -3px #25292e0a, 0 6px 18px 0 #25292e1f;
+  --flick-scrim: #1f232866;
+}
+
+[data-theme="light_high_contrast"] {
+  color-scheme: light;
+  --flick-bg: #ffffff;
+  --flick-bg-rgb: 255 255 255;
+  --flick-bg-subtle: #e6eaef;
+  --flick-bg-inset: #eff2f5;
+  --flick-sidebar: #eff2f5;
+  --flick-surface: #ffffff;
+  --flick-surface-elevated: #ffffff;
+  --flick-text: #010409;
+  --flick-muted: #393f46;
+  --flick-vibrant-text: #010409;
+  --flick-border: #454c54;
+  --flick-border-muted: #454c54;
+  --flick-border-strong: #20252c;
+  --flick-btn-bg: #e7ecf0;
+  --flick-btn-hover: #ced5dc;
+  --flick-btn-active: #acb6c0;
+  --flick-btn-border: #454c54;
+  --flick-neutral-muted: #dae0e7;
+  --flick-neutral-subtle: #eff2f5;
+  --flick-accent-blue: #023b95;
+  --flick-accent-emphasis: #0349b4;
+  --flick-accent-muted: #dff7ff;
+  --flick-accent-border: #0349b4;
+  --flick-on-accent: #ffffff;
+  --flick-accent-mint: #024c1a;
+  --flick-success-emphasis: #055d20;
+  --flick-success-muted: #d2fedb;
+  --flick-accent-amber: #603700;
+  --flick-attention-emphasis: #744500;
+  --flick-attention-muted: #fcf7be;
+  --flick-accent-red: #86061d;
+  --flick-danger-emphasis: #a0111f;
+  --flick-danger-muted: #fff0ee;
+  --flick-accent-violet: #512598;
+  --flick-done-muted: #faf0fe;
+  --flick-focus: #0349b4;
+  --flick-material-glass: #ffffff;
+  --flick-material-glass-strong: #ffffff;
+  --flick-material-opaque: #ffffff;
+  --flick-wallpaper-a: #ffffff;
+  --flick-wallpaper-b: #ffffff;
+  --flick-shadow-small: 0 1px 0 0 #454c54;
+  --flick-shadow-overlay: 0 0 0 1px #454c54, 0 6px 18px 0 #25292e33;
+  --flick-scrim: #01040999;
+}
+
+/* Light Protanopia & Deuteranopia: blue replaces green, orange replaces red. */
+[data-theme="light_colorblind"] {
+  color-scheme: light;
+  --flick-bg: #ffffff;
+  --flick-bg-rgb: 255 255 255;
+  --flick-bg-subtle: #f6f8fa;
+  --flick-bg-inset: #f6f8fa;
+  --flick-sidebar: #f6f8fa;
+  --flick-surface: #ffffff;
+  --flick-surface-elevated: #ffffff;
+  --flick-text: #1f2328;
+  --flick-muted: #59636e;
+  --flick-vibrant-text: #1f2328;
+  --flick-border: #d1d9e0;
+  --flick-border-muted: #d1d9e0b3;
+  --flick-border-strong: #818b98;
+  --flick-btn-bg: #f6f8fa;
+  --flick-btn-hover: #eff2f5;
+  --flick-btn-active: #e6eaef;
+  --flick-btn-border: #d1d9e0;
+  --flick-neutral-muted: #818b981f;
+  --flick-neutral-subtle: #818b980f;
+  --flick-accent-blue: #0969da;
+  --flick-accent-emphasis: #0969da;
+  --flick-accent-muted: #ddf4ff;
+  --flick-accent-border: #54aeff66;
+  --flick-on-accent: #ffffff;
+  --flick-accent-mint: #0969da;
+  --flick-success-emphasis: #0969da;
+  --flick-success-muted: #ddf4ff;
+  --flick-accent-amber: #9a6700;
+  --flick-attention-emphasis: #9a6700;
+  --flick-attention-muted: #fff8c5;
+  --flick-accent-red: #bc4c00;
+  --flick-danger-emphasis: #bc4c00;
+  --flick-danger-muted: #fff1e5;
+  --flick-accent-violet: #8250df;
+  --flick-done-muted: #fbefff;
+  --flick-focus: #0969da;
+  --flick-material-glass: #ffffff;
+  --flick-material-glass-strong: #ffffff;
+  --flick-material-opaque: #ffffff;
+  --flick-wallpaper-a: #ffffff;
+  --flick-wallpaper-b: #ffffff;
+  --flick-shadow-small: 0 1px 1px 0 #1f23280a, 0 1px 2px 0 #1f232808;
+  --flick-shadow-overlay: 0 0 0 1px #d1d9e080, 0 6px 12px -3px #25292e0a, 0 6px 18px 0 #25292e1f;
+  --flick-scrim: #1f232866;
+}
+
+/* Dark. Also the no-script fallback when the OS prefers dark. */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --flick-bg: #0d1117;
+  --flick-bg-rgb: 13 17 23;
+  --flick-bg-subtle: #151b23;
+  --flick-bg-inset: #010409;
+  --flick-sidebar: #010409;
+  --flick-surface: #0d1117;
+  --flick-surface-elevated: #151b23;
+  --flick-text: #f0f6fc;
+  --flick-muted: #9198a1;
+  --flick-vibrant-text: #f0f6fc;
+  --flick-border: #3d444d;
+  --flick-border-muted: #3d444db3;
+  --flick-border-strong: #656c76;
+  --flick-btn-bg: #212830;
+  --flick-btn-hover: #262c36;
+  --flick-btn-active: #2a313c;
+  --flick-btn-border: #3d444d;
+  --flick-neutral-muted: #656c7633;
+  --flick-neutral-subtle: #656c761a;
+  --flick-accent-blue: #4493f8;
+  --flick-accent-emphasis: #1f6feb;
+  --flick-accent-muted: #388bfd1a;
+  --flick-accent-border: #388bfd66;
+  --flick-on-accent: #ffffff;
+  --flick-accent-mint: #3fb950;
+  --flick-success-emphasis: #238636;
+  --flick-success-muted: #2ea04326;
+  --flick-accent-amber: #d29922;
+  --flick-attention-emphasis: #9e6a03;
+  --flick-attention-muted: #bb800926;
+  --flick-accent-red: #f85149;
+  --flick-danger-emphasis: #da3633;
+  --flick-danger-muted: #f851491a;
+  --flick-accent-violet: #ab7df8;
+  --flick-done-muted: #ab7df826;
+  --flick-focus: #1f6feb;
+  --flick-material-glass: #0d1117;
+  --flick-material-glass-strong: #151b23;
+  --flick-material-opaque: #151b23;
+  --flick-wallpaper-a: #0d1117;
+  --flick-wallpaper-b: #0d1117;
+  --flick-shadow-small: 0 0 transparent;
+  --flick-shadow-overlay: 0 0 0 1px #3d444d, 0 8px 24px 0 #010409;
+  --flick-scrim: #01040999;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --flick-bg: #0d1117;
+    --flick-bg-rgb: 13 17 23;
+    --flick-bg-subtle: #151b23;
+    --flick-bg-inset: #010409;
+    --flick-sidebar: #010409;
+    --flick-surface: #0d1117;
+    --flick-surface-elevated: #151b23;
+    --flick-text: #f0f6fc;
+    --flick-muted: #9198a1;
+    --flick-vibrant-text: #f0f6fc;
+    --flick-border: #3d444d;
+    --flick-border-muted: #3d444db3;
+    --flick-border-strong: #656c76;
+    --flick-btn-bg: #212830;
+    --flick-btn-hover: #262c36;
+    --flick-btn-active: #2a313c;
+    --flick-btn-border: #3d444d;
+    --flick-neutral-muted: #656c7633;
+    --flick-neutral-subtle: #656c761a;
+    --flick-accent-blue: #4493f8;
+    --flick-accent-emphasis: #1f6feb;
+    --flick-accent-muted: #388bfd1a;
+    --flick-accent-border: #388bfd66;
+    --flick-on-accent: #ffffff;
+    --flick-accent-mint: #3fb950;
+    --flick-success-emphasis: #238636;
+    --flick-success-muted: #2ea04326;
+    --flick-accent-amber: #d29922;
+    --flick-attention-emphasis: #9e6a03;
+    --flick-attention-muted: #bb800926;
+    --flick-accent-red: #f85149;
+    --flick-danger-emphasis: #da3633;
+    --flick-danger-muted: #f851491a;
+    --flick-accent-violet: #ab7df8;
+    --flick-done-muted: #ab7df826;
+    --flick-focus: #1f6feb;
+    --flick-material-glass: #0d1117;
+    --flick-material-glass-strong: #151b23;
+    --flick-material-opaque: #151b23;
+    --flick-wallpaper-a: #0d1117;
+    --flick-wallpaper-b: #0d1117;
+    --flick-shadow-small: 0 0 transparent;
+    --flick-shadow-overlay: 0 0 0 1px #3d444d, 0 8px 24px 0 #010409;
+    --flick-scrim: #01040999;
   }
 }
 
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .flick-glass {
-    background: var(--flick-material-opaque);
-  }
+[data-theme="dark_dimmed"] {
+  color-scheme: dark;
+  --flick-bg: #212830;
+  --flick-bg-rgb: 33 40 48;
+  --flick-bg-subtle: #262c36;
+  --flick-bg-inset: #151b23;
+  --flick-sidebar: #1c2128;
+  --flick-surface: #212830;
+  --flick-surface-elevated: #2a313c;
+  --flick-text: #d1d7e0;
+  --flick-muted: #9198a1;
+  --flick-vibrant-text: #d1d7e0;
+  --flick-border: #3d444d;
+  --flick-border-muted: #3d444db3;
+  --flick-border-strong: #656c76;
+  --flick-btn-bg: #2a313c;
+  --flick-btn-hover: #2f3742;
+  --flick-btn-active: #333d47;
+  --flick-btn-border: #3d444d;
+  --flick-neutral-muted: #656c7633;
+  --flick-neutral-subtle: #656c761a;
+  --flick-accent-blue: #478be6;
+  --flick-accent-emphasis: #316dca;
+  --flick-accent-muted: #4184e41a;
+  --flick-accent-border: #4184e466;
+  --flick-on-accent: #f0f6fc;
+  --flick-accent-mint: #57ab5a;
+  --flick-success-emphasis: #347d39;
+  --flick-success-muted: #46954a26;
+  --flick-accent-amber: #c69026;
+  --flick-attention-emphasis: #966600;
+  --flick-attention-muted: #ae7c1426;
+  --flick-accent-red: #e5534b;
+  --flick-danger-emphasis: #c93c37;
+  --flick-danger-muted: #e5534b1a;
+  --flick-accent-violet: #986ee2;
+  --flick-done-muted: #986ee226;
+  --flick-focus: #316dca;
+  --flick-material-glass: #212830;
+  --flick-material-glass-strong: #2a313c;
+  --flick-material-opaque: #2a313c;
+  --flick-wallpaper-a: #212830;
+  --flick-wallpaper-b: #212830;
+  --flick-shadow-small: 0 0 transparent;
+  --flick-shadow-overlay: 0 0 0 1px #3d444d, 0 8px 24px 0 #151b23;
+  --flick-scrim: #151b2399;
 }
 
-@media (prefers-reduced-transparency: reduce) {
-  .flick-glass {
-    background: var(--flick-material-opaque) !important;
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-  }
+[data-theme="dark_high_contrast"] {
+  color-scheme: dark;
+  --flick-bg: #010409;
+  --flick-bg-rgb: 1 4 9;
+  --flick-bg-subtle: #151b23;
+  --flick-bg-inset: #010409;
+  --flick-sidebar: #010409;
+  --flick-surface: #010409;
+  --flick-surface-elevated: #151b23;
+  --flick-text: #ffffff;
+  --flick-muted: #b7bdc8;
+  --flick-vibrant-text: #ffffff;
+  --flick-border: #b7bdc8;
+  --flick-border-muted: #b7bdc8;
+  --flick-border-strong: #ffffff;
+  --flick-btn-bg: #262c36;
+  --flick-btn-hover: #2a313c;
+  --flick-btn-active: #3d444d;
+  --flick-btn-border: #b7bdc8;
+  --flick-neutral-muted: #3d444d;
+  --flick-neutral-subtle: #212830;
+  --flick-accent-blue: #74b9ff;
+  --flick-accent-emphasis: #409eff;
+  --flick-accent-muted: #5cacff1a;
+  --flick-accent-border: #409eff;
+  --flick-on-accent: #010409;
+  --flick-accent-mint: #28d751;
+  --flick-success-emphasis: #09b43a;
+  --flick-success-muted: #29d74e1a;
+  --flick-accent-amber: #f0b72f;
+  --flick-attention-emphasis: #e09b13;
+  --flick-attention-muted: #fbd66926;
+  --flick-accent-red: #ff9492;
+  --flick-danger-emphasis: #ff6a69;
+  --flick-danger-muted: #ff80801a;
+  --flick-accent-violet: #dbb7ff;
+  --flick-done-muted: #dbb7ff26;
+  --flick-focus: #409eff;
+  --flick-material-glass: #010409;
+  --flick-material-glass-strong: #151b23;
+  --flick-material-opaque: #151b23;
+  --flick-wallpaper-a: #010409;
+  --flick-wallpaper-b: #010409;
+  --flick-shadow-small: 0 0 transparent;
+  --flick-shadow-overlay: 0 0 0 1px #b7bdc8, 0 8px 24px 0 #010409;
+  --flick-scrim: #010409cc;
+}
+
+/* Legacy utility: every "glass" surface is now an opaque Primer box. */
+.flick-glass {
+  background: var(--flick-surface);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root, [data-theme] {
+  :root,
+  [data-theme] {
     --animate-fast: 1ms;
     --animate-panel: 1ms;
     --animate-dwell: 1ms;
@@ -244,5 +520,5 @@
 }
 
 .hyperlegible-font {
-  --font-sans: "Atkinson Hyperlegible", system-ui, -apple-system, sans-serif;
+  --font-sans: "Atkinson Hyperlegible", -apple-system, BlinkMacSystemFont, sans-serif;
 }

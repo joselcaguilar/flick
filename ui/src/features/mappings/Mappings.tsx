@@ -295,8 +295,7 @@ export function MappingsRoute() {
     <section className="feature-screen mappings-screen" aria-labelledby="screen-title">
       <header className="operate-header">
         <div>
-          <p className="route-path">Mappings</p>
-          <h1 id="screen-title">Gesture sentences</h1>
+          <h1 id="screen-title">Mappings</h1>
           <p>Targeted device verbs and global shortcuts stay separate, so pointing always wins.</p>
         </div>
         <Link className="ui-button ui-button-primary ui-button-md" to="/mappings/new">
@@ -414,8 +413,7 @@ export function MappingEditorRoute() {
     <section className="feature-screen mapping-editor-screen" aria-labelledby="screen-title">
       <header className="operate-header">
         <div>
-          <p className="route-path">Mappings / Editor</p>
-          <h1 id="screen-title">Build a sentence</h1>
+          <h1 id="screen-title">Mapping editor</h1>
           <p>Choose when Flick listens, what it points at, and the Home Assistant action it sends.</p>
         </div>
         <Button variant="primary" disabled={!canEnable}>

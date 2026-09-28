@@ -179,9 +179,8 @@ export function GestureStudioRoute() {
 
   return (
     <section className="studio-route" aria-labelledby="screen-title">
-      <div className="studio-hero">
-        <p className="route-path">Gestures / Studio</p>
-        <h1 id="screen-title">Record, train, prove it.</h1>
+      <div className="page-header">
+        <h1 id="screen-title">Gesture studio</h1>
         <p>
           Studio keeps the flow under {targetTime(type)}: name the gesture, record a handful of takes, train
           locally, live-test against confusions, then save.

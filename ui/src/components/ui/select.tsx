@@ -23,7 +23,7 @@ export function Select({
         </SelectPrimitive.Icon>
       </SelectPrimitive.Trigger>
       <SelectPrimitive.Portal>
-        <SelectPrimitive.Content className="flick-glass ui-select-content" position="popper" sideOffset={8}>
+        <SelectPrimitive.Content className="ui-select-content" position="popper" sideOffset={8}>
           <SelectPrimitive.Viewport>
             {items.map((item) => (
               <SelectPrimitive.Item key={item.value} className={cn("ui-select-item")} value={item.value}>

@@ -1,78 +1,111 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
-import type { ThemeMode } from "./api/types";
+import type { DarkThemeId, LightThemeId, ThemeMode } from "./api/types";
 
-const storageKey = "flick.theme";
-const highContrastKey = "flick.highContrast";
+export const lightThemes: { id: LightThemeId; label: string }[] = [
+  { id: "light", label: "Light default" },
+  { id: "light_high_contrast", label: "Light high contrast" },
+  { id: "light_colorblind", label: "Light Protanopia & Deuteranopia" },
+];
 
-interface ThemeContextValue {
+export const darkThemes: { id: DarkThemeId; label: string }[] = [
+  { id: "dark", label: "Dark default" },
+  { id: "dark_dimmed", label: "Dark dimmed" },
+  { id: "dark_high_contrast", label: "Dark high contrast" },
+];
+
+const modeKey = "flick.theme";
+const lightKey = "flick.lightTheme";
+const darkKey = "flick.darkTheme";
+
+export interface ThemePreferences {
   mode: ThemeMode;
-  highContrast: boolean;
+  light: LightThemeId;
+  dark: DarkThemeId;
+}
+
+interface ThemeContextValue extends ThemePreferences {
+  resolved: LightThemeId | DarkThemeId;
   setMode: (mode: ThemeMode) => void;
-  setHighContrast: (enabled: boolean) => void;
-  cycleMode: () => void;
+  setLightTheme: (theme: LightThemeId) => void;
+  setDarkTheme: (theme: DarkThemeId) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-function getStoredMode(): ThemeMode {
-  if (typeof window === "undefined") return "system";
-  const stored = window.localStorage.getItem(storageKey);
-  return stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
+const isLight = (value: unknown): value is LightThemeId => lightThemes.some((theme) => theme.id === value);
+const isDark = (value: unknown): value is DarkThemeId => darkThemes.some((theme) => theme.id === value);
+const isMode = (value: unknown): value is ThemeMode =>
+  value === "system" || value === "light" || value === "dark";
+
+function readPreferences(): ThemePreferences {
+  if (typeof window === "undefined") return { mode: "system", light: "light", dark: "dark" };
+  const mode = window.localStorage.getItem(modeKey);
+  const light = window.localStorage.getItem(lightKey);
+  const dark = window.localStorage.getItem(darkKey);
+  return {
+    mode: isMode(mode) ? mode : "system",
+    light: isLight(light) ? light : "light",
+    dark: isDark(dark) ? dark : "dark",
+  };
 }
 
-function getStoredHighContrast() {
-  if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(highContrastKey) === "1";
+const darkQuery = () => window.matchMedia("(prefers-color-scheme: dark)");
+
+export function resolveTheme(preferences: ThemePreferences, systemDark: boolean) {
+  const scheme = preferences.mode === "system" ? (systemDark ? "dark" : "light") : preferences.mode;
+  return scheme === "dark" ? preferences.dark : preferences.light;
 }
 
-function shouldForceOpaque() {
-  if (typeof window === "undefined") return false;
-  const reducedTransparency = window.matchMedia("(prefers-reduced-transparency: reduce)").matches;
-  const unsupported = !CSS.supports("(backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))");
-  const platform = navigator.platform.toLowerCase();
-  return reducedTransparency || unsupported || platform.includes("linux");
-}
-
-function applyTheme(mode: ThemeMode, highContrast: boolean) {
+function applyTheme(preferences: ThemePreferences) {
   const root = document.documentElement;
-  root.dataset.theme = highContrast ? "high-contrast" : mode === "system" ? "" : mode;
-  root.dataset.themeMode = mode;
-  root.classList.toggle("high-contrast", highContrast);
-  root.classList.toggle("opaque-fallback", shouldForceOpaque());
+  const resolved = resolveTheme(preferences, darkQuery().matches);
+  root.dataset.theme = resolved;
+  root.dataset.colorMode = preferences.mode === "system" ? "auto" : preferences.mode;
+  root.dataset.lightTheme = preferences.light;
+  root.dataset.darkTheme = preferences.dark;
+  root.classList.toggle("high-contrast", resolved.endsWith("high_contrast"));
+  return resolved;
 }
+
+// Apply before React renders so the first paint already uses the saved theme.
+if (typeof document !== "undefined") applyTheme(readPreferences());
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeState] = useState<ThemeMode>(getStoredMode);
-  const [highContrast, setHighContrastState] = useState(getStoredHighContrast);
+  const [preferences, setPreferences] = useState<ThemePreferences>(readPreferences);
+  const [resolved, setResolved] = useState(() => resolveTheme(preferences, darkQuery().matches));
 
   useEffect(() => {
-    applyTheme(mode, highContrast);
-    const media = window.matchMedia("(prefers-reduced-transparency: reduce)");
-    const onChange = () => applyTheme(mode, highContrast);
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
-  }, [mode, highContrast]);
+    setResolved(applyTheme(preferences));
+    const media = darkQuery();
+    const onSchemeChange = () => setResolved(applyTheme(preferences));
+    media.addEventListener("change", onSchemeChange);
+    return () => media.removeEventListener("change", onSchemeChange);
+  }, [preferences]);
 
-  const value = useMemo<ThemeContextValue>(
-    () => ({
-      mode,
-      highContrast,
-      setMode: (next) => {
-        window.localStorage.setItem(storageKey, next);
-        setModeState(next);
-      },
-      setHighContrast: (enabled) => {
-        window.localStorage.setItem(highContrastKey, enabled ? "1" : "0");
-        setHighContrastState(enabled);
-      },
-      cycleMode: () => {
-        const next = mode === "system" ? "light" : mode === "light" ? "dark" : "system";
-        window.localStorage.setItem(storageKey, next);
-        setModeState(next);
-      },
-    }),
-    [highContrast, mode],
-  );
+  // Keep the HUD window and the main window on the same theme.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === modeKey || event.key === lightKey || event.key === darkKey) {
+        setPreferences(readPreferences());
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  const value = useMemo<ThemeContextValue>(() => {
+    const update = (key: string, value: string, next: Partial<ThemePreferences>) => {
+      window.localStorage.setItem(key, value);
+      setPreferences((current) => ({ ...current, ...next }));
+    };
+    return {
+      ...preferences,
+      resolved,
+      setMode: (mode) => update(modeKey, mode, { mode }),
+      setLightTheme: (light) => update(lightKey, light, { light }),
+      setDarkTheme: (dark) => update(darkKey, dark, { dark }),
+    };
+  }, [preferences, resolved]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

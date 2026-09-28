@@ -11,7 +11,7 @@ export interface ListRowProps {
 
 export function ListRow({ title, description, leading, trailing, className }: ListRowProps) {
   return (
-    <div className={cn("ui-list-row", className)}>
+    <div className={cn("ui-list-row", !leading && "ui-list-row-plain", className)}>
       {leading ? <div className="ui-list-row-leading">{leading}</div> : null}
       <div className="ui-list-row-body">
         <strong>{title}</strong>

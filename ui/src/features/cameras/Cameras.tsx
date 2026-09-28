@@ -162,8 +162,7 @@ export function CamerasRoute() {
     <section className="feature-screen cameras-screen" aria-labelledby="screen-title">
       <header className="operate-header">
         <div>
-          <p className="route-path">Cameras</p>
-          <h1 id="screen-title">Local cameras</h1>
+          <h1 id="screen-title">Cameras</h1>
           <p>Built-in and Continuity cameras. Video never leaves this Mac.</p>
         </div>
         <div className="header-actions">

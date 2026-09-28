@@ -21,7 +21,7 @@ export function Modal({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="ui-dialog-overlay" />
-        <Dialog.Content className={cn("flick-glass ui-dialog", className)}>
+        <Dialog.Content className={cn("ui-dialog", className)}>
           <Dialog.Title>{title}</Dialog.Title>
           {description ? <Dialog.Description>{description}</Dialog.Description> : null}
           {children}
@@ -46,7 +46,7 @@ export function Sheet({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="ui-dialog-overlay" />
-        <Dialog.Content className="flick-glass ui-sheet">
+        <Dialog.Content className="ui-sheet">
           <Dialog.Title>{title}</Dialog.Title>
           {children}
         </Dialog.Content>

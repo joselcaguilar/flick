@@ -32,7 +32,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((toast) => (
           <ToastPrimitive.Root
             key={toast.id}
-            className="flick-glass ui-toast"
+            className="ui-toast"
             data-tone={toast.tone}
             onOpenChange={(open) =>
               !open && setToasts((current) => current.filter((item) => item.id !== toast.id))

@@ -8,11 +8,7 @@ export const TooltipTrigger = TooltipPrimitive.Trigger;
 export function TooltipContent({ className, ...props }: TooltipPrimitive.TooltipContentProps) {
   return (
     <TooltipPrimitive.Portal>
-      <TooltipPrimitive.Content
-        className={cn("flick-glass ui-tooltip", className)}
-        sideOffset={6}
-        {...props}
-      />
+      <TooltipPrimitive.Content className={cn("ui-tooltip", className)} sideOffset={6} {...props} />
     </TooltipPrimitive.Portal>
   );
 }

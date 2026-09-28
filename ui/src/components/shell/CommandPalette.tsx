@@ -54,8 +54,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       {
         id: "action:teach",
         group: "Actions",
-        label: "Teach Ventilador dormitorio",
-        description: "Open the point-to-select teach flow for the owner fan scenario.",
+        label: "Teach a device",
+        description: "Point at a real device and link it to Home Assistant.",
         shortcut: "T",
         run: () => {
           navigate("/devices/teach");
@@ -132,7 +132,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       <Dialog.Portal>
         <Dialog.Overlay className="command-overlay" />
         <Dialog.Content
-          className="flick-glass command-palette"
+          className="command-palette"
           aria-describedby="command-description"
           onKeyDown={onKeyDown}
         >
