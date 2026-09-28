@@ -1,5 +1,5 @@
 import type { components } from "../api/schema";
-import type { CameraState, EngineStatus, HaState } from "../api/types";
+import type { ActivityItem, CameraState, EngineStatus, HaState } from "../api/types";
 
 export type WsTopic =
   | "status"
@@ -246,5 +246,6 @@ export interface EventStreamState {
     similarity: number;
   };
   hud: HudState;
+  activity: ActivityItem[];
   updates: Array<{ id: string; kind: string; version: string; phase?: string }>;
 }

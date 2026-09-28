@@ -7,6 +7,7 @@ export const initialEventState: EventStreamState = {
   ha: { state: "disconnected" },
   hands: {},
   hud: { state: "idle", title: "Flick is watching", detail: "Show me your hand" },
+  activity: [],
   updates: [],
 };
 
@@ -17,6 +18,17 @@ export type EventStreamAction =
 
 function mark<T extends EventStreamState>(state: T, ts?: string): T {
   return { ...state, lastEventAt: ts ?? new Date().toISOString() };
+}
+
+function gestureName(gestureId?: string | null) {
+  return gestureId
+    ?.replace(/^builtin\./, "")
+    .replace(/_/g, " ")
+    .replace(/\\b\\w/g, (match) => match.toUpperCase());
+}
+
+function upsertActivity(activity: EventStreamState["activity"], item: EventStreamState["activity"][number]) {
+  return [item, ...activity.filter((entry) => entry.id !== item.id)].slice(0, 50);
 }
 
 export function eventReducer(state: EventStreamState, action: EventStreamAction): EventStreamState {
@@ -85,6 +97,15 @@ export function eventReducer(state: EventStreamState, action: EventStreamAction)
         {
           ...state,
           suppression: { gesture_id: message.gesture_id, reason: message.reason, ts: message.ts },
+          activity: upsertActivity(state.activity, {
+            id: `suppressed-${message.ts}-${message.gesture_id}`,
+            ts: message.ts,
+            status: "suppressed",
+            gesture_id: message.gesture_id,
+            gesture_name: gestureName(message.gesture_id),
+            reason: message.reason,
+            camera_id: message.camera_id,
+          }),
           hud:
             message.reason === "no_target"
               ? {
@@ -101,6 +122,17 @@ export function eventReducer(state: EventStreamState, action: EventStreamAction)
       return mark(
         {
           ...state,
+          activity: upsertActivity(state.activity, {
+            id: message.event_id,
+            ts: message.ts,
+            status: "sent",
+            gesture_id: message.gesture_id,
+            gesture_name: gestureName(message.gesture_id),
+            confidence: message.confidence,
+            mapping_id: message.mapping_ids[0],
+            action_summary: message.action_summary,
+            camera_id: message.camera_id,
+          }),
           hud: {
             state: "sent",
             title: message.action_summary,
@@ -115,6 +147,15 @@ export function eventReducer(state: EventStreamState, action: EventStreamAction)
       return mark(
         {
           ...state,
+          activity: upsertActivity(state.activity, {
+            id: message.activity_id,
+            ts: message.ts,
+            status: message.status,
+            mapping_id: message.mapping_id,
+            action_summary: state.hud.title,
+            message: message.message,
+            latency: message.latency,
+          }),
           hud: {
             state: message.status === "ok" ? "done" : "failed",
             title: state.hud.title,

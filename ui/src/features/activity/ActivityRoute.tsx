@@ -3,6 +3,7 @@ import { useActivity, useGestures, useMappings, usePatchSettings, useSettings } 
 import type { ActivityItem } from "../../api/types";
 import { GestureGlyph } from "../../components/domain";
 import { Badge, Button, GlassPanel, Select, Switch } from "../../components/ui";
+import { useEventStore } from "../../events/store";
 import { asPercent, formatTime } from "../../lib/utils";
 import { reasonCopy, suppressionReasonOrder } from "./reasons";
 import "./styles.css";
@@ -101,7 +102,11 @@ export function ActivityRoute() {
   const mappings = useMappings();
   const settings = useSettings();
   const patchSettings = usePatchSettings();
-  const items = query.data?.items ?? [];
+  const liveActivity = useEventStore((state) => state.activity);
+  const items = useMemo(
+    () => [...liveActivity, ...(query.data?.items ?? [])],
+    [liveActivity, query.data?.items],
+  );
   const filtered = useMemo(
     () =>
       items.filter((item) => {
