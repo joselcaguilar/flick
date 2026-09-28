@@ -2355,7 +2355,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "engine_status";
+            type: "engine.status";
         } | {
             /** @description Camera status. */
             payload: {
@@ -2363,7 +2363,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "camera_status";
+            type: "camera.status";
         } | {
             /** @description Hand landmark stream. */
             payload: {
@@ -2379,7 +2379,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "gesture_candidate";
+            type: "gesture.candidate";
         } | {
             /** @description Gesture suppressed. */
             payload: {
@@ -2387,7 +2387,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "gesture_suppressed";
+            type: "gesture.suppressed";
         } | {
             /** @description Gesture fired. */
             payload: {
@@ -2395,7 +2395,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "gesture_fired";
+            type: "gesture.fired";
         } | {
             /** @description Gesture update. */
             payload: {
@@ -2403,7 +2403,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "gesture_update";
+            type: "gesture.update";
         } | {
             /** @description Gesture end. */
             payload: {
@@ -2411,7 +2411,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "gesture_end";
+            type: "gesture.end";
         } | {
             /** @description Armed. */
             payload: {
@@ -2435,7 +2435,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "confirm_required";
+            type: "confirm.required";
         } | {
             /** @description Action result. */
             payload: {
@@ -2443,7 +2443,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "action_result";
+            type: "action.result";
         } | {
             /** @description Home Assistant status. */
             payload: {
@@ -2451,7 +2451,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "ha_status";
+            type: "ha.status";
         } | {
             /** @description Entity state update. */
             payload: {
@@ -2459,7 +2459,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "ha_entity";
+            type: "ha.entity";
         } | {
             /** @description Capture progress. */
             payload: {
@@ -2467,7 +2467,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "capture_progress";
+            type: "capture.progress";
         } | {
             /** @description Engine paused. */
             payload: {
@@ -2475,7 +2475,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "engine_paused";
+            type: "engine.paused";
         } | {
             /** @description Engine resumed. */
             payload: {
@@ -2483,7 +2483,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "engine_resumed";
+            type: "engine.resumed";
         } | {
             /** @description Target hover. */
             payload: {
@@ -2491,7 +2491,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "target_hover";
+            type: "target.hover";
         } | {
             /** @description Target selected. */
             payload: {
@@ -2499,7 +2499,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "target_selected";
+            type: "target.selected";
         } | {
             /** @description Target cleared. */
             payload: {
@@ -2507,7 +2507,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "target_cleared";
+            type: "target.cleared";
         } | {
             /** @description Target ambiguity. */
             payload: {
@@ -2515,7 +2515,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "target_ambiguous";
+            type: "target.ambiguous";
         } | {
             /** @description Place status. */
             payload: {
@@ -2523,7 +2523,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "place_status";
+            type: "place.status";
         } | {
             /** @description Teach progress. */
             payload: {
@@ -2531,7 +2531,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "teach_progress";
+            type: "teach.progress";
         } | {
             /** @description Update available. */
             payload: {
@@ -2539,7 +2539,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "update_available";
+            type: "update.available";
         } | {
             /** @description Update progress. */
             payload: {
@@ -2547,7 +2547,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "update_progress";
+            type: "update.progress";
         } | {
             /** @description App update ready. */
             payload: {
@@ -2555,7 +2555,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "update_ready";
+            type: "update.ready";
         } | {
             /** @description Model activated. */
             payload: {
@@ -2563,7 +2563,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "model_activated";
+            type: "model.activated";
         } | {
             /** @description Model rolled back. */
             payload: {
@@ -2571,7 +2571,7 @@ export interface components {
                 ts: string;
             };
             /** @enum {string} */
-            type: "model_rolled_back";
+            type: "model.rolled_back";
         } | {
             /** @description Client fell behind and must resync through REST. */
             payload: {
