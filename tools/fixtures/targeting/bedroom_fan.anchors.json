@@ -1,0 +1,21 @@
+[
+  {
+    "id": "01J00000000000000000000002",
+    "name": "Ventilador Dormitorio",
+    "domain": "fan",
+    "entity": {
+      "entity_id": "fan.ventilador_dormitorio",
+      "state": "on",
+      "attributes": {
+        "friendly_name": "Ventilador Dormitorio",
+        "supported_features": 53,
+        "percentage": 1,
+        "percentage_step": 1.0,
+        "direction": "reverse"
+      }
+    },
+    "levels": [
+      1
+    ]
+  }
+]
