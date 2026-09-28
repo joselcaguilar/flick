@@ -21,6 +21,13 @@ function permissionTone(permission?: string | null) {
   return "neutral";
 }
 
+const permissionLabels: Record<string, string> = {
+  authorized: "Camera access allowed",
+  denied: "Camera access denied",
+  restricted: "Camera access restricted",
+  not_determined: "Camera access not asked yet",
+};
+
 function cameraTone(state?: string | null) {
   if (state === "running") return "success";
   if (state === "error" || state === "permission_denied") return "danger";
@@ -75,9 +82,6 @@ function ConfiguredCameraCard({ camera, live }: { camera: Camera; live?: CameraS
         <Button variant={running ? "ghost" : "primary"} size="sm" loading={pending} onClick={toggleCamera}>
           {running ? "Stop camera" : camera.enabled ? "Start camera" : "Enable camera"}
         </Button>
-        <Badge tone={permissionTone(live?.camera_permission)}>
-          {live?.camera_permission ?? "permission unknown"}
-        </Badge>
       </div>
       {failed ? (
         <p className="inline-error" role="alert">
@@ -166,9 +170,9 @@ export function CamerasRoute() {
           <p>Built-in and Continuity cameras. Video never leaves this Mac.</p>
         </div>
         <div className="header-actions">
-          <Badge tone={permissionTone(permission)}>
-            Permission · {String(permission).replace(/_/g, " ")}
-          </Badge>
+          {permissionLabels[permission] ? (
+            <Badge tone={permissionTone(permission)}>{permissionLabels[permission]}</Badge>
+          ) : null}
           {permission === "denied" && isTauri() ? (
             <Button variant="primary" size="sm" loading={openingSettings} onClick={openCameraPrivacySettings}>
               Open System Settings
