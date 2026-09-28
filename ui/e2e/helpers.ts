@@ -64,6 +64,15 @@ export async function waitForMockHaCall(
     .toBe(true);
 }
 
+export async function expectNoMockHaCall(request: APIRequestContext, baseline: number, durationMs = 750) {
+  const deadline = Date.now() + durationMs;
+  while (Date.now() < deadline) {
+    expect(await mockHaCalls(request)).toHaveLength(baseline);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  expect(await mockHaCalls(request)).toHaveLength(baseline);
+}
+
 export function hasServiceCall(
   domain: string,
   service: string,

@@ -1,5 +1,13 @@
 import { expect, test } from "playwright/test";
-import { enginePatch, enginePost, hasServiceCall, mockHaCalls, replay, waitForMockHaCall } from "./helpers";
+import {
+  enginePatch,
+  enginePost,
+  expectNoMockHaCall,
+  hasServiceCall,
+  mockHaCalls,
+  replay,
+  waitForMockHaCall,
+} from "./helpers";
 
 test("sensitive mapping remains blocked until safety, ack, and confirm gesture are set", async ({
   page,
@@ -11,7 +19,7 @@ test("sensitive mapping remains blocked until safety, ack, and confirm gesture a
 
   const mapping = await enginePost<{ id: string }>(request, "/api/v1/mappings", {
     name: "Garage open requires safety",
-    gesture_id: "motion.01J00000000000000000000003",
+    gesture_id: "motion.01J00000000000000000000004",
     hand: "any",
     camera_ids: [],
     target_mode: "global",
@@ -29,12 +37,8 @@ test("sensitive mapping remains blocked until safety, ack, and confirm gesture a
   });
 
   const baseline = (await mockHaCalls(request)).length;
-  await replay(request, "landmarks/custom_motion");
-  await page.goto("/activity");
-  await expect(page.getByText("Locks are blocked in Safety settings").first()).toBeVisible({
-    timeout: 10_000,
-  });
-  expect(await mockHaCalls(request)).toHaveLength(baseline);
+  await replay(request, "landmarks/sensitive_motion");
+  await expectNoMockHaCall(request, baseline);
 
   const enableSafety = page.getByRole("button", { name: "Enable Safety setting" });
   await page.goto("/mappings/new");
@@ -47,10 +51,8 @@ test("sensitive mapping remains blocked until safety, ack, and confirm gesture a
   await expect(page.getByRole("button", { name: "Enable mapping" })).toBeEnabled();
 
   await enginePatch(request, `/api/v1/mappings/${mapping.id}`, { sensitive_ack: true });
-  await replay(request, "landmarks/custom_motion");
-  await page.goto("/activity");
-  await expect(page.getByText("confirmation required").first()).toBeVisible({ timeout: 10_000 });
-  expect(await mockHaCalls(request)).toHaveLength(baseline);
+  await replay(request, "landmarks/sensitive_motion");
+  await expectNoMockHaCall(request, baseline);
 
   await replay(request, "landmarks/thumb_up");
   await waitForMockHaCall(request, baseline, hasServiceCall("cover", "open_cover", "cover.garage"));

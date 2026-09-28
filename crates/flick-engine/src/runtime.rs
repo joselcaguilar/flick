@@ -838,6 +838,16 @@ fn bedroom_fan_scenario() -> flick_ha::mock::MockScenario {
     }
 }
 
+fn append_owner_anchor_for_dev(runtime: &RuntimeConfig, anchors: &mut Vec<DispatcherAnchor>) {
+    if !(runtime.mock_ha || runtime.fake_landmarks.is_some()) {
+        return;
+    }
+    let owner_anchor = owner_fan_anchor();
+    if !anchors.iter().any(|anchor| anchor.id == owner_anchor.id) {
+        anchors.push(owner_anchor);
+    }
+}
+
 struct EngineApp {
     runtime: RuntimeConfig,
     store: Arc<Store>,
@@ -1021,8 +1031,9 @@ impl EngineApp {
     async fn reload_dispatcher_anchors_from_store(&self) -> Result<(), ApiProblem> {
         let anchors = load_api_anchors(&self.targeting)
             .map_err(|err| ApiProblem::validation("anchor_reload_failed", err.to_string()))?;
-        let dispatcher_anchors =
+        let mut dispatcher_anchors =
             dispatcher_anchors_from_api(&anchors, &self.registry.lock().await.clone());
+        append_owner_anchor_for_dev(&self.runtime, &mut dispatcher_anchors);
         if let Some(dispatcher) = self.dispatcher.lock().await.clone() {
             dispatcher.set_anchors(dispatcher_anchors).await;
         }
@@ -1989,8 +2000,9 @@ impl ConfigGateway for EngineApp {
     async fn anchors_changed(&self, anchors: Vec<ApiAnchor>) -> Result<(), ApiProblem> {
         persist_anchor_edits(&self.store, &anchors)
             .map_err(|err| ApiProblem::validation("anchor_store_failed", err.to_string()))?;
-        let dispatcher_anchors =
+        let mut dispatcher_anchors =
             dispatcher_anchors_from_api(&anchors, &self.registry.lock().await.clone());
+        append_owner_anchor_for_dev(&self.runtime, &mut dispatcher_anchors);
         if let Some(dispatcher) = self.dispatcher.lock().await.clone() {
             dispatcher.set_anchors(dispatcher_anchors).await;
         }
