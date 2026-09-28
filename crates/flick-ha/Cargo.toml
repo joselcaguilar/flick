@@ -10,7 +10,9 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+async-trait.workspace = true
 flick-core.workspace = true
+futures.workspace = true
 keyring.workspace = true
 mdns-sd.workspace = true
 serde.workspace = true
@@ -20,3 +22,14 @@ tokio.workspace = true
 tokio-tungstenite.workspace = true
 tracing.workspace = true
 url.workspace = true
+
+[features]
+default = ["mock"]
+mock = []
+
+[[example]]
+name = "mock_ha"
+required-features = ["mock"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
