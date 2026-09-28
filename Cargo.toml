@@ -1,0 +1,91 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "xtask"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+rust-version = "1.98"
+repository = "https://github.com/joselcaguilar/flick"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+dbg_macro = "warn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "unwind"
+strip = "symbols"
+
+[workspace.dependencies]
+flick-core = { path = "crates/flick-core" }
+
+# core/runtime
+tokio = { version = "1.53.1", features = ["full"] }
+tokio-util = "0.7.19"
+futures = "0.3.34"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "2.0.21"
+anyhow = "1.0.104"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["json", "env-filter"] }
+tracing-appender = "0.2.5"
+smallvec = { version = "1.16.2", features = ["serde", "const_generics"] }
+ulid = { version = "3.0.0", features = ["serde"] }
+async-trait = "0.1.92"
+parking_lot = "0.12.5"
+crossbeam-channel = "0.5.17"
+arc-swap = "1.9.2"
+bytes = "1.12.1"
+directories = "6.0.0"
+toml = "1.1.6"
+clap = { version = "4.6.7", features = ["derive", "env"] }
+humantime-serde = "1.1.1"
+time = { version = "0.3.55", features = ["serde", "formatting", "parsing"] }
+
+# vision/geometry
+nalgebra = "0.35.0"
+ort = { version = "2.0.0-rc.13", features = ["download-binaries", "coreml"] }
+ndarray = "0.17.2"
+image = "0.25.10"
+fast_image_resize = "6.1.0"
+nokhwa = { version = "0.10.11", features = ["input-native", "output-threaded"] }
+rand = "0.10.3"
+rand_distr = "0.6.0"
+
+# Home Assistant / network
+tokio-tungstenite = { version = "0.30.0", features = ["rustls-tls-webpki-roots"] }
+url = "2.5.8"
+mdns-sd = "0.21.4"
+keyring = "4.2.0"
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "json", "stream"] }
+
+# store/API
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+rusqlite_migration = "2.6.0"
+axum = { version = "0.8.9", features = ["ws", "macros"] }
+tower = "0.5.3"
+tower-http = { version = "0.7.1", features = ["cors", "trace"] }
+utoipa = { version = "6.0.0", features = ["axum_extras", "ulid", "time"] }
+utoipa-axum = "0.3.0"
+schemars = { version = "1.2.2", features = ["derive"] }
+
+# OTA
+ed25519-dalek = { version = "3.0.0", features = ["rand_core", "pkcs8"] }
+sha2 = "0.11.0"
+hex = "0.4.3"
+base64 = "0.23.1"
+zstd = "0.14.0"
+tar = "0.4.46"
+semver = { version = "1.0.28", features = ["serde"] }
+
+# tests/dev
+proptest = "1.11.0"
+tempfile = "3.27.0"

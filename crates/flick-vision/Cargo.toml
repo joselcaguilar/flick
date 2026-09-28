@@ -1,0 +1,20 @@
+[package]
+name = "flick-vision"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+flick-core.workspace = true
+fast_image_resize.workspace = true
+image.workspace = true
+nalgebra.workspace = true
+ndarray.workspace = true
+ort.workspace = true
+smallvec.workspace = true
+tracing.workspace = true
