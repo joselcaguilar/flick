@@ -715,20 +715,44 @@ fn choose_resolved(
 ) -> Option<ResolvedCandidate> {
     let mut sorted = candidates.to_vec();
     sorted.sort_by(|left, right| {
-        right
-            .candidate
-            .confidence
-            .total_cmp(&left.candidate.confidence)
+        candidate_priority(right.candidate.gesture_id)
+            .cmp(&candidate_priority(left.candidate.gesture_id))
+            .then_with(|| {
+                right
+                    .candidate
+                    .confidence
+                    .total_cmp(&left.candidate.confidence)
+            })
     });
     let best = sorted.first()?.clone();
     if let Some(second) = sorted.get(1) {
-        if second.candidate.gesture_id != best.candidate.gesture_id
+        if candidate_priority(second.candidate.gesture_id)
+            == candidate_priority(best.candidate.gesture_id)
+            && second.candidate.gesture_id != best.candidate.gesture_id
             && best.candidate.confidence - second.candidate.confidence < conflict_margin
         {
             return None;
         }
     }
     Some(best)
+}
+
+fn candidate_priority(gesture_id: GestureId) -> u8 {
+    match gesture_id {
+        GestureId::Builtin(
+            BuiltinGesture::SwipeLeft
+            | BuiltinGesture::SwipeRight
+            | BuiltinGesture::SwipeUp
+            | BuiltinGesture::SwipeDown
+            | BuiltinGesture::PinchDial
+            | BuiltinGesture::CircleCw
+            | BuiltinGesture::CircleCcw
+            | BuiltinGesture::CircleAny
+            | BuiltinGesture::TwoHandSeparate,
+        )
+        | GestureId::Motion(_) => 2,
+        GestureId::Builtin(_) | GestureId::Custom(_) | GestureId::SystemNone => 1,
+    }
 }
 
 fn most_relevant_suppression(candidates: &[SuppressedCandidate]) -> Option<&SuppressedCandidate> {
