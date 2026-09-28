@@ -4,6 +4,7 @@ import { useActivity, useStatus, useUpdates } from "../api/hooks";
 import { ConfidenceMeter, DevicePill, GestureGlyph, PreviewCanvas } from "../components/domain";
 import { Badge, Button, GlassPanel, Kbd, ListRow, Skeleton } from "../components/ui";
 import { useEventStore } from "../events/store";
+import { OnboardingRoute } from "../features/onboarding/OnboardingRoute";
 import { formatTime } from "../lib/utils";
 
 export interface RouteMeta {
@@ -224,13 +225,7 @@ export const routes: RouteMeta[] = [
     path: "/onboarding",
     title: "Onboarding",
     description: "First-run camera, Home Assistant and first flick flow.",
-    element: (
-      <EmptyRoute
-        title="Onboarding"
-        description="Get a new household from camera permission to first gesture in under three minutes."
-        action="First run scaffold"
-      />
-    ),
+    element: <OnboardingRoute />,
   },
   {
     path: "/gestures",

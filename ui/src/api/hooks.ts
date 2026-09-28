@@ -11,6 +11,7 @@ import type {
   ClassifierReport,
   EngineStatus,
   Gesture,
+  GesturePackPreview,
   HaArea,
   HaDiscovery,
   HaEntity,
@@ -138,6 +139,34 @@ export function useGestures() {
   return useQuery({ queryKey: queryKeys.gestures, queryFn: () => api.get<Gesture[]>("/api/v1/gestures") });
 }
 
+export function useCreateGesture() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      name: string;
+      kind?: "static" | "motion";
+      hands_required?: number;
+      hand_constraint: string;
+      icon?: string;
+      threshold?: number;
+    }) => api.post<Gesture>("/api/v1/gestures", body),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.gestures }),
+  });
+}
+
+export function usePatchGesture() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Partial<Gesture> }) =>
+      api.patch<Gesture>(`/api/v1/gestures/${id}`, patch),
+    onSuccess: (updated) => {
+      client.setQueryData<Gesture[]>(queryKeys.gestures, (gestures) =>
+        gestures?.map((gesture) => (gesture.id === updated.id ? { ...gesture, ...updated } : gesture)),
+      );
+    },
+  });
+}
+
 export function useGestureMotionTakes(id: string) {
   return useQuery({
     queryKey: queryKeys.gestureMotionTakes(id),
@@ -218,6 +247,44 @@ export function useCheckUpdates() {
   return useMutation({
     mutationFn: () => api.post<UpdateState>("/api/v1/updates/check"),
     onSuccess: (updates) => client.setQueryData(queryKeys.updates, updates),
+  });
+}
+
+export function useInstallUpdate() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { kind: "app" | "pack"; id?: string }) => api.post<void>("/api/v1/updates/install", body),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.updates }),
+  });
+}
+
+export function useRollbackUpdate() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { kind: "app" | "pack"; id?: string }) => api.post<void>("/api/v1/updates/rollback", body),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.updates }),
+  });
+}
+
+export function useExportGesturePack() {
+  return useMutation({
+    mutationFn: (body: { gesture_ids: string[]; include_mapping_templates: boolean }) =>
+      api.post<Record<string, unknown>>("/api/v1/packs/export", body),
+  });
+}
+
+export function usePreviewGesturePack() {
+  return useMutation({
+    mutationFn: (pack: Record<string, unknown>) => api.post<GesturePackPreview>("/api/v1/packs/import/preview", pack),
+  });
+}
+
+export function useCommitGesturePack() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { pack: Record<string, unknown>; choices: Record<string, unknown> }) =>
+      api.post<{ imported_gesture_ids: string[] }>("/api/v1/packs/import/commit", body),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.gestures }),
   });
 }
 

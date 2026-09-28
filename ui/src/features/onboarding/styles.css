@@ -1,0 +1,358 @@
+.onboarding-route {
+  display: grid;
+  gap: 1rem;
+}
+
+.onboarding-hero {
+  max-inline-size: 70rem;
+  padding: 1rem 0.35rem 0;
+}
+
+.onboarding-hero h1,
+.onboarding-screen h2 {
+  margin: 0;
+  letter-spacing: -0.045em;
+}
+
+.onboarding-hero h1 {
+  max-inline-size: 13ch;
+  font-size: clamp(2.2rem, 6vw, 5.2rem);
+  line-height: 0.92;
+}
+
+.onboarding-hero p:not(.route-path),
+.onboarding-screen p,
+.onboarding-screen li {
+  color: var(--flick-muted);
+}
+
+.onboarding-progress {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.45rem;
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-2xl);
+  padding: 0.55rem;
+}
+
+.onboarding-progress button,
+.permission-grid button,
+.error-presets button,
+.discovery-card {
+  border: 1px solid var(--flick-border);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--flick-surface) 58%, transparent);
+  color: var(--flick-muted);
+}
+
+.onboarding-progress button {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-block-size: 2.65rem;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.onboarding-progress button span {
+  display: grid;
+  place-items: center;
+  inline-size: 1.55rem;
+  block-size: 1.55rem;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--flick-text) 10%, transparent);
+  color: var(--flick-text);
+}
+
+.onboarding-progress button[data-active="true"],
+.onboarding-progress button[data-complete="true"],
+.permission-grid button[data-active="true"] {
+  color: var(--flick-vibrant-text);
+  background: color-mix(in srgb, var(--flick-accent-blue) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--flick-accent-blue) 35%, transparent);
+}
+
+.onboarding-stage,
+.onboarding-screen {
+  min-inline-size: 0;
+}
+
+.onboarding-screen {
+  display: grid;
+  gap: 1.25rem;
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--flick-shadow-glass);
+  padding: clamp(1rem, 3vw, 1.5rem);
+}
+
+.onboarding-screen h2 {
+  margin-block-start: 0.55rem;
+  max-inline-size: 15ch;
+  font-size: clamp(1.8rem, 4vw, 3.25rem);
+  line-height: 0.98;
+}
+
+.onboarding-promises,
+.control-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.onboarding-promise {
+  display: grid;
+  gap: 0.45rem;
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--flick-surface) 66%, transparent);
+  padding: 1rem;
+}
+
+.onboarding-promise > span {
+  display: grid;
+  place-items: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, var(--flick-accent-blue), var(--flick-accent-violet));
+  color: white;
+  font-weight: 850;
+}
+
+.onboarding-promise p,
+.onboarding-promise strong {
+  margin: 0;
+}
+
+.onboarding-actions,
+.teach-slot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.onboarding-split {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(20rem, 1.15fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.onboarding-field {
+  display: grid;
+  gap: 0.35rem;
+  margin-block-start: 0.8rem;
+}
+
+.onboarding-field > span {
+  color: var(--flick-muted);
+  font-size: 0.8rem;
+  font-weight: 750;
+}
+
+.permission-grid,
+.error-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-block-start: 0.8rem;
+}
+
+.permission-grid button,
+.error-presets button {
+  min-block-size: 2.25rem;
+  padding-inline: 0.7rem;
+  text-transform: capitalize;
+}
+
+.onboarding-preview-card {
+  position: static;
+  margin-block-start: 0.65rem;
+}
+
+.discovery-list {
+  display: grid;
+  gap: 0.6rem;
+  margin-block-start: 1rem;
+}
+
+.discovery-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.25rem 0.6rem;
+  padding: 0.85rem;
+  text-align: start;
+}
+
+.discovery-card strong,
+.discovery-card span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.discovery-card span {
+  color: var(--flick-muted);
+  font-size: 0.85rem;
+}
+
+.ha-form,
+.token-guide {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.token-guide {
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--flick-surface) 58%, transparent);
+  padding: 0.8rem;
+}
+
+.token-guide a {
+  color: var(--flick-vibrant-text);
+  font-weight: 750;
+}
+
+.token-guide ol {
+  margin: 0;
+  padding-inline-start: 1.1rem;
+}
+
+.inline-error,
+.inline-success {
+  margin: 0;
+  border-radius: var(--radius-lg);
+  padding: 0.65rem 0.75rem;
+  font-weight: 700;
+}
+
+.inline-error {
+  color: color-mix(in srgb, var(--flick-accent-red) 72%, var(--flick-text));
+  background: color-mix(in srgb, var(--flick-accent-red) 15%, transparent);
+}
+
+.inline-success {
+  color: color-mix(in srgb, var(--flick-accent-mint) 68%, var(--flick-text));
+  background: color-mix(in srgb, var(--flick-accent-mint) 14%, transparent);
+}
+
+.hud-demo {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.85rem;
+  min-block-size: 7rem;
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-2xl);
+  background: var(--flick-material-glass-strong);
+  box-shadow: var(--flick-shadow-glass);
+  padding: 1rem;
+}
+
+.hud-demo strong,
+.hud-demo p {
+  display: block;
+  margin: 0;
+}
+
+.hud-demo span:last-child {
+  color: var(--flick-accent-mint);
+  font-size: 1.4rem;
+  font-weight: 850;
+}
+
+.onboarding-teach-slot {
+  display: grid;
+  gap: 1rem;
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-2xl);
+  padding: 1rem;
+}
+
+.onboarding-teach-slot h3 {
+  margin: 0.55rem 0 0;
+  font-size: 1.45rem;
+  letter-spacing: -0.03em;
+}
+
+.teach-slot-preview {
+  position: relative;
+  min-block-size: 10rem;
+  overflow: hidden;
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(circle at 75% 24%, color-mix(in srgb, var(--flick-accent-mint) 24%, transparent), transparent 8rem),
+    color-mix(in srgb, var(--flick-surface) 70%, transparent);
+}
+
+.teach-camera-dot,
+.teach-device-dot,
+.teach-ray {
+  position: absolute;
+}
+
+.teach-camera-dot {
+  inset-inline-start: 14%;
+  inset-block-end: 20%;
+  inline-size: 1rem;
+  block-size: 1rem;
+  border-radius: 50%;
+  background: var(--flick-accent-blue);
+}
+
+.teach-ray {
+  inset-inline-start: 17%;
+  inset-block-end: 26%;
+  inline-size: 58%;
+  block-size: 2px;
+  rotate: -20deg;
+  transform-origin: left;
+  background: linear-gradient(90deg, var(--flick-accent-blue), transparent);
+}
+
+.teach-device-dot {
+  inset-inline-end: 14%;
+  inset-block-start: 18%;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--flick-accent-mint) 20%, var(--flick-surface));
+  color: var(--flick-text);
+  padding: 0.45rem 0.65rem;
+  font-weight: 850;
+}
+
+@media (max-width: 900px) {
+  .onboarding-progress,
+  .onboarding-promises,
+  .control-grid,
+  .onboarding-split {
+    grid-template-columns: 1fr;
+  }
+
+  .onboarding-progress button {
+    justify-content: start;
+  }
+}
+
+@media (max-width: 560px) {
+  .onboarding-hero h1 {
+    font-size: clamp(2.1rem, 14vw, 3.7rem);
+  }
+
+  .onboarding-progress {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .onboarding-progress button {
+    min-inline-size: 9rem;
+  }
+
+  .onboarding-screen {
+    border-radius: 1.5rem;
+  }
+}
