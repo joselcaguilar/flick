@@ -40,7 +40,8 @@ use flick_capture::{
 };
 use flick_core::{
     Action, ActionOutcome, ActionStatus, ActionTarget, AnchorId, CameraId, DialProperty, Frame,
-    FrameSource, HandFrame, HandPipeline, PlaceId, SourceInfo, SourceKind, Verb,
+    FrameSource, GestureId, HandFrame, HandPipeline, MappingId, PlaceId, SourceInfo, SourceKind,
+    Verb,
 };
 use flick_gestures::{GestureEngine, GestureEngineConfig};
 use flick_ha::{
@@ -63,7 +64,8 @@ use tokio::{net::TcpListener, sync::Mutex};
 use crate::{
     config::RuntimeConfig,
     dispatcher::{
-        Dispatcher, HaActionSink, NoopActionSink, owner_fan_anchor, owner_scenario_mappings,
+        Dispatcher, DispatcherMapping, HaActionSink, NoopActionSink, owner_fan_anchor,
+        owner_scenario_mappings,
     },
     fake_landmarks::{ReplayCatalog, ReplayFixture, replay_once},
     targeting_store::{SqliteTargetingStore, anchor_record_to_anchor, anchor_to_record},
@@ -98,10 +100,14 @@ pub async fn serve(runtime: RuntimeConfig, token: String) -> anyhow::Result<()> 
     };
     let state = ApiState::new(api_config.clone(), gateways);
     let events = state.events();
+    let mut mappings = owner_scenario_mappings();
+    if runtime.dev {
+        mappings.push(dev_custom_motion_mapping());
+    }
     let dispatcher = Dispatcher::builder(sink)
         .store(store)
         .events(events)
-        .mappings(owner_scenario_mappings())
+        .mappings(mappings)
         .anchors(vec![owner_fan_anchor()])
         .build();
     app.set_dispatcher(dispatcher).await;
@@ -286,6 +292,27 @@ fn bedroom_fan_scenario() -> flick_ha::mock::MockScenario {
         call_delay_ms: 0,
         call_errors: Vec::new(),
     }
+}
+
+fn dev_custom_motion_mapping() -> DispatcherMapping {
+    DispatcherMapping::global(
+        MappingId::from_str("01J00000000000000000000013")
+            .expect("static dev mapping id should parse"),
+        "Custom motion toggles bed light",
+        GestureId::from_str("motion.01J00000000000000000000003")
+            .expect("static dev gesture id should parse"),
+        Action::CallService {
+            domain: "light".to_owned(),
+            service: "toggle".to_owned(),
+            target: ActionTarget {
+                entity_id: Some(vec!["light.bed_light".to_owned()]),
+                device_id: None,
+                area_id: None,
+            },
+            data: json!({}),
+            preset: Some("light.toggle".to_owned()),
+        },
+    )
 }
 
 struct EngineApp {
