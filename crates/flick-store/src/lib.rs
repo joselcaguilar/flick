@@ -15,6 +15,7 @@ use serde_json::Value;
 const DB_FILE: &str = "flick.db";
 const BACKUP_DIR: &str = "backups";
 const BUSY_TIMEOUT: Duration = Duration::from_millis(5_000);
+const SNAPSHOT_KEEP: usize = 3;
 
 /// Store result type using the core storage error boundary.
 pub type Result<T> = std::result::Result<T, StoreError>;
@@ -32,13 +33,13 @@ pub struct Store {
 }
 
 impl Store {
-    /// Opens `<data_dir>/flick.db`, creates the directory, snapshots an existing DB, then migrates.
+    /// Opens `<data_dir>/flick.db`, creating a snapshot only when a migration is pending.
     pub fn open(data_dir: impl AsRef<Path>) -> Result<Self> {
         let data_dir = data_dir.as_ref();
         fs::create_dir_all(data_dir).map_err(file_error)?;
         let db_path = data_dir.join(DB_FILE);
         if db_path.exists() && non_empty_file(&db_path)? {
-            snapshot_database(&db_path, &data_dir.join(BACKUP_DIR))?;
+            snapshot_if_migration_pending(&db_path, &data_dir.join(BACKUP_DIR))?;
         }
         Self::open_path(db_path)
     }
@@ -51,9 +52,7 @@ impl Store {
         }
         let mut conn = Connection::open(&db_path).map_err(database_error)?;
         configure_connection(&conn)?;
-        migrations()
-            .to_latest(&mut conn)
-            .map_err(|err| StoreError::Migration(err.to_string()))?;
+        apply_migrations(&mut conn)?;
         Ok(Self {
             conn: Mutex::new(conn),
             db_path,
@@ -64,9 +63,7 @@ impl Store {
     pub fn open_memory() -> Result<Self> {
         let mut conn = Connection::open_in_memory().map_err(database_error)?;
         configure_connection(&conn)?;
-        migrations()
-            .to_latest(&mut conn)
-            .map_err(|err| StoreError::Migration(err.to_string()))?;
+        apply_migrations(&mut conn)?;
         Ok(Self {
             conn: Mutex::new(conn),
             db_path: PathBuf::from(":memory:"),
@@ -204,16 +201,121 @@ pub fn configure_connection(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Copies a pre-migration database into the backup directory.
+/// Creates a consistent SQLite snapshot into the backup directory and prunes older snapshots.
 pub fn snapshot_database(db_path: &Path, backup_dir: &Path) -> Result<PathBuf> {
     fs::create_dir_all(backup_dir).map_err(file_error)?;
     let ts = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|err| StoreError::Database(err.to_string()))?
-        .as_millis();
-    let snapshot = backup_dir.join(format!("flick-{}-{ts}.db", env!("CARGO_PKG_VERSION")));
-    fs::copy(db_path, &snapshot).map_err(file_error)?;
+        .as_nanos();
+    let snapshot = backup_dir.join(format!(
+        "flick-{}-{ts}-{}.db",
+        env!("CARGO_PKG_VERSION"),
+        std::process::id()
+    ));
+    let conn = Connection::open(db_path).map_err(database_error)?;
+    conn.busy_timeout(BUSY_TIMEOUT).map_err(database_error)?;
+    let snapshot_arg = snapshot
+        .to_str()
+        .ok_or_else(|| StoreError::Database("snapshot path is not valid UTF-8".to_owned()))?;
+    conn.execute("VACUUM main INTO ?1", params![snapshot_arg])
+        .map_err(database_error)?;
+    prune_snapshots(backup_dir, SNAPSHOT_KEEP)?;
     Ok(snapshot)
+}
+
+fn snapshot_if_migration_pending(db_path: &Path, backup_dir: &Path) -> Result<Option<PathBuf>> {
+    prune_snapshots(backup_dir, SNAPSHOT_KEEP)?;
+    let conn = Connection::open(db_path).map_err(database_error)?;
+    configure_connection(&conn)?;
+    let pending = migrations()
+        .pending_migrations(&conn)
+        .map_err(|err| StoreError::Migration(err.to_string()))?;
+    if pending > 0 {
+        snapshot_database(db_path, backup_dir).map(Some)
+    } else {
+        Ok(None)
+    }
+}
+
+fn apply_migrations(conn: &mut Connection) -> Result<()> {
+    let migrations = migrations();
+    match migrations
+        .pending_migrations(conn)
+        .map_err(|err| StoreError::Migration(err.to_string()))?
+    {
+        pending if pending > 0 => migrations
+            .to_latest(conn)
+            .map_err(|err| StoreError::Migration(err.to_string())),
+        pending if pending < 0 => {
+            if schema_marked_breaking(conn)? {
+                Err(StoreError::Migration(
+                    "database was migrated by a breaking future schema".to_owned(),
+                ))
+            } else {
+                tracing::warn!(
+                    pending_migrations = pending,
+                    "opening database migrated by an additive future schema"
+                );
+                Ok(())
+            }
+        }
+        _ => Ok(()),
+    }
+}
+
+fn schema_marked_breaking(conn: &Connection) -> Result<bool> {
+    let has_settings = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'settings'",
+            [],
+            |_| Ok(()),
+        )
+        .optional()
+        .map_err(database_error)?
+        .is_some();
+    if !has_settings {
+        return Ok(false);
+    }
+    let Some(raw) = conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'schema.breaking_db'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(database_error)?
+    else {
+        return Ok(false);
+    };
+    serde_json::from_str::<bool>(&raw).map_err(json_error)
+}
+
+fn prune_snapshots(backup_dir: &Path, keep: usize) -> Result<()> {
+    if !backup_dir.exists() {
+        return Ok(());
+    }
+    let mut snapshots = Vec::new();
+    for entry in fs::read_dir(backup_dir).map_err(file_error)? {
+        let entry = entry.map_err(file_error)?;
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+            continue;
+        };
+        if name.starts_with("flick-") && name.ends_with(".db") {
+            let modified = entry
+                .metadata()
+                .and_then(|metadata| metadata.modified())
+                .unwrap_or(UNIX_EPOCH);
+            snapshots.push((modified, path));
+        }
+    }
+    snapshots.sort_by_key(|(modified, path)| (*modified, path.clone()));
+    let remove_count = snapshots.len().saturating_sub(keep);
+    for (_, path) in snapshots.into_iter().take(remove_count) {
+        fs::remove_file(path).map_err(file_error)?;
+    }
+    Ok(())
 }
 
 fn non_empty_file(path: &Path) -> Result<bool> {
