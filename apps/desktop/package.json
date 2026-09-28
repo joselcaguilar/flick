@@ -12,7 +12,8 @@
     "prepare-dist": "node ./scripts/prepare-dist.mjs",
     "dev:placeholder": "node ./scripts/dev-placeholder.mjs",
     "prepare-dev": "pnpm run prepare-sidecar && pnpm run dev:placeholder",
-    "prepare-build": "pnpm run prepare-sidecar && pnpm run prepare-models && pnpm run prepare-dist"
+    "prepare-build": "pnpm run prepare-sidecar && pnpm run prepare-models && pnpm run prepare-dist",
+    "bundle:local": "node ./scripts/bundle-local.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.9.6"
