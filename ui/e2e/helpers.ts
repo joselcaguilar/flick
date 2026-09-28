@@ -31,6 +31,21 @@ export async function enginePost<T>(
   return (await response.json()) as T;
 }
 
+export async function enginePatch<T>(
+  request: APIRequestContext,
+  path: string,
+  data?: unknown,
+  expectedStatus = 200,
+): Promise<T> {
+  const response = await request.patch(`${engineUrl}${path}`, {
+    headers: authHeaders,
+    data,
+  });
+  expect(response.status(), `${path} status`).toBe(expectedStatus);
+  if (response.status() === 204) return undefined as T;
+  return (await response.json()) as T;
+}
+
 export async function replay(request: APIRequestContext, fixture: string) {
   await enginePost(request, "/api/v1/dev/replay", { fixture }, 202);
 }

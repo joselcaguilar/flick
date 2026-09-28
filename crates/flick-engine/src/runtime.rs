@@ -814,11 +814,23 @@ fn bedroom_fan_scenario() -> flick_ha::mock::MockScenario {
                 last_changed: None,
                 last_updated: None,
             },
+            EntityState {
+                entity_id: "cover.garage".to_owned(),
+                state: "closed".to_owned(),
+                attributes: serde_json::Map::from_iter([
+                    ("friendly_name".to_owned(), json!("Garage door")),
+                    ("device_class".to_owned(), json!("garage")),
+                    ("supported_features".to_owned(), json!(15)),
+                ]),
+                last_changed: None,
+                last_updated: None,
+            },
             owner_fan_anchor().entity,
         ],
         services: json!({
             "light": {"toggle": {}, "turn_on": {}, "turn_off": {}},
-            "fan": {"turn_on": {}, "turn_off": {}, "toggle": {}, "increase_speed": {}, "decrease_speed": {}}
+            "fan": {"turn_on": {}, "turn_off": {}, "toggle": {}, "increase_speed": {}, "decrease_speed": {}},
+            "cover": {"open_cover": {}, "close_cover": {}, "stop_cover": {}}
         }),
         registries: flick_ha::mock::MockRegistries::default(),
         call_delay_ms: 0,
