@@ -30,8 +30,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.98.1
-      # TODO(P1-801): install desktop system dependencies such as libwebkit2gtk-4.1-dev
-      # only after apps/desktop is added to the workspace.
+      - name: Install Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
       - name: Test
         run: cargo test --workspace
 
@@ -57,3 +64,46 @@ jobs:
   # TODO(P1-602): api-drift once cargo xtask gen-api writes generated TS types.
   # api-drift:
   #   runs-on: ubuntu-22.04
+
+  build-bundles:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.6.0
+      - name: Install Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+      - name: Install desktop dependencies
+        run: pnpm --dir apps/desktop install --frozen-lockfile
+      - name: Build unsigned preview bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$RUNNER_OS" in
+            macOS) pnpm --dir apps/desktop tauri build --debug --bundles app ;;
+            Windows) pnpm --dir apps/desktop tauri build --debug --bundles nsis ;;
+            Linux) pnpm --dir apps/desktop tauri build --debug --bundles appimage,deb ;;
+          esac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flick-${{ matrix.os }}-preview
+          path: target/debug/bundle/**
+          if-no-files-found: error

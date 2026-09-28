@@ -251,6 +251,7 @@ impl EngineSupervisor {
             inner.pid = Some(pid);
             inner.last_error = None;
         }
+        println!("engine sidecar ready: {}", endpoint.base_url);
         let _ = app.emit("engine-status", EngineStatus::Ready);
         self.monitor(app, endpoint, child, rx).await;
         Ok(())
@@ -451,6 +452,7 @@ impl EngineSupervisor {
             }
         };
         tracing::warn!(%error, ?status, "engine sidecar crashed");
+        eprintln!("engine sidecar crashed: {error}");
         let _ = app.emit("engine-status", status);
         if status == EngineStatus::Fatal {
             let _ = app.emit("engine-fatal", error);
