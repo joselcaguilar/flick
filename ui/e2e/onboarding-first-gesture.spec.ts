@@ -7,7 +7,8 @@ test("onboarding connects mock HA, fires first gesture, and supports demo mode",
 }) => {
   await page.goto("/onboarding");
   await page.getByRole("button", { name: "Get started" }).click();
-  await page.getByRole("button", { name: "Continue" }).click();
+  // Fake-landmark engine: real camera capture is verified manually on device.
+  await page.getByRole("button", { name: "Skip camera for now" }).click();
   await page.getByRole("button", { name: /Mock Home/ }).click();
   await page.getByRole("button", { name: "Connect" }).click();
   await expect(page.getByText(/Connected to Home/)).toBeVisible();

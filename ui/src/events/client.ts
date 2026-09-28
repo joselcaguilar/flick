@@ -21,6 +21,14 @@ const defaultTopics: WsTopic[] = [
   "hands:camera-main",
 ];
 let singleton: EventClient | undefined;
+const extraTopics = new Set<WsTopic>();
+let sendSubscribe: ((topics: WsTopic[]) => void) | undefined;
+
+export function subscribeTopics(topics: WsTopic[]) {
+  const added = topics.filter((topic) => !extraTopics.has(topic));
+  for (const topic of added) extraTopics.add(topic);
+  if (added.length) sendSubscribe?.(added);
+}
 
 export async function startEventStream(topics: WsTopic[] = defaultTopics): Promise<EventClient> {
   if (singleton) return singleton;
@@ -45,7 +53,7 @@ export async function startEventStream(topics: WsTopic[] = defaultTopics): Promi
     ws.addEventListener("open", () => {
       attempt = 0;
       useEventStore.getState().dispatch({ type: "connection", state: "open" });
-      ws?.send(JSON.stringify({ type: "subscribe", topics }));
+      ws?.send(JSON.stringify({ type: "subscribe", topics: [...topics, ...extraTopics] }));
     });
 
     ws.addEventListener("message", (event) => {
@@ -66,10 +74,14 @@ export async function startEventStream(topics: WsTopic[] = defaultTopics): Promi
   };
 
   connect();
+  sendSubscribe = (added) => {
+    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "subscribe", topics: added }));
+  };
 
   singleton = {
     close: () => {
       closed = true;
+      sendSubscribe = undefined;
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       ws?.close();
       singleton = undefined;

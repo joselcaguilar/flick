@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { Navigate } from "react-router-dom";
+import { features } from "../config/features";
 import { ActivityRoute } from "../features/activity/ActivityRoute";
 import { CamerasRoute } from "../features/cameras/Cameras";
 import { DashboardRoute } from "../features/dashboard/Dashboard";
@@ -17,6 +19,7 @@ export interface RouteMeta {
   description: string;
   nav?: boolean;
   mobile?: boolean;
+  command?: boolean;
   shortcut?: string;
   element: ReactNode;
 }
@@ -125,8 +128,9 @@ export const routes: RouteMeta[] = [
     path: "/pro",
     title: "Pro",
     description: "Future Pro capabilities.",
-    nav: true,
+    nav: features.pro,
     mobile: false,
-    element: <ProRoute />,
+    command: features.pro,
+    element: features.pro ? <ProRoute /> : <Navigate to="/" replace />,
   },
 ];

@@ -13,7 +13,7 @@ import {
 } from "../../api/hooks";
 import { ConfidenceMeter, DevicePill, GestureGlyph, PreviewCanvas } from "../../components/domain";
 import { Badge, Button, GlassPanel, Input, ListRow, Select } from "../../components/ui";
-import type { HandObservationEvent } from "../../events/types";
+import { useLiveHands } from "../../events/useLiveHands";
 import {
   type CameraPermission,
   cameraPermissionStatus,
@@ -35,17 +35,6 @@ const steps: Array<{ id: StepId; label: string }> = [
   { id: "teach", label: "Teach" },
   { id: "control", label: "Stay in control" },
 ];
-
-const mockHand: HandObservationEvent = {
-  track_id: 1,
-  hand: "right",
-  bbox: { x: 0.42, y: 0.18, w: 0.28, h: 0.48 },
-  landmarks: Array.from({ length: 21 }, (_, index) => ({
-    x: 0.42 + (index % 5) * 0.045,
-    y: 0.68 - Math.floor(index / 5) * 0.095,
-    z: 0,
-  })),
-};
 
 function errorMessage(error: unknown) {
   const problem = (error as { problem?: { title?: string; detail?: string } }).problem;
@@ -127,7 +116,7 @@ export function OnboardingRoute() {
   const configuredCameras = useCameras();
   const createCamera = useCreateCamera();
   const startCamera = useStartCamera();
-  const previewTicket = useCameraPreviewTicket();
+  const [startedCameraId, setStartedCameraId] = useState<string>();
   const discovery = useHaDiscover();
   const lightEntities = useHaEntities("?domain=light");
   const connect = useHaConnect();
@@ -146,7 +135,10 @@ export function OnboardingRoute() {
   const activeIndex = steps.findIndex((item) => item.id === step);
   const cameraCopy = cameraStateCopy(cameraPermission, cameraStarted);
   const selectedLight = lightEntities.data?.[0];
-  const cameraBusy = createCamera.isPending || startCamera.isPending || previewTicket.isPending;
+  const cameraBusy = createCamera.isPending || startCamera.isPending;
+  const preview = useCameraPreviewTicket(startedCameraId, cameraStarted);
+  const liveHands = useLiveHands(startedCameraId);
+  const handTracked = cameraStarted && Boolean(liveHands?.hands.length);
 
   const currentCamera = useMemo(
     () =>
@@ -220,7 +212,7 @@ export function OnboardingRoute() {
     if (!camera) throw new Error("No camera was found. Connect a camera, then check again.");
 
     await startCamera.mutateAsync(camera.id);
-    await previewTicket.mutateAsync(camera.id).catch(() => undefined);
+    setStartedCameraId(camera.id);
     setCameraRef(camera.device_ref ?? selectedAvailable?.device_ref ?? cameraRef);
     setCameraStarted(true);
   }
@@ -368,8 +360,9 @@ export function OnboardingRoute() {
               <div>
                 <PreviewCanvas
                   alt={`${currentCamera?.name ?? "Camera"} preview with a tracked hand`}
-                  hands={cameraStarted ? [mockHand] : []}
-                  ray={cameraStarted ? { origin2d: [0.48, 0.64], tip2d: [0.73, 0.24], model: "eye" } : null}
+                  src={cameraStarted ? preview.data?.src || undefined : undefined}
+                  hands={cameraStarted ? liveHands?.hands : []}
+                  ray={cameraStarted ? liveHands?.ray : null}
                 />
                 <div className="preview-overlay-card onboarding-preview-card">
                   <DevicePill
@@ -377,7 +370,10 @@ export function OnboardingRoute() {
                     domain="camera"
                     detail={cameraStarted ? "running locally" : "not started"}
                   />
-                  <ConfidenceMeter value={cameraStarted ? 0.92 : 0.12} label="Hand tracked" />
+                  <ConfidenceMeter
+                    value={handTracked ? 0.92 : 0.12}
+                    label={handTracked ? "Hand tracked" : "Show a hand"}
+                  />
                 </div>
               </div>
             </div>

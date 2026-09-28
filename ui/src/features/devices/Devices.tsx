@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   useAnchors,
+  useCameraPreviewTicket,
   useCancelTeach,
   useCommitTeach,
   useHaEntities,
@@ -30,6 +31,7 @@ import {
 } from "../../components/domain";
 import { Badge, Button, GlassPanel, ListRow, Select, Skeleton, Switch } from "../../components/ui";
 import { useEventStore } from "../../events/store";
+import { useActiveCamera, useLiveHands } from "../../events/useLiveHands";
 import { formatTime } from "../../lib/utils";
 
 function anchorTargetEntity(anchor: Anchor) {
@@ -109,7 +111,9 @@ function levelLabel(action: Action) {
 }
 
 function TeachPreview({ title, detail, sessionId }: { title: string; detail: string; sessionId?: string }) {
-  const hands = useEventStore((state) => state.hands["camera-main"]);
+  const activeCamera = useActiveCamera();
+  const hands = useLiveHands(activeCamera.id);
+  const preview = useCameraPreviewTicket(activeCamera.id, activeCamera.running);
   const teach = useEventStore((state) => state.teach);
   const progress = teach?.session_id === sessionId ? teach : undefined;
   const confidence = progress?.confidence ?? 0.82;
@@ -122,7 +126,12 @@ function TeachPreview({ title, detail, sessionId }: { title: string; detail: str
         </div>
         <Badge tone={progress?.phase === "error" ? "danger" : "success"}>{progress?.hint ?? detail}</Badge>
       </div>
-      <PreviewCanvas alt="Live camera preview with pointing ray" hands={hands?.hands} ray={hands?.ray} />
+      <PreviewCanvas
+        src={preview.data?.src || undefined}
+        alt="Live camera preview with pointing ray"
+        hands={hands?.hands}
+        ray={hands?.ray}
+      />
       <div className="teach-ray-caption">
         <ConfidenceMeter
           value={confidence}

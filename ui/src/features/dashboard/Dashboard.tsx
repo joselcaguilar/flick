@@ -3,6 +3,7 @@ import { useActivity, useStatus, useUpdates } from "../../api/hooks";
 import { ConfidenceMeter, DevicePill, PreviewCanvas } from "../../components/domain";
 import { Badge, Button, GlassPanel, Kbd, ListRow, Skeleton } from "../../components/ui";
 import { useEventStore } from "../../events/store";
+import { useLiveHands } from "../../events/useLiveHands";
 import { formatTime } from "../../lib/utils";
 
 function statusLabel(status?: string | null) {
@@ -42,7 +43,7 @@ export function DashboardRoute() {
   const updates = useUpdates();
   const activity = useActivity("?limit=10");
   const eventState = useEventStore();
-  const liveHands = eventState.hands["camera-main"];
+  const liveHands = useLiveHands();
   const engine = status.data;
   const camera = engine?.cameras[0];
   const inference =
@@ -184,12 +185,6 @@ export function DashboardRoute() {
                 Camera status
               </Link>
             </div>
-          </GlassPanel>
-
-          <GlassPanel className="dashboard-hud-card">
-            <span>HUD now</span>
-            <strong>{eventState.hud.title}</strong>
-            {eventState.hud.detail ? <p>{eventState.hud.detail}</p> : null}
           </GlassPanel>
         </aside>
       </div>

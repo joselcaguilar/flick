@@ -123,6 +123,10 @@ export function HudCapsule({ liveState }: { liveState: HudState }) {
     }
   }, [hud.state]);
 
+  if (!previewState && hud.state === "idle") {
+    return <main className="hud-stage" aria-live="polite" />;
+  }
+
   return (
     <main className="hud-stage" aria-live="polite">
       <section className="flick-glass hud-capsule" data-state={hud.state} data-tone={stateTone(hud.state)}>

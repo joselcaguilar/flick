@@ -101,6 +101,16 @@ code,
   padding: 1rem;
 }
 
+.app-shell[data-shell="macos"] .shell-sidebar {
+  padding-block-start: 0.85rem;
+}
+
+.mac-sidebar-drag-inset {
+  min-block-size: 3.25rem;
+  margin: -0.35rem -0.25rem 0.75rem;
+  border-radius: 1.25rem;
+}
+
 .brand-mark {
   display: flex;
   align-items: center;
@@ -110,19 +120,9 @@ code,
   margin-block-end: 1.25rem;
 }
 
-.brand-mark > span {
-  display: grid;
-  place-items: center;
-  inline-size: 2.75rem;
-  block-size: 2.75rem;
-  border: 1px solid color-mix(in srgb, var(--flick-accent-blue) 48%, var(--flick-border));
-  border-radius: 1rem;
-  color: white;
-  background: linear-gradient(135deg, var(--flick-accent-blue), var(--flick-accent-violet));
-  box-shadow:
-    inset 0 1px rgba(255, 255, 255, 0.45),
-    0 14px 32px color-mix(in srgb, var(--flick-accent-blue) 22%, transparent);
-  font-weight: 800;
+.brand-mark-slot {
+  flex: none;
+  filter: drop-shadow(0 12px 24px color-mix(in srgb, var(--flick-accent-blue) 24%, transparent));
 }
 
 .brand-mark strong {
@@ -176,6 +176,7 @@ code,
 }
 
 .shell-toolbar {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -186,12 +187,65 @@ code,
   padding: 0.7rem 0.8rem;
 }
 
+.toolbar-drag-region {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+}
+
 .toolbar-left,
 .toolbar-actions {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 0.55rem;
   flex-wrap: wrap;
+}
+
+.sidebar-live-status {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-block-start: 0.75rem;
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--flick-surface) 50%, transparent);
+  padding: 0.75rem 0.85rem;
+}
+
+.sidebar-live-status i {
+  inline-size: 0.62rem;
+  block-size: 0.62rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--flick-accent-amber);
+  box-shadow: 0 0 0 0.28rem color-mix(in srgb, var(--flick-accent-amber) 18%, transparent);
+}
+
+.sidebar-live-status[data-tone="online"] i {
+  background: var(--flick-accent-mint);
+  box-shadow: 0 0 0 0.28rem color-mix(in srgb, var(--flick-accent-mint) 18%, transparent);
+}
+
+.sidebar-live-status[data-tone="error"] i {
+  background: var(--flick-accent-red);
+  box-shadow: 0 0 0 0.28rem color-mix(in srgb, var(--flick-accent-red) 18%, transparent);
+}
+
+.sidebar-live-status strong,
+.sidebar-live-status span {
+  display: block;
+}
+
+.sidebar-live-status strong {
+  font-size: 0.86rem;
+}
+
+.sidebar-live-status span {
+  color: var(--flick-muted);
+  font-size: 0.78rem;
 }
 
 .mobile-menu-button {
@@ -276,6 +330,12 @@ code,
 .shell-content {
   min-inline-size: 0;
   padding-block-end: 1rem;
+}
+
+.content-drag-region {
+  block-size: 0.9rem;
+  margin-block: -0.35rem 0.35rem;
+  border-radius: var(--radius-pill);
 }
 
 .home-grid {
@@ -1021,6 +1081,12 @@ body.hud-window {
     display: none;
   }
 
+  .mac-sidebar-drag-inset,
+  .toolbar-drag-region,
+  .content-drag-region {
+    display: none;
+  }
+
   .mobile-menu-button {
     display: inline-grid;
     place-items: center;
@@ -1158,8 +1224,7 @@ body.hud-window {
 }
 
 .dashboard-activity-panel,
-.dashboard-quick-actions,
-.dashboard-hud-card {
+.dashboard-quick-actions {
   grid-column: auto;
 }
 
@@ -1232,8 +1297,7 @@ body.hud-window {
 
   .dashboard-status-strip,
   .dashboard-update-banner,
-  .dashboard-quick-actions,
-  .dashboard-hud-card {
+  .dashboard-quick-actions {
     grid-column: auto;
   }
 }
@@ -1972,6 +2036,25 @@ body.hud-window {
 
 .camera-preview-panel .preview-canvas {
   aspect-ratio: 16 / 9;
+}
+
+.camera-permission-panel {
+  display: grid;
+  min-block-size: 16rem;
+  align-content: center;
+  justify-items: center;
+  gap: 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--flick-accent-red) 42%, var(--flick-border));
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--flick-accent-red) 8%, var(--flick-surface));
+  color: var(--flick-text);
+  padding: 1.25rem;
+  text-align: center;
+}
+
+.camera-permission-panel span {
+  max-inline-size: 36ch;
+  color: var(--flick-muted);
 }
 
 .camera-list-column,

@@ -983,7 +983,7 @@ fn install_tray(app: &AppHandle) -> tauri::Result<()> {
 
     let tray = TrayIconBuilder::with_id("main")
         .menu(&menu)
-        .icon(template_tray_icon())
+        .icon(template_tray_icon()?)
         .icon_as_template(true)
         .tooltip("Flick")
         .show_menu_on_left_click(true)
@@ -1208,25 +1208,8 @@ fn toggle_pause(app: &AppHandle) {
     set_pause(app, paused);
 }
 
-fn template_tray_icon() -> Image<'static> {
-    let mut rgba = vec![0u8; 18 * 18 * 4];
-    for y in 2usize..16 {
-        for x in 5usize..13 {
-            if (x > 6 && x < 11) || y > 8 {
-                let idx = (y * 18 + x) * 4;
-                rgba[idx + 3] = 255;
-            }
-        }
-    }
-    for (x, y) in [(4usize, 6usize), (6, 3), (8, 2), (10, 3), (12, 5)] {
-        for yy in y..(y + 7).min(18) {
-            for xx in x..(x + 2).min(18) {
-                let idx = (yy * 18 + xx) * 4;
-                rgba[idx + 3] = 255;
-            }
-        }
-    }
-    Image::new_owned(rgba, 18, 18)
+fn template_tray_icon() -> tauri::Result<Image<'static>> {
+    Image::from_bytes(include_bytes!("../icons/tray/tray-template@2x.png"))
 }
 
 fn generate_token() -> anyhow::Result<String> {

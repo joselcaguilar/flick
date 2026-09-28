@@ -3,6 +3,7 @@
 interface ImportMetaEnv {
   readonly VITE_ENGINE_URL?: string;
   readonly VITE_ENGINE_TOKEN?: string;
+  readonly VITE_FEATURE_PRO?: string;
   readonly VITE_MOCK?: string;
 }
 

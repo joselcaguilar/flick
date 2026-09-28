@@ -30,17 +30,19 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
   const commands = useMemo<CommandItem[]>(
     () => [
-      ...routes.map((route) => ({
-        id: `route:${route.path}`,
-        group: "Routes" as const,
-        label: route.title,
-        description: route.description,
-        shortcut: route.shortcut,
-        run: () => {
-          navigate(route.path);
-          onOpenChange(false);
-        },
-      })),
+      ...routes
+        .filter((route) => route.command !== false)
+        .map((route) => ({
+          id: `route:${route.path}`,
+          group: "Routes" as const,
+          label: route.title,
+          description: route.description,
+          shortcut: route.shortcut,
+          run: () => {
+            navigate(route.path);
+            onOpenChange(false);
+          },
+        })),
       {
         id: "action:pause",
         group: "Actions",
