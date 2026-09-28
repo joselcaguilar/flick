@@ -1,0 +1,259 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-28T17:03:56+02:00",
+  "title": "Design System: Flick",
+  "extensions": {
+    "colorMeta": {
+      "cue-cyan": {
+        "role": "primary",
+        "displayName": "Cue Cyan",
+        "canonical": "#007A8C",
+        "tonalRamp": [
+          "#002227",
+          "#003C45",
+          "#005966",
+          "#007A8C",
+          "#00A1B8",
+          "#66E2F2",
+          "#B9F5FB",
+          "#E8FDFF"
+        ]
+      },
+      "cue-amber": {
+        "role": "secondary",
+        "displayName": "Cue Amber",
+        "canonical": "#B76B00",
+        "tonalRamp": [
+          "#2A1600",
+          "#583100",
+          "#835000",
+          "#B76B00",
+          "#E99400",
+          "#FFC857",
+          "#FFE5A3",
+          "#FFF8DA"
+        ]
+      },
+      "cue-green": {
+        "role": "state",
+        "displayName": "Cue Green",
+        "canonical": "#176B46",
+        "tonalRamp": [
+          "#052013",
+          "#0A3A24",
+          "#105936",
+          "#176B46",
+          "#249460",
+          "#72E59A",
+          "#BDF6CF",
+          "#EBFFF0"
+        ]
+      },
+      "cue-red": {
+        "role": "state",
+        "displayName": "Cue Red",
+        "canonical": "#A9282F",
+        "tonalRamp": [
+          "#30070A",
+          "#5A1016",
+          "#831D24",
+          "#A9282F",
+          "#D9434D",
+          "#FF7A84",
+          "#FFC2C7",
+          "#FFF0F1"
+        ]
+      },
+      "night-booth": {
+        "role": "neutral",
+        "displayName": "Night Booth",
+        "canonical": "#07100E",
+        "tonalRamp": [
+          "#000000",
+          "#07100E",
+          "#0E1816",
+          "#172620",
+          "#2E433B",
+          "#5E756B",
+          "#A8BBB2",
+          "#EAF3EE"
+        ]
+      },
+      "light-booth": {
+        "role": "neutral",
+        "displayName": "Light Booth",
+        "canonical": "#F4F7F2",
+        "tonalRamp": [
+          "#13201B",
+          "#4E625B",
+          "#93A69C",
+          "#C6D4CC",
+          "#E7EFE8",
+          "#F4F7F2",
+          "#FFFFFF",
+          "#FFFFFF"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Major screen and flow statements."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Screen titles and major panel headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Plain-language product copy."
+      },
+      "label": {
+        "displayName": "Cue Label",
+        "purpose": "Status chips, controls and compact metadata."
+      },
+      "hud-title": {
+        "displayName": "HUD Title",
+        "purpose": "Always-on-top device/action text at 3 m."
+      },
+      "hud-body": {
+        "displayName": "HUD Body",
+        "purpose": "HUD secondary state and reason text, 20 px minimum."
+      },
+      "overlay-label": {
+        "displayName": "Overlay Label",
+        "purpose": "Preview ray and skeleton annotations."
+      }
+    },
+    "shadows": [
+      {
+        "name": "panel-rest",
+        "value": "0 1px 2px rgba(19, 32, 27, 0.08), 0 10px 30px rgba(19, 32, 27, 0.08)",
+        "purpose": "Cards and preview containers."
+      },
+      {
+        "name": "panel-lift",
+        "value": "0 10px 20px rgba(19, 32, 27, 0.10), 0 24px 60px rgba(19, 32, 27, 0.12)",
+        "purpose": "Active teaching pane or popover."
+      },
+      {
+        "name": "hud-scrim",
+        "value": "0 18px 60px rgba(0, 0, 0, 0.34)",
+        "purpose": "HUD pill over wallpaper."
+      }
+    ],
+    "motion": [
+      {
+        "name": "cue-fast",
+        "value": "180ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Button, chip and panel state changes."
+      },
+      {
+        "name": "dwell",
+        "value": "500ms linear with static fallback",
+        "purpose": "Point-to-select dwell ring."
+      },
+      {
+        "name": "selection-window",
+        "value": "4000ms linear with countdown text",
+        "purpose": "Selected device verb window."
+      },
+      {
+        "name": "reduce-motion",
+        "value": "no continuous movement; show bars, labels and immediate state",
+        "purpose": "Accessibility fallback."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "880px"
+      },
+      {
+        "name": "lg",
+        "value": "1180px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Cue-key primary action.",
+      "html": "<button class=\"ds-btn-primary\">TEACH A DEVICE</button>",
+      "css": ".ds-btn-primary{font-family:var(--font-sans);font-weight:700;letter-spacing:.04em;border:0;border-radius:999px;background:var(--flick-cue-cyan);color:var(--flick-primary-foreground);padding:12px 20px;min-height:44px;box-shadow:var(--flick-shadow-panel-rest);transition:transform var(--animate-cue-fast) var(--ease-cue),box-shadow var(--animate-cue-fast) var(--ease-cue)}.ds-btn-primary:hover{transform:translateY(-1px);box-shadow:var(--flick-shadow-panel-lift)}.ds-btn-primary:focus-visible{outline:3px solid var(--flick-focus);outline-offset:3px}.ds-btn-primary:active{transform:translateY(1px)}"
+    },
+    {
+      "name": "Status Chip",
+      "kind": "chip",
+      "refersTo": "chip-status",
+      "description": "Icon/text status that never relies on color alone.",
+      "html": "<span class=\"ds-chip\">\u2713 Watching</span>",
+      "css": ".ds-chip{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-sans);font-weight:700;font-size:13px;letter-spacing:.04em;border-radius:999px;background:var(--flick-surface-raised);color:var(--flick-text);border:1px solid var(--flick-border);padding:7px 10px}.ds-chip[data-state=success]{background:color-mix(in srgb,var(--flick-cue-green) 14%,var(--flick-surface));color:var(--flick-text)}"
+    },
+    {
+      "name": "Preview Card",
+      "kind": "card",
+      "refersTo": "card-preview",
+      "description": "Large clipped camera/skeleton stage.",
+      "html": "<section class=\"ds-preview-card\"><div class=\"ds-preview-grid\"></div></section>",
+      "css": ".ds-preview-card{border-radius:32px;overflow:hidden;background:var(--flick-surface);border:1px solid var(--flick-border);box-shadow:var(--flick-shadow-panel-rest);padding:16px}.ds-preview-grid{min-height:240px;border-radius:24px;background:linear-gradient(var(--flick-grid-line) 1px,transparent 1px),linear-gradient(90deg,var(--flick-grid-line) 1px,transparent 1px),var(--flick-surface-raised);background-size:32px 32px}"
+    },
+    {
+      "name": "HUD Pill",
+      "kind": "custom",
+      "refersTo": "hud-pill",
+      "description": "Always-on-top result overlay.",
+      "html": "<aside class=\"ds-hud\"><strong>Ventilador dormitorio</strong><span>selected \u00b7 4 s</span></aside>",
+      "css": ".ds-hud{width:360px;min-height:96px;border-radius:32px;background:rgba(14,24,22,.92);color:#EAF3EE;box-shadow:var(--flick-shadow-hud);backdrop-filter:blur(18px);display:grid;align-content:center;padding:18px 22px;font-family:var(--font-sans)}.ds-hud strong{font-size:22px;line-height:1.1}.ds-hud span{font-size:20px;line-height:1.25}.high-contrast .ds-hud{background:#000;color:#fff;border:2px solid #fff;backdrop-filter:none}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Sightline Cue Desk",
+    "overview": "Flick treats the room as a small stage: the camera is the booth, the user's pointing hand casts a sightline, and every gesture is a cue that must visibly lock, fire and resolve.",
+    "keyCharacteristics": [
+      "Sightlines and target rings are the signature visual primitives.",
+      "Cyan means aiming/selection, amber waiting/attention, green done, red failed; text and icons always repeat state.",
+      "Atkinson Hyperlegible is bundled for distance legibility.",
+      "Surfaces are layered by tone, soft shadow and hairline grids, not decorative glass.",
+      "Motion is a cue, not ornament."
+    ],
+    "rules": [
+      {
+        "name": "The Cue Rarity Rule",
+        "body": "At rest, no more than one cue color family should dominate a view; color marks live state, not decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Red Needs Words Rule",
+        "body": "Any failed/unsafe state must include an icon plus a plain-language reason.",
+        "section": "colors"
+      },
+      {
+        "name": "The Three-Meter Rule",
+        "body": "HUD primary text is never below 20 px; high-contrast HUD text uses black/white pairs that exceed 7:1.",
+        "section": "typography"
+      },
+      {
+        "name": "The Useful Blur Rule",
+        "body": "Backdrop blur appears only behind the HUD or overlays on video/wallpaper, and must preserve contrast in high-contrast mode by switching to an opaque background.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do make the live preview or HUD state immediately answer: what Flick sees, what it selected, what happened.",
+      "Do keep HUD text at 20 px or larger and repeat state with icons/text.",
+      "Do use local bundled fonts and SVG assets; the app must work offline."
+    ],
+    "donts": [
+      "Don't ship the stock shadcn theme, default gray palette or generic rounded card grid.",
+      "Don't convey selected/done/failed by color alone.",
+      "Don't load fonts, icons or images from a runtime CDN."
+    ]
+  }
+}
