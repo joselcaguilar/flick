@@ -1,6 +1,7 @@
 use std::{
     env, fs,
     path::PathBuf,
+    sync::atomic::{AtomicUsize, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -150,9 +151,12 @@ fn additive_future_schema_opens_without_rollback() -> Result<(), Box<dyn std::er
 }
 
 fn unique_test_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    // Parallel tests share a PID and macOS clocks tick in microseconds, so add a counter.
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    let seq = NEXT.fetch_add(1, Ordering::Relaxed);
     let ts = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     Ok(env::current_dir()?
         .join("target")
         .join("flick-store-tests")
-        .join(format!("{}-{ts}", std::process::id())))
+        .join(format!("{}-{ts}-{seq}", std::process::id())))
 }
