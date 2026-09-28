@@ -17,6 +17,10 @@ import {
   status,
   updates,
 } from "./data";
+import { cameraHandlers } from "./handlers.cameras";
+import { deviceHandlers } from "./handlers.devices";
+import { mappingHandlers } from "./handlers.mappings";
+import { proHandlers } from "./handlers.pro";
 
 const api = "*/api/v1";
 let mutableSettings = { ...settings };
@@ -34,6 +38,10 @@ function outcome(message = "Done · Home Assistant confirmed") {
 }
 
 export const handlers = [
+  ...deviceHandlers,
+  ...mappingHandlers,
+  ...cameraHandlers,
+  ...proHandlers,
   http.get("*/health", () => ok({ status: "ok", version: "0.1.0-dev", uptime_s: 42 })),
   http.get(`${api}/status`, () => ok(status)),
   http.post(`${api}/engine/pause`, async ({ request }) => {
