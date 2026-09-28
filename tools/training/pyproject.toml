@@ -1,0 +1,26 @@
+[project]
+name = "flick-training"
+version = "0.1.0"
+description = "Phase 0 model sourcing, conversion, inspection, and parity helpers for Flick."
+requires-python = ">=3.14"
+dependencies = []
+
+[project.optional-dependencies]
+inspect = [
+  "onnx>=1.23",
+  "onnxruntime>=1.30",
+  "numpy>=2.5",
+]
+tflite = [
+  "tflite2onnx>=0.4.1",
+]
+reference = [
+  "mediapipe>=1.0.1",
+]
+tensorflow = [
+  "tensorflow>=2.21",
+  "tf2onnx>=1.17",
+]
+
+[tool.uv]
+package = false
