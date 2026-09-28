@@ -552,7 +552,7 @@ impl TrackState {
                 let should_fire = self
                     .active
                     .as_ref()
-                    .map_or(true, |active| !active.fired || now >= active.next_at);
+                    .is_none_or(|active| !active.fired || now >= active.next_at);
                 if !should_fire {
                     return TrackProduced::None;
                 }
@@ -710,12 +710,11 @@ fn choose_candidate(
     let mut sorted = candidates.to_vec();
     sorted.sort_by(|left, right| right.confidence.total_cmp(&left.confidence));
     let best = sorted.first()?.clone();
-    if let Some(second) = sorted.get(1) {
-        if second.gesture_id != best.gesture_id
-            && best.confidence - second.confidence < conflict_margin
-        {
-            return None;
-        }
+    if let Some(second) = sorted.get(1)
+        && second.gesture_id != best.gesture_id
+        && best.confidence - second.confidence < conflict_margin
+    {
+        return None;
     }
     Some(best)
 }
@@ -736,14 +735,13 @@ fn choose_resolved(
             })
     });
     let best = sorted.first()?.clone();
-    if let Some(second) = sorted.get(1) {
-        if candidate_priority(second.candidate.gesture_id)
+    if let Some(second) = sorted.get(1)
+        && candidate_priority(second.candidate.gesture_id)
             == candidate_priority(best.candidate.gesture_id)
-            && second.candidate.gesture_id != best.candidate.gesture_id
-            && best.candidate.confidence - second.candidate.confidence < conflict_margin
-        {
-            return None;
-        }
+        && second.candidate.gesture_id != best.candidate.gesture_id
+        && best.candidate.confidence - second.candidate.confidence < conflict_margin
+    {
+        return None;
     }
     Some(best)
 }

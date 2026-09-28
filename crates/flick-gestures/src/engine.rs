@@ -50,12 +50,13 @@ pub struct GestureEngineConfig {
 
 impl Default for GestureEngineConfig {
     fn default() -> Self {
-        let mut trigger = TriggerConfig::default();
-        trigger.mappings = builtin_replay_mappings();
         Self {
             tier0: Tier0Config::default(),
             motion: MotionConfig::default(),
-            trigger,
+            trigger: TriggerConfig {
+                mappings: builtin_replay_mappings(),
+                ..TriggerConfig::default()
+            },
         }
     }
 }
@@ -83,13 +84,12 @@ impl GestureEngineConfig {
                 _ => MotionAxis::Any,
             };
         }
-        if let Some(params) = settings.get("gestures.params") {
-            if let Some(threshold) = params
+        if let Some(params) = settings.get("gestures.params")
+            && let Some(threshold) = params
                 .get("tier0_threshold")
                 .and_then(serde_json::Value::as_f64)
-            {
-                config.tier0.threshold = threshold as f32;
-            }
+        {
+            config.tier0.threshold = threshold as f32;
         }
         config.trigger.mappings = mappings;
         config

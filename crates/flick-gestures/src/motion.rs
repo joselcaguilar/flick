@@ -353,9 +353,7 @@ impl MotionTrack {
             return None;
         }
         let turns = signed_turns(&recent, centroid);
-        let full_turns = if turns >= 300.0 {
-            (turns / 360.0).round() as i32
-        } else if turns <= -300.0 {
+        let full_turns = if turns.abs() >= 300.0 {
             (turns / 360.0).round() as i32
         } else {
             0
