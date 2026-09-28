@@ -12,7 +12,8 @@
     "test": "vitest run",
     "gen:api": "openapi-typescript ${OPENAPI_PATH:-../crates/flick-api/openapi.json} -o src/api/schema.d.ts",
     "detect": "node scripts/detect.mjs --json src",
-    "screenshots:shell": "node scripts/capture-screenshots.mjs"
+    "screenshots:shell": "node scripts/capture-screenshots.mjs",
+    "screenshots:hud": "node scripts/capture-hud-screenshots.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.23",

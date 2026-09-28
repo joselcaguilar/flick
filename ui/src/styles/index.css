@@ -1179,3 +1179,86 @@ body.hud-window {
     grid-template-columns: 1fr;
   }
 }
+
+.hud-capsule {
+  transition:
+    box-shadow var(--animate-fast) var(--ease-standard),
+    border-color var(--animate-fast) var(--ease-standard),
+    background var(--animate-fast) var(--ease-standard);
+}
+
+.hud-capsule[data-tone="success"] {
+  border-color: color-mix(in srgb, var(--flick-accent-mint) 55%, var(--flick-border));
+}
+
+.hud-capsule[data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--flick-accent-red) 55%, var(--flick-border));
+}
+
+.hud-capsule[data-tone="warning"] {
+  border-color: color-mix(in srgb, var(--flick-accent-amber) 58%, var(--flick-border));
+}
+
+.hud-capsule[data-state="aiming"] .hud-icon,
+.hud-capsule[data-state="candidate"] .hud-icon {
+  box-shadow: 0 0 0 0.45rem color-mix(in srgb, var(--flick-accent-blue) 16%, transparent);
+}
+
+.hud-capsule[data-state="selected"] .hud-icon,
+.hud-capsule[data-state="armed"] .hud-icon {
+  box-shadow: 0 0 0 0.45rem color-mix(in srgb, var(--flick-accent-violet) 18%, transparent);
+}
+
+.hud-capsule[data-state="done"] .hud-icon {
+  background: var(--flick-accent-mint);
+  color: #03130e;
+}
+
+.hud-capsule[data-state="failed"] .hud-icon,
+.hud-capsule[data-state="camera_moved"] .hud-icon {
+  background: var(--flick-accent-red);
+  color: white;
+}
+
+.hud-capsule[data-state="confirm"] .hud-icon,
+.hud-capsule[data-state="ambiguous"] .hud-icon,
+.hud-capsule[data-state="paused"] .hud-icon {
+  background: var(--flick-accent-amber);
+  color: #1c1300;
+}
+
+.hud-icon .entity-icon,
+.hud-icon .gesture-glyph {
+  inline-size: 100%;
+  block-size: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.hud-copy {
+  min-inline-size: 0;
+}
+
+.high-contrast .hud-capsule,
+.opaque-fallback .hud-capsule {
+  background: #000;
+  color: #fff;
+  border-color: #fff;
+}
+
+.high-contrast .hud-capsule p,
+.high-contrast .hud-progress,
+.opaque-fallback .hud-capsule p {
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-capsule {
+    transition: none;
+  }
+
+  .hud-capsule .hud-icon {
+    box-shadow: none;
+  }
+}

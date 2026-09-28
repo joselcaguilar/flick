@@ -127,8 +127,53 @@ export function eventReducer(state: EventStreamState, action: EventStreamAction)
         },
         message.ts,
       );
+    case "gesture.update":
+      return mark(
+        {
+          ...state,
+          hud: {
+            state: "dial",
+            title: state.selectedTarget?.name ?? "Dial",
+            detail: typeof message.value === "number" ? `${Math.round(message.value * 100)}%` : "Adjusting",
+            icon: "◌",
+            progress: typeof message.value === "number" ? message.value : undefined,
+            updatedAt: message.ts,
+          },
+        },
+        message.ts,
+      );
     case "ha.status":
       return mark({ ...state, ha: { state: message.state, ha_version: message.ha_version } }, message.ts);
+    case "armed":
+      return mark(
+        {
+          ...state,
+          hud: {
+            state: "armed",
+            title: "Listening… 4 s",
+            detail: "Confirming the next gesture",
+            icon: "◆",
+            expiresAt: message.until,
+            updatedAt: message.ts,
+          },
+        },
+        message.ts,
+      );
+    case "confirm.required":
+      return mark(
+        {
+          ...state,
+          hud: {
+            state: "confirm",
+            title: "Confirm with 👍",
+            detail: "Sensitive device · 3 s",
+            icon: "🔒",
+            expiresAt: message.expires_at,
+            updatedAt: message.ts,
+          },
+        },
+        message.ts,
+      );
     case "engine.paused":
       return mark(
         {
@@ -253,11 +298,8 @@ export function eventReducer(state: EventStreamState, action: EventStreamAction)
     case "model.rolled_back":
     case "ha.entity":
     case "capture.progress":
-    case "gesture.update":
     case "gesture.end":
-    case "armed":
     case "disarmed":
-    case "confirm.required":
     case "teach.progress":
     case "resync":
       return mark(state, message.ts);

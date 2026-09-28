@@ -194,6 +194,7 @@ export interface HudState {
     | "aiming"
     | "selected"
     | "candidate"
+    | "armed"
     | "sent"
     | "done"
     | "failed"
