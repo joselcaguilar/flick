@@ -1,0 +1,232 @@
+.settings-route {
+  display: grid;
+  gap: 1rem;
+}
+
+.settings-hero {
+  max-inline-size: 72rem;
+  padding: 1rem 0.35rem 0;
+}
+
+.settings-hero h1,
+.settings-section-heading h2 {
+  margin: 0;
+  letter-spacing: -0.045em;
+}
+
+.settings-hero h1 {
+  max-inline-size: 12ch;
+  font-size: clamp(2.2rem, 6vw, 5rem);
+  line-height: 0.92;
+}
+
+.settings-hero p:not(.route-path),
+.settings-section-heading p,
+.setting-row span,
+.settings-callout span,
+.updates-card span,
+.model-list span,
+.ha-status-card span,
+.privacy-explainer span,
+.about-grid span {
+  color: var(--flick-muted);
+}
+
+.settings-notice {
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--flick-accent-blue) 28%, var(--flick-border));
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--flick-accent-blue) 12%, transparent);
+  padding: 0.8rem 1rem;
+  font-weight: 750;
+}
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.settings-section {
+  display: grid;
+  gap: 1rem;
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--flick-shadow-glass);
+  padding: 1rem;
+}
+
+.settings-section-heading h2 {
+  font-size: clamp(1.35rem, 2.5vw, 2.25rem);
+  line-height: 1;
+}
+
+.settings-section-heading p {
+  margin-block: 0.45rem 0;
+}
+
+.settings-section-body {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.setting-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(10rem, auto);
+  gap: 0.8rem;
+  align-items: center;
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--flick-surface) 62%, transparent);
+  padding: 0.8rem;
+}
+
+.setting-row strong,
+.setting-row span,
+.setting-row em {
+  display: block;
+}
+
+.setting-row em {
+  margin-block-start: 0.35rem;
+  color: color-mix(in srgb, var(--flick-accent-red) 76%, var(--flick-text));
+  font-style: normal;
+  font-weight: 750;
+}
+
+.setting-control {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.setting-control .ui-input,
+.setting-control .ui-select {
+  min-inline-size: 11rem;
+}
+
+.inline-number-pair {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.inline-number-pair .ui-input {
+  min-inline-size: 0;
+  inline-size: 5.5rem;
+}
+
+.settings-callout,
+.updates-card,
+.ha-status-card,
+.privacy-explainer,
+.about-grid > div,
+.model-list > div {
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--flick-surface) 62%, transparent);
+  padding: 0.85rem;
+}
+
+.settings-callout,
+.updates-card,
+.privacy-explainer {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.settings-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.model-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.model-list > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.link-button,
+.settings-link,
+.discovered-ha-list button {
+  border: 0;
+  background: transparent;
+  color: var(--flick-vibrant-text);
+  font: inherit;
+  font-weight: 800;
+  text-align: start;
+  text-decoration: none;
+  padding: 0;
+}
+
+.ha-status-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.discovered-ha-list {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.about-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.about-grid span,
+.about-grid strong {
+  display: block;
+}
+
+@media (max-width: 1120px) {
+  .settings-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .settings-hero h1 {
+    font-size: clamp(2.1rem, 14vw, 3.7rem);
+  }
+
+  .settings-section {
+    border-radius: 1.5rem;
+  }
+
+  .setting-row {
+    grid-template-columns: 1fr;
+  }
+
+  .setting-control,
+  .setting-control .ui-input,
+  .setting-control .ui-select,
+  .settings-action-row .ui-button {
+    inline-size: 100%;
+    justify-content: stretch;
+  }
+
+  .inline-number-pair,
+  .settings-action-row {
+    flex-direction: column;
+  }
+
+  .inline-number-pair .ui-input {
+    inline-size: 100%;
+  }
+
+  .model-list > div,
+  .ha-status-card,
+  .about-grid {
+    grid-template-columns: 1fr;
+  }
+}

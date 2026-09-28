@@ -7,6 +7,7 @@ import { useEventStore } from "../events/store";
 import { ActivityRoute } from "../features/activity/ActivityRoute";
 import { GesturesLibraryRoute } from "../features/gestures/GesturesLibraryRoute";
 import { OnboardingRoute } from "../features/onboarding/OnboardingRoute";
+import { SettingsRoute } from "../features/settings/SettingsRoute";
 import { GestureStudioRoute } from "../features/studio/GestureStudioRoute";
 import { formatTime } from "../lib/utils";
 
@@ -347,13 +348,7 @@ export const routes: RouteMeta[] = [
     nav: true,
     mobile: true,
     shortcut: "⌘,",
-    element: (
-      <EmptyRoute
-        title="Settings"
-        description="Theme, detection, pointing, safety, feedback, privacy, Home Assistant, updates and advanced controls."
-        action="Settings scaffold"
-      />
-    ),
+    element: <SettingsRoute />,
   },
   {
     path: "/pro",
