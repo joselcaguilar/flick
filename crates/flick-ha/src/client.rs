@@ -59,6 +59,19 @@ impl HaClient {
         self.status_rx.clone()
     }
 
+    /// Waits until the initial authentication attempt reaches `ready` or
+    /// `auth_failed`.
+    pub async fn wait_for_auth(&self) -> Result<HaStatus, HaError> {
+        let mut rx = self.status();
+        loop {
+            let status = rx.borrow().clone();
+            if matches!(status, HaStatus::Ready { .. } | HaStatus::AuthFailed { .. }) {
+                return Ok(status);
+            }
+            rx.changed().await.map_err(|_| HaError::ClientStopped)?;
+        }
+    }
+
     /// Subscribes to HA client events.
     #[must_use]
     pub fn events(&self) -> broadcast::Receiver<HaEvent> {
@@ -301,8 +314,12 @@ async fn run_actor(
         loop {
             tokio::select! {
                 () = &mut sleep => break,
-                Some(command) = rx.recv() => handle_disconnected_command(command, &mut queued_calls, &mut subscriptions, config.stale_action),
-                else => return,
+                command = rx.recv() => {
+                    let Some(command) = command else {
+                        return;
+                    };
+                    handle_disconnected_command(command, &mut queued_calls, &mut subscriptions, config.stale_action);
+                }
             }
             drop_stale(&mut queued_calls, config.stale_action);
         }
@@ -387,12 +404,18 @@ async fn run_connected(
 
     loop {
         tokio::select! {
-            Some(command) = rx.recv() => {
+            command = rx.recv() => {
+                let Some(command) = command else {
+                    return DisconnectReason::Shutdown;
+                };
                 if handle_connected_command(command, &mut ws, config, state, queued_calls).await.is_err() {
                     return DisconnectReason::Socket;
                 }
             }
-            Some(message) = ws.next() => {
+            message = ws.next() => {
+                let Some(message) = message else {
+                    return DisconnectReason::Socket;
+                };
                 match message {
                     Ok(Message::Text(text)) => {
                         if handle_text(&text, state, events_tx).is_err() {
@@ -707,8 +730,22 @@ fn handle_text(
 fn handle_message(value: &Value, state: &mut SessionState, events_tx: &broadcast::Sender<HaEvent>) {
     match value.get("type").and_then(Value::as_str) {
         Some("result") => handle_result(value, state, events_tx),
+        Some("pong") => handle_pong(value, state),
         Some("event") => handle_event(value, state, events_tx),
         _ => {}
+    }
+}
+
+fn handle_pong(value: &Value, state: &mut SessionState) {
+    let Some(id) = value.get("id").and_then(Value::as_u64) else {
+        return;
+    };
+    let is_ping = state
+        .pending
+        .get(&id)
+        .is_some_and(|pending| matches!(&pending.kind, PendingKind::Ping));
+    if is_ping {
+        state.pending.remove(&id);
     }
 }
 

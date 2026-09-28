@@ -41,6 +41,9 @@ const CASES: &[Case] = &[
     Case {
         run: targeting_precedence,
     },
+    Case {
+        run: scattered_candidates_do_not_accumulate,
+    },
 ];
 
 fn tap_votes_once() {
@@ -366,6 +369,32 @@ fn targeting_precedence() {
             .reason,
         SuppressionReason::NoTarget
     );
+}
+
+fn scattered_candidates_do_not_accumulate() {
+    let mut fsm = TriggerFsmSet::new(TriggerConfig {
+        vote_n: 3,
+        vote_m: 4,
+        mappings: vec![GestureMapping::tap(gesture(BuiltinGesture::ThumbUp))],
+        ..TriggerConfig::default()
+    });
+    let mut fired = Vec::new();
+    for index in 0..8 {
+        let candidates = if index % 2 == 0 {
+            vec![candidate(BuiltinGesture::ThumbUp, 0.9)]
+        } else {
+            Vec::new()
+        };
+        fired.extend(
+            fsm.update(
+                &frame(index * 80, 1),
+                candidates.as_slice(),
+                &SelectionState::Idle,
+            )
+            .events,
+        );
+    }
+    assert!(fired.is_empty());
 }
 
 proptest! {

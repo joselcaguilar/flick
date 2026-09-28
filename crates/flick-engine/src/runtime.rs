@@ -623,24 +623,18 @@ fn rfc3339_from_ms(ms: i64) -> String {
 }
 
 async fn wait_ha_ready(client: &HaClient) -> anyhow::Result<String> {
-    let mut status = client.status();
-    let ready = async {
-        loop {
-            let current = { status.borrow().clone() };
-            match current {
-                HaStatus::Ready { ha_version } => return Ok(ha_version.unwrap_or_default()),
-                HaStatus::AuthFailed { message } => {
-                    anyhow::bail!("Home Assistant authentication failed: {message}");
-                }
-                HaStatus::Disconnected | HaStatus::Connecting | HaStatus::Reconnecting { .. } => {
-                    status.changed().await?;
-                }
-            }
-        }
-    };
-    tokio::time::timeout(Duration::from_secs(8), ready)
+    let status = tokio::time::timeout(Duration::from_secs(8), client.wait_for_auth())
         .await
-        .context("timed out waiting for Home Assistant authentication")?
+        .context("timed out waiting for Home Assistant authentication")??;
+    match status {
+        HaStatus::Ready { ha_version } => Ok(ha_version.unwrap_or_default()),
+        HaStatus::AuthFailed { message } => {
+            anyhow::bail!("Home Assistant authentication failed: {message}");
+        }
+        HaStatus::Disconnected | HaStatus::Connecting | HaStatus::Reconnecting { .. } => {
+            anyhow::bail!("Home Assistant authentication did not complete")
+        }
+    }
 }
 
 fn load_default_ha_instance(store: &Store) -> anyhow::Result<Option<(HaInstance, String)>> {

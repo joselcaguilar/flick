@@ -11,6 +11,8 @@
 //!
 //! - [`HaClient::connect`] creates a cheap-to-clone handle backed by one
 //!   reconnecting WebSocket task.
+//! - [`HaClient::wait_for_auth`] lets callers await the initial `auth_ok` or
+//!   `auth_invalid` status before saving credentials.
 //! - [`HaClient::status`] returns a `watch` receiver for `disconnected`,
 //!   `connecting`, `ready` and `auth_failed` state.
 //! - [`HaClient::call`] sends a concrete [`flick_core::Action::CallService`]

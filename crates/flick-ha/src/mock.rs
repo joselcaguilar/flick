@@ -161,6 +161,11 @@ impl MockHaHandle {
             .unwrap_or(0)
     }
 
+    /// Returns the number of currently authenticated sockets.
+    pub async fn active_connections(&self) -> usize {
+        self.state.lock().await.active_connections
+    }
+
     /// Forces all connected clients to disconnect.
     pub fn disconnect_clients(&self) {
         let _ = self.disconnect_tx.send(());
@@ -172,6 +177,7 @@ struct MockState {
     entities: HashMap<String, EntityState>,
     calls: Vec<ServiceCallRecord>,
     subscription_counts: HashMap<String, usize>,
+    active_connections: usize,
 }
 
 impl MockState {
@@ -186,6 +192,7 @@ impl MockState {
             entities,
             calls: Vec::new(),
             subscription_counts: HashMap::new(),
+            active_connections: 0,
         }
     }
 }
@@ -202,7 +209,16 @@ async fn accept_loop(
         let state = Arc::clone(&state);
         let disconnect_rx = disconnect_tx.subscribe();
         tokio::spawn(async move {
-            let _ = handle_client(stream, state, disconnect_rx).await;
+            {
+                let mut locked = state.lock().await;
+                locked.active_connections += 1;
+            }
+            let result = handle_client(stream, Arc::clone(&state), disconnect_rx).await;
+            {
+                let mut locked = state.lock().await;
+                locked.active_connections = locked.active_connections.saturating_sub(1);
+            }
+            let _ = result;
         });
     }
 }
@@ -278,9 +294,8 @@ async fn handle_command(
     let value: Value = serde_json::from_str(text)?;
     let id = value.get("id").and_then(Value::as_u64).unwrap_or(0);
     match value.get("type").and_then(Value::as_str).unwrap_or("") {
-        "supported_features" | "ping" | "unsubscribe_events" => {
-            send_result(ws, id, true, Value::Null).await
-        }
+        "supported_features" | "unsubscribe_events" => send_result(ws, id, true, Value::Null).await,
+        "ping" => send_json(ws, json!({ "id": id, "type": "pong" })).await,
         "get_config" => {
             let result = state.lock().await.scenario.config.clone();
             send_result(ws, id, true, result).await

@@ -60,15 +60,44 @@ async fn handshake_ok_and_invalid_token() {
     let client = HaClient::connect(HaConnectionConfig::new(&url, token).unwrap())
         .await
         .unwrap();
-    let ready = wait_for_status(&client, |status| matches!(status, HaStatus::Ready { .. })).await;
+    let ready = client.wait_for_auth().await.unwrap();
     assert!(matches!(ready, HaStatus::Ready { .. }));
 
     let bad = HaClient::connect(HaConnectionConfig::new(&url, "bad-token").unwrap())
         .await
         .unwrap();
-    let failed =
-        wait_for_status(&bad, |status| matches!(status, HaStatus::AuthFailed { .. })).await;
+    let failed = bad.wait_for_auth().await.unwrap();
     assert!(matches!(failed, HaStatus::AuthFailed { .. }));
+}
+
+#[tokio::test(start_paused = true)]
+async fn keepalive_pongs_prevent_timeout_and_drop_stops_client_task() {
+    let (url, token, handle) = MockHa::start(MockScenario::default()).await.unwrap();
+    let mut config = HaConnectionConfig::new(&url, token).unwrap();
+    config.ping_interval = Duration::from_millis(100);
+    config.ping_timeout = Duration::from_millis(250);
+    config.reconnect_initial = Duration::from_secs(10);
+    config.reconnect_max = Duration::from_secs(10);
+    let client = HaClient::connect(config).await.unwrap();
+    assert!(matches!(
+        client.wait_for_auth().await.unwrap(),
+        HaStatus::Ready { .. }
+    ));
+
+    tokio::time::advance(Duration::from_secs(1)).await;
+    for _ in 0..20 {
+        tokio::task::yield_now().await;
+    }
+    assert!(matches!(*client.status().borrow(), HaStatus::Ready { .. }));
+
+    drop(client);
+    for _ in 0..20 {
+        if handle.active_connections().await == 0 {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(handle.active_connections().await, 0);
 }
 
 #[tokio::test]
