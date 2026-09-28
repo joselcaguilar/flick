@@ -606,7 +606,7 @@ code,
 }
 
 .ui-button-danger {
-  color: white;
+  color: #2a0007;
   background: var(--flick-accent-red);
 }
 

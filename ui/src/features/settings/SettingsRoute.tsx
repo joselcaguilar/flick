@@ -261,6 +261,7 @@ export function SettingsRoute() {
             error={fieldErrors["camera.active_fps"]}
           >
             <Input
+              aria-label="Active FPS"
               type="number"
               min={10}
               max={60}
@@ -276,6 +277,7 @@ export function SettingsRoute() {
             error={fieldErrors["camera.max_hands"]}
           >
             <Input
+              aria-label="Max hands"
               type="number"
               min={1}
               max={2}
@@ -310,6 +312,7 @@ export function SettingsRoute() {
           >
             <div className="inline-number-pair">
               <Input
+                aria-label="Vote frames needed"
                 type="number"
                 min={1}
                 max={10}
@@ -323,6 +326,7 @@ export function SettingsRoute() {
                 }
               />
               <Input
+                aria-label="Vote window frames"
                 type="number"
                 min={1}
                 max={12}
@@ -343,6 +347,7 @@ export function SettingsRoute() {
             error={fieldErrors["detection.min_hand_size"]}
           >
             <Input
+              aria-label="Minimum hand size"
               type="number"
               min={0.03}
               max={0.18}
@@ -472,6 +477,7 @@ export function SettingsRoute() {
           <SettingRow label="From / to" description="Use 24-hour local time." error={fieldErrors.quiet_hours}>
             <div className="inline-number-pair">
               <Input
+                aria-label="Quiet hours start"
                 type="time"
                 defaultValue={quietHours.from}
                 onBlur={(event) =>
@@ -483,6 +489,7 @@ export function SettingsRoute() {
                 }
               />
               <Input
+                aria-label="Quiet hours end"
                 type="time"
                 defaultValue={quietHours.to}
                 onBlur={(event) =>
@@ -518,6 +525,7 @@ export function SettingsRoute() {
             error={fieldErrors["targeting.tolerance_deg"]}
           >
             <Input
+              aria-label="Aim tolerance"
               type="number"
               min={5}
               max={15}
@@ -533,6 +541,7 @@ export function SettingsRoute() {
             error={fieldErrors["targeting.dwell_ms"]}
           >
             <Input
+              aria-label="Dwell duration"
               type="number"
               min={250}
               max={1500}
@@ -549,6 +558,7 @@ export function SettingsRoute() {
             error={fieldErrors["targeting.window_ms"]}
           >
             <Input
+              aria-label="Selection window"
               type="number"
               min={1000}
               max={10000}
@@ -637,6 +647,7 @@ export function SettingsRoute() {
             error={fieldErrors["feedback.hud"]}
           >
             <Input
+              aria-label="HUD duration"
               type="number"
               min={500}
               max={5000}
@@ -666,6 +677,7 @@ export function SettingsRoute() {
           </SettingRow>
           <SettingRow label="Sound volume" description="0 to 1." error={fieldErrors["feedback.sounds"]}>
             <Input
+              aria-label="Sound volume"
               type="number"
               min={0}
               max={1}
@@ -833,14 +845,23 @@ export function SettingsRoute() {
             description="Used for re-authentication."
             error={fieldErrors["ha.url"]}
           >
-            <Input value={haUrl} onChange={(event) => setHaUrl(event.target.value)} />
+            <Input
+              aria-label="Instance URL"
+              value={haUrl}
+              onChange={(event) => setHaUrl(event.target.value)}
+            />
           </SettingRow>
           <SettingRow
             label="Long-lived token"
             description="Stored by the engine keychain backend, not in settings."
             error={haError ?? undefined}
           >
-            <Input type="password" value={haToken} onChange={(event) => setHaToken(event.target.value)} />
+            <Input
+              aria-label="Long-lived token"
+              type="password"
+              value={haToken}
+              onChange={(event) => setHaToken(event.target.value)}
+            />
           </SettingRow>
           <div className="settings-action-row">
             <Button variant="primary" onClick={() => void reconnectHa()} loading={haConnect.isPending}>
