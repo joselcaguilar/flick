@@ -4,6 +4,7 @@ import { useActivity, useStatus, useUpdates } from "../api/hooks";
 import { ConfidenceMeter, DevicePill, GestureGlyph, PreviewCanvas } from "../components/domain";
 import { Badge, Button, GlassPanel, Kbd, ListRow, Skeleton } from "../components/ui";
 import { useEventStore } from "../events/store";
+import { GesturesLibraryRoute } from "../features/gestures/GesturesLibraryRoute";
 import { OnboardingRoute } from "../features/onboarding/OnboardingRoute";
 import { formatTime } from "../lib/utils";
 
@@ -234,13 +235,7 @@ export const routes: RouteMeta[] = [
     nav: true,
     mobile: true,
     shortcut: "⌘2",
-    element: (
-      <EmptyRoute
-        title="Gestures library"
-        description="Built-ins, custom gestures, enable toggles and update notes live here."
-        action="No custom gestures yet"
-      />
-    ),
+    element: <GesturesLibraryRoute />,
   },
   {
     path: "/gestures/new",
