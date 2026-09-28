@@ -1,0 +1,151 @@
+{
+  "app": {
+    "name": "Flick",
+    "skip": "Skip to content",
+    "commandSearch": "Search commands",
+    "mockMode": "Mock mode"
+  },
+  "nav": {
+    "home": "Home",
+    "gestures": "Gestures",
+    "devices": "Devices",
+    "mappings": "Mappings",
+    "cameras": "Cameras",
+    "activity": "Activity",
+    "settings": "Settings",
+    "pro": "Pro"
+  },
+  "toolbar": {
+    "engine": "Engine",
+    "ha": "Home Assistant",
+    "watching": "Watching",
+    "paused": "Paused",
+    "connected": "Connected",
+    "offline": "Offline",
+    "theme": "Theme",
+    "contrast": "High contrast"
+  },
+  "theme": {
+    "system": "System",
+    "light": "Light",
+    "dark": "Dark"
+  },
+  "actions": {
+    "teachDevice": "Teach a device",
+    "recordGesture": "Record gesture",
+    "addMapping": "Add mapping",
+    "pause15": "Pause 15 min",
+    "resume": "Resume",
+    "openPalette": "Open palette",
+    "closePalette": "Close palette",
+    "restart": "Restart",
+    "retry": "Try again",
+    "openSettings": "Open settings"
+  },
+  "home": {
+    "breadcrumb": "Home / Dashboard",
+    "title": "Point, lock, flick.",
+    "subtitle": "Flick is watching locally. Video stays on this Mac.",
+    "previewTitle": "Live preview",
+    "previewMeta": "Skeleton overlay placeholder · MacBook Camera",
+    "raySteady": "Ray steady",
+    "rayVerdict": "4° off — great",
+    "selectedUntil": "selected · 4 s",
+    "recentActivity": "Recent activity",
+    "status": "Status",
+    "camera": "Camera",
+    "place": "Place",
+    "updateReady": "Update ready",
+    "updateCopy": "Flick 1.3 is ready — restart to update",
+    "quickActions": "Quick actions"
+  },
+  "empty": {
+    "loading": "Loading local state…",
+    "errorTitle": "Something needs attention",
+    "errorBody": "Flick will keep trying. Use the command palette for recovery actions.",
+    "screenBody": "This screen is scaffolded for the next UI phase. The route, title, empty state and command path are ready.",
+    "mappings": "No mappings yet. Pick a gesture and tell Flick what it should do.",
+    "devices": "Point at something in the room — Flick will remember it.",
+    "cameraDenied": "Flick needs camera access to see your gestures. Video stays on this Mac.",
+    "haOffline": "Can't reach Home Assistant. Flick will keep trying — your camera is paused meanwhile.",
+    "cameraMoved": "Your camera moved, so pointing is paused. Point at two devices you taught to fix it."
+  },
+  "routes": {
+    "onboarding": "Onboarding",
+    "gestures": "Gestures library",
+    "gestureStudio": "Gesture Studio",
+    "devices": "Devices",
+    "teach": "Teach a device",
+    "places": "Places",
+    "realign": "Re-align devices",
+    "mappings": "Mappings",
+    "mappingEditor": "Mapping editor",
+    "cameras": "Cameras",
+    "activity": "Activity",
+    "settings": "Settings",
+    "pro": "Pro"
+  },
+  "settings": {
+    "general": "General",
+    "detection": "Detection",
+    "pointing": "Pointing",
+    "safety": "Safety",
+    "feedback": "Feedback",
+    "privacy": "Privacy",
+    "homeAssistant": "Home Assistant",
+    "updates": "Updates",
+    "advanced": "Advanced"
+  },
+  "command": {
+    "title": "Command palette",
+    "placeholder": "Search Flick commands",
+    "routes": "Routes",
+    "actions": "Actions",
+    "noResults": "No commands match that search."
+  },
+  "hud": {
+    "placeholder": "HUD preview",
+    "selected": "selected · ↻ speed 1 · ✋✋ off",
+    "done": "Done · Home Assistant confirmed",
+    "failed": "Failed · Home Assistant unavailable",
+    "aiming": "Point more precisely",
+    "paused": "Flick paused"
+  },
+  "teach": {
+    "spotTitle": "Point at Ventilador dormitorio and hold still.",
+    "steady": "1 s steady capture",
+    "saving": "What Flick is saving",
+    "device": "Device",
+    "entity": "Entity",
+    "spot": "Spot",
+    "next": "Next",
+    "spotValue": "1 of 2",
+    "nextCopy": "Take one or two steps to the side and point again.",
+    "coach": "Hold still. The ring fills when the ray jitters less than 2°.",
+    "capturing": "Capturing spot 1",
+    "privacy": "Median ray only · no camera image saved"
+  },
+  "devices": {
+    "title": "Taught devices",
+    "teach": "Teach a device",
+    "places": "Places",
+    "realign": "Re-align devices",
+    "onboardingStep5": "Point at a device"
+  },
+  "mappings": {
+    "title": "Gesture sentences",
+    "devicesTab": "Devices",
+    "globalTab": "Global",
+    "editor": "Build a sentence",
+    "sensitive": "Sensitive flow"
+  },
+  "cameras": {
+    "title": "Local cameras",
+    "permission": "Permission",
+    "phase2": "RTSP setup comes in Phase 2"
+  },
+  "pro": {
+    "title": "Core today. Pro later.",
+    "phase": "Phase 3"
+  }
+}
