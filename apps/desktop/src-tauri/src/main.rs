@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command as OsCommand,
     sync::{Arc, Mutex as StdMutex},
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -26,11 +26,15 @@ use tauri_plugin_shell::{
     process::{CommandChild, CommandEvent},
 };
 use tauri_plugin_updater::UpdaterExt;
-use tokio::{sync::Mutex as AsyncMutex, time};
+use tokio::{
+    sync::{Mutex as AsyncMutex, Notify},
+    time,
+};
 use url::Url;
 
 const SIDECAR_NAME: &str = "flick-engine";
 const UPDATE_STATE_FILE: &str = "update_state.json";
+const BACKOFF_RESET_AFTER: Duration = Duration::from_secs(60);
 
 #[derive(Clone)]
 struct AppState {
@@ -70,6 +74,7 @@ struct EngineInner {
 struct EngineSupervisor {
     inner: AsyncMutex<EngineInner>,
     client: reqwest::Client,
+    retry: Notify,
 }
 
 #[derive(Debug, Deserialize)]
@@ -181,6 +186,7 @@ impl EngineSupervisor {
                 last_error: None,
             }),
             client: reqwest::Client::new(),
+            retry: Notify::new(),
         }
     }
 
@@ -201,42 +207,85 @@ impl EngineSupervisor {
                 self.set_status(&app, EngineStatus::Stopped, None).await;
                 break;
             }
+            if self.is_fatal().await {
+                self.wait_for_retry_or_shutdown().await;
+                backoff = Duration::from_millis(500);
+                continue;
+            }
 
             self.set_status(&app, EngineStatus::Starting, None).await;
             match self.spawn_once(&app).await {
-                Ok(()) => {
-                    backoff = Duration::from_millis(500);
+                Ok(healthy_for) => {
+                    if healthy_for >= BACKOFF_RESET_AFTER {
+                        backoff = Duration::from_millis(500);
+                    }
                 }
                 Err(error) => {
-                    self.record_crash(&app, error.to_string()).await;
+                    if self.is_shutting_down().await {
+                        self.clear_running(EngineStatus::Stopped).await;
+                    } else {
+                        self.record_crash(&app, error.to_string()).await;
+                    }
                 }
             }
 
-            if self.is_fatal().await || self.is_shutting_down().await {
+            if self.is_shutting_down().await {
+                continue;
+            }
+            if self.is_fatal().await {
                 continue;
             }
 
             self.set_status(&app, EngineStatus::Restarting, None).await;
-            time::sleep(backoff).await;
-            backoff = (backoff * 2).min(Duration::from_secs(10));
+            let sleeper = time::sleep(backoff);
+            tokio::pin!(sleeper);
+            tokio::select! {
+                () = &mut sleeper => {
+                    backoff = (backoff * 2).min(Duration::from_secs(10));
+                }
+                () = self.retry.notified() => {}
+            }
         }
     }
 
-    async fn spawn_once(&self, app: &AppHandle) -> anyhow::Result<()> {
+    async fn spawn_once(&self, app: &AppHandle) -> anyhow::Result<Duration> {
         let token = generate_token()?;
         let data_dir = app.path().app_data_dir()?;
         fs::create_dir_all(&data_dir)?;
         let data_dir_arg = data_dir.to_string_lossy().to_string();
-        let (mut rx, mut child) = app
+        let (mut rx, child) = app
             .shell()
             .sidecar(SIDECAR_NAME)?
             .args(["--sidecar", "--port", "0", "--data-dir", &data_dir_arg])
             .spawn()?;
-        child.write(format!("{token}\n").as_bytes())?;
-        let pid = child.pid();
+        let mut child = Some(child);
+        let pid = child
+            .as_ref()
+            .map(CommandChild::pid)
+            .ok_or_else(|| anyhow::anyhow!("engine child was not captured"))?;
+        {
+            let mut inner = self.inner.lock().await;
+            inner.pid = Some(pid);
+        }
 
-        let ready = self.wait_ready(&mut rx).await?;
+        if let Err(error) = child
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("engine child was not captured"))?
+            .write(format!("{token}\n").as_bytes())
+        {
+            terminate_child_slot(&mut child).await;
+            return Err(error.into());
+        }
+
+        let ready = match self.wait_ready(&mut rx).await {
+            Ok(ready) => ready,
+            Err(error) => {
+                terminate_child_slot(&mut child).await;
+                return Err(error);
+            }
+        };
         if ready.event != "ready" {
+            terminate_child_slot(&mut child).await;
             anyhow::bail!("unexpected sidecar event {}", ready.event);
         }
         let endpoint = EngineEndpoint {
@@ -253,8 +302,10 @@ impl EngineSupervisor {
         }
         println!("engine sidecar ready: {}", endpoint.base_url);
         let _ = app.emit("engine-status", EngineStatus::Ready);
-        self.monitor(app, endpoint, child, rx).await;
-        Ok(())
+        let child = child
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("engine child was not captured"))?;
+        Ok(self.monitor(app, endpoint, child, rx).await)
     }
 
     async fn wait_ready(
@@ -295,7 +346,9 @@ impl EngineSupervisor {
         endpoint: EngineEndpoint,
         child: CommandChild,
         mut rx: tokio::sync::mpsc::Receiver<CommandEvent>,
-    ) {
+    ) -> Duration {
+        let ready_at = Instant::now();
+        let mut healthy_until = ready_at;
         let mut child = Some(child);
         let mut interval = time::interval(Duration::from_secs(2));
         let mut failed_health_checks = 0u8;
@@ -322,11 +375,13 @@ impl EngineSupervisor {
                         Some(CommandEvent::Stderr(line)) => tracing::warn!(stderr = %String::from_utf8_lossy(&line), "engine sidecar stderr"),
                         Some(CommandEvent::Stdout(line)) => tracing::debug!(stdout = %String::from_utf8_lossy(&line), "engine sidecar stdout"),
                         Some(CommandEvent::Error(error)) => {
+                            terminate_child_slot(&mut child).await;
                             self.record_crash(app, error).await;
                             break;
                         }
                         Some(_) => {}
                         None => {
+                            terminate_child_slot(&mut child).await;
                             self.record_crash(app, "engine event stream closed".to_owned()).await;
                             break;
                         }
@@ -335,6 +390,7 @@ impl EngineSupervisor {
                 _ = interval.tick() => {
                     if self.health_ok(&endpoint).await {
                         failed_health_checks = 0;
+                        healthy_until = Instant::now();
                     } else {
                         failed_health_checks = failed_health_checks.saturating_add(1);
                         if failed_health_checks >= 3 {
@@ -348,6 +404,7 @@ impl EngineSupervisor {
                 }
             }
         }
+        healthy_until.duration_since(ready_at)
     }
 
     async fn health_ok(&self, endpoint: &EngineEndpoint) -> bool {
@@ -391,14 +448,55 @@ impl EngineSupervisor {
             .map_err(|error| error.to_string())
     }
 
+    async fn retry(&self, app: &AppHandle) {
+        let should_emit = {
+            let mut inner = self.inner.lock().await;
+            if inner.status == EngineStatus::Fatal {
+                inner.crashes.clear();
+                inner.last_error = None;
+                inner.status = EngineStatus::Restarting;
+                true
+            } else {
+                false
+            }
+        };
+        if should_emit {
+            let _ = app.emit("engine-status", EngineStatus::Restarting);
+        }
+        self.retry.notify_waiters();
+    }
+
     async fn shutdown(&self) {
         let pid = {
             let mut inner = self.inner.lock().await;
             inner.shutting_down = true;
             inner.pid
         };
+        self.retry.notify_waiters();
         if let Some(pid) = pid {
             terminate_pid(pid).await;
+        }
+    }
+
+    async fn shutdown_and_wait(&self, timeout: Duration) -> Result<(), String> {
+        self.shutdown().await;
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            if self.inner.lock().await.pid.is_none() {
+                return Ok(());
+            }
+            time::sleep(Duration::from_millis(100)).await;
+        }
+        Err("engine did not exit before timeout".to_owned())
+    }
+
+    async fn wait_for_retry_or_shutdown(&self) {
+        loop {
+            let notified = self.retry.notified();
+            if self.is_shutting_down().await || !self.is_fatal().await {
+                return;
+            }
+            notified.await;
         }
     }
 
@@ -516,6 +614,12 @@ async fn engine_endpoint(state: State<'_, AppState>) -> Result<EngineEndpoint, S
         time::sleep(Duration::from_millis(100)).await;
     }
     Err("engine is not ready".to_owned())
+}
+
+#[tauri::command]
+async fn engine_retry(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    state.supervisor.retry(&app).await;
+    Ok(())
 }
 
 #[tauri::command]
@@ -644,12 +748,6 @@ async fn app_update_rollback(app: AppHandle, state: State<'_, AppState>) -> Resu
         })
         .await;
 
-    if let Some(pending) = &disk_state.pending_app
-        && let Some(backup) = &pending.db_backup
-    {
-        restore_db_backup(&data_dir, backup)?;
-    }
-
     let updater = update_builder(&app, Some(rollback_to.clone()))?
         .build()
         .map_err(|error| error.to_string())?;
@@ -658,10 +756,20 @@ async fn app_update_rollback(app: AppHandle, state: State<'_, AppState>) -> Resu
         .await
         .map_err(|error| error.to_string())?
         .ok_or_else(|| format!("rollback artifact {rollback_to} is not available"))?;
-    update
-        .download_and_install(|_, _| {}, || {})
+    let bytes = update
+        .download(|_, _| {}, || {})
         .await
         .map_err(|error| error.to_string())?;
+    state
+        .supervisor
+        .shutdown_and_wait(Duration::from_secs(15))
+        .await?;
+    if let Some(pending) = &disk_state.pending_app
+        && let Some(backup) = &pending.db_backup
+    {
+        restore_db_backup(&data_dir, backup)?;
+    }
+    update.install(bytes).map_err(|error| error.to_string())?;
     app.request_restart();
     Ok(())
 }
@@ -698,6 +806,7 @@ fn main() {
         )
         .invoke_handler(tauri::generate_handler![
             engine_endpoint,
+            engine_retry,
             show_main_window,
             set_hud_config,
             open_external,
@@ -813,6 +922,7 @@ fn install_tray(app: &AppHandle) -> tauri::Result<()> {
         false,
         None::<&str>,
     )?;
+    let retry_engine = MenuItem::with_id(app, "retry_engine", "Retry engine", true, None::<&str>)?;
     let pause_15 = MenuItem::with_id(app, "pause_15", "15 min", true, None::<&str>)?;
     let pause_60 = MenuItem::with_id(app, "pause_60", "1 hour", true, None::<&str>)?;
     let pause_until = MenuItem::with_id(app, "pause_until", "Until I resume", true, None::<&str>)?;
@@ -828,6 +938,7 @@ fn install_tray(app: &AppHandle) -> tauri::Result<()> {
     let quit = MenuItem::with_id(app, "quit", "Quit Flick", true, None::<&str>)?;
     let menu = MenuBuilder::new(app)
         .item(&status)
+        .item(&retry_engine)
         .separator()
         .item(&pause)
         .item(&resume)
@@ -870,6 +981,14 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
         }
         "pause_15" | "pause_60" | "pause_until" => set_pause(app, true),
         "resume" => set_pause(app, false),
+        "retry_engine" => {
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Some(state) = app.try_state::<AppState>() {
+                    state.supervisor.retry(&app).await;
+                }
+            });
+        }
         "update" => {
             let app = app.clone();
             tauri::async_runtime::spawn(async move {
@@ -1042,6 +1161,12 @@ async fn terminate_child(child: CommandChild) {
     }
 }
 
+async fn terminate_child_slot(child: &mut Option<CommandChild>) {
+    if let Some(child) = child.take() {
+        terminate_child(child).await;
+    }
+}
+
 async fn terminate_pid(pid: u32) {
     #[cfg(unix)]
     {
@@ -1104,14 +1229,7 @@ fn snapshot_before_update(
     let db = data_dir.join("flick.db");
     let backup = if db.exists() {
         let backups = data_dir.join("backups");
-        fs::create_dir_all(&backups).map_err(|error| error.to_string())?;
-        let ts = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        let path = backups.join(format!("flick-{from}-{ts}.db"));
-        fs::copy(&db, &path).map_err(|error| error.to_string())?;
-        Some(path)
+        Some(flick_store::snapshot_database(&db, &backups).map_err(|error| error.to_string())?)
     } else {
         None
     };
@@ -1124,9 +1242,30 @@ fn snapshot_before_update(
 
 fn restore_db_backup(data_dir: &Path, backup: &Path) -> Result<(), String> {
     if backup.exists() {
-        fs::copy(backup, data_dir.join("flick.db")).map_err(|error| error.to_string())?;
+        let db = data_dir.join("flick.db");
+        remove_file_if_exists(sqlite_sidecar_path(&db, "-wal"))?;
+        remove_file_if_exists(sqlite_sidecar_path(&db, "-shm"))?;
+        fs::copy(backup, &db).map_err(|error| error.to_string())?;
+        remove_file_if_exists(sqlite_sidecar_path(&db, "-wal"))?;
+        remove_file_if_exists(sqlite_sidecar_path(&db, "-shm"))?;
     }
     Ok(())
+}
+
+fn sqlite_sidecar_path(db: &Path, suffix: &str) -> PathBuf {
+    let name = db
+        .file_name()
+        .map(|value| value.to_string_lossy())
+        .unwrap_or_default();
+    db.with_file_name(format!("{name}{suffix}"))
+}
+
+fn remove_file_if_exists(path: PathBuf) -> Result<(), String> {
+    match fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
 }
 
 fn update_state_path(data_dir: &Path) -> PathBuf {
