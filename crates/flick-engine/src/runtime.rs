@@ -2407,21 +2407,7 @@ impl PreviewSource for EngineApp {
         {
             return Some(frame);
         }
-        let width = 320;
-        let height = 180;
-        let mut rgb = Vec::with_capacity(width * height * 3);
-        for y in 0..height {
-            for x in 0..width {
-                rgb.push((x % 256) as u8);
-                rgb.push((y % 256) as u8);
-                rgb.push(64);
-            }
-        }
-        Some(PreviewFrame {
-            width: width as u32,
-            height: height as u32,
-            rgb,
-        })
+        None
     }
 }
 

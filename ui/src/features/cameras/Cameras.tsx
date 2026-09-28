@@ -10,7 +10,7 @@ import {
 import type { Camera, CameraAvailable, CameraStatus } from "../../api/types";
 import { PreviewCanvas } from "../../components/domain";
 import { Badge, Button, GlassPanel, ListRow, Skeleton, useToast } from "../../components/ui";
-import { useLiveHands } from "../../events/useLiveHands";
+import { useCameraLive, useLiveHands } from "../../events/useLiveHands";
 import { isTauri } from "../../platform/tauri";
 import { useCameraSetup } from "./useCameraSetup";
 
@@ -23,7 +23,7 @@ function permissionTone(permission?: string | null) {
 
 function cameraTone(state?: string | null) {
   if (state === "running") return "success";
-  if (state === "error") return "danger";
+  if (state === "error" || state === "permission_denied") return "danger";
   if (state === "starting" || state === "reconnecting") return "warning";
   return "neutral";
 }
@@ -34,16 +34,11 @@ function bestFormat(camera: CameraAvailable) {
   return `${format.width}×${format.height} · ${format.fps} fps · ${format.format}`;
 }
 
-function findLiveCamera(cameras: CameraStatus[] | undefined, camera: Camera) {
-  return cameras?.find(
-    (item) => item.camera_id === camera.id || item.id === camera.id || item.camera_id === camera.device_ref,
-  );
-}
-
 function ConfiguredCameraCard({ camera, live }: { camera: Camera; live?: CameraStatus }) {
   const start = useStartCamera();
   const stop = useStopCamera();
   const running = live?.state === "running" || live?.state === "starting" || live?.state === "reconnecting";
+  const failed = live?.state === "error" || live?.state === "permission_denied";
   const pending = start.isPending || stop.isPending;
 
   function toggleCamera() {
@@ -84,8 +79,18 @@ function ConfiguredCameraCard({ camera, live }: { camera: Camera; live?: CameraS
           {live?.camera_permission ?? "permission unknown"}
         </Badge>
       </div>
+      {failed ? (
+        <p className="inline-error" role="alert">
+          {live?.error ?? "The camera couldn't start. Check the camera connection and try again."}
+        </p>
+      ) : null}
     </GlassPanel>
   );
+}
+
+function ConfiguredCameraCardLive({ camera }: { camera: Camera }) {
+  const live = useCameraLive(camera.id);
+  return <ConfiguredCameraCard camera={camera} live={live} />;
 }
 
 function AvailableCameraRow({ camera }: { camera: CameraAvailable }) {
@@ -108,9 +113,7 @@ export function CamerasRoute() {
   const permission =
     status.data?.camera_permission ?? status.data?.cameras[0]?.camera_permission ?? "unknown";
   const activeCamera = cameras.data?.[0];
-  const activeLive = activeCamera
-    ? findLiveCamera(status.data?.cameras, activeCamera)
-    : status.data?.cameras[0];
+  const activeLive = useCameraLive(activeCamera?.id ?? status.data?.cameras[0]?.camera_id);
   const running = activeLive?.state === "running";
   const preview = useCameraPreviewTicket(activeCamera?.id ?? activeLive?.camera_id, running);
   const hands = useLiveHands(activeLive?.camera_id ?? activeCamera?.id);
@@ -225,13 +228,7 @@ export function CamerasRoute() {
           {cameras.isLoading ? (
             <Skeleton />
           ) : (
-            cameras.data?.map((camera) => (
-              <ConfiguredCameraCard
-                key={camera.id}
-                camera={camera}
-                live={findLiveCamera(status.data?.cameras, camera)}
-              />
-            ))
+            cameras.data?.map((camera) => <ConfiguredCameraCardLive key={camera.id} camera={camera} />)
           )}
           <GlassPanel className="camera-card">
             <div className="panel-heading">

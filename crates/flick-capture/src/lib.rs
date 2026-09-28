@@ -23,10 +23,13 @@ use image::ImageReader;
 use nokhwa::{
     Camera,
     pixel_format::RgbFormat,
-    utils::{CameraFormat, CameraIndex, FrameFormat, RequestedFormat, RequestedFormatType},
+    utils::{
+        CameraFormat, CameraIndex, FrameFormat, RequestedFormat, RequestedFormatType,
+        buf_yuyv422_to_rgb,
+    },
 };
 use parking_lot::{Condvar, Mutex};
-use tracing::{error, warn};
+use tracing::{debug, error, info, warn};
 
 const SUPERVISOR_RETRY: Duration = Duration::from_secs(2);
 
@@ -334,6 +337,7 @@ pub struct LocalCameraSource {
     camera: Camera,
     seq: u64,
     rgb: Vec<u8>,
+    logged_first_frame: bool,
 }
 
 impl LocalCameraSource {
@@ -341,19 +345,51 @@ impl LocalCameraSource {
     pub fn open(options: LocalCameraOptions) -> Result<Self, CaptureError> {
         ensure_camera_authorized()?;
 
-        let camera_format = CameraFormat::new_from(
-            options.width,
-            options.height,
-            FrameFormat::MJPEG,
-            options.fps,
-        );
-        let requested =
-            RequestedFormat::new::<RgbFormat>(RequestedFormatType::Closest(camera_format));
+        let requested = RequestedFormat::new::<RgbFormat>(RequestedFormatType::None);
         let mut camera =
             Camera::new(CameraIndex::Index(options.index), requested).map_err(map_nokhwa_error)?;
+        match camera.compatible_camera_formats() {
+            Ok(formats) => {
+                if let Some(format) =
+                    choose_camera_format(&formats, options.width, options.height, options.fps)
+                {
+                    info!(
+                        width = format.width(),
+                        height = format.height(),
+                        fps = format.frame_rate(),
+                        format = %format.format(),
+                        "selected local camera format"
+                    );
+                    if let Err(err) = camera.set_camera_requset(RequestedFormat::new::<RgbFormat>(
+                        RequestedFormatType::Exact(format),
+                    )) {
+                        warn!(
+                            error = %err,
+                            width = format.width(),
+                            height = format.height(),
+                            fps = format.frame_rate(),
+                            format = %format.format(),
+                            "camera rejected selected format; keeping backend default"
+                        );
+                    }
+                } else {
+                    warn!("camera reported no decodable formats; keeping backend default");
+                }
+            }
+            Err(err) => {
+                warn!(error = %err, "failed to query camera formats; keeping backend default");
+            }
+        }
         camera.open_stream().map_err(map_nokhwa_error)?;
         let format = camera.camera_format();
         let resolution = format.resolution();
+        info!(
+            width = resolution.width(),
+            height = resolution.height(),
+            fps = format.frame_rate(),
+            format = %format.format(),
+            "opened local camera stream"
+        );
         let info = SourceInfo {
             id: options.camera_id,
             kind: SourceKind::Local,
@@ -368,6 +404,7 @@ impl LocalCameraSource {
             camera,
             seq: 0,
             rgb: vec![0; len],
+            logged_first_frame: false,
         })
     }
 
@@ -398,15 +435,32 @@ impl FrameSource for LocalCameraSource {
     fn next_frame(&mut self) -> Result<Frame, CaptureError> {
         let buffer = self.camera.frame().map_err(map_nokhwa_error)?;
         let resolution = buffer.resolution();
+        let source_format = buffer.source_frame_format();
+        if !self.logged_first_frame {
+            debug!(
+                width = resolution.width(),
+                height = resolution.height(),
+                bytes = buffer.buffer().len(),
+                format = %source_format,
+                "received first camera frame buffer"
+            );
+            self.logged_first_frame = true;
+        }
         if resolution.width() != self.info.width || resolution.height() != self.info.height {
             self.info.width = resolution.width();
             self.info.height = resolution.height();
             self.rgb
                 .resize(rgb_len(self.info.width, self.info.height)?, 0);
         }
-        buffer
-            .decode_image_to_buffer::<RgbFormat>(&mut self.rgb)
-            .map_err(|err| CaptureError::Decode(err.to_string()))?;
+        if source_format == FrameFormat::YUYV {
+            let yuyv = repack_padded_yuyv(buffer.buffer(), self.info.width, self.info.height);
+            buf_yuyv422_to_rgb(yuyv.as_ref(), &mut self.rgb, false)
+                .map_err(|err| CaptureError::Decode(err.to_string()))?;
+        } else {
+            buffer
+                .decode_image_to_buffer::<RgbFormat>(&mut self.rgb)
+                .map_err(|err| CaptureError::Decode(err.to_string()))?;
+        }
         let frame = Frame {
             camera_id: self.info.id,
             seq: self.seq,
@@ -428,6 +482,59 @@ impl FrameSource for LocalCameraSource {
             self.info.fps = fps;
         }
     }
+}
+
+fn choose_camera_format(
+    formats: &[CameraFormat],
+    target_width: u32,
+    target_height: u32,
+    target_fps: u32,
+) -> Option<CameraFormat> {
+    formats
+        .iter()
+        .copied()
+        .filter(|format| format_rank(format.format()).is_some())
+        .min_by_key(|format| {
+            let resolution = format.resolution();
+            let dx = u64::from(resolution.width().abs_diff(target_width));
+            let dy = u64::from(resolution.height().abs_diff(target_height));
+            (
+                format.frame_rate() < target_fps.min(24),
+                dx.saturating_mul(dx).saturating_add(dy.saturating_mul(dy)),
+                format.frame_rate().abs_diff(target_fps),
+                format_rank(format.format()).unwrap_or(u8::MAX),
+            )
+        })
+}
+
+fn format_rank(format: FrameFormat) -> Option<u8> {
+    match format {
+        FrameFormat::MJPEG => Some(0),
+        FrameFormat::NV12 => Some(1),
+        FrameFormat::YUYV => Some(2),
+        FrameFormat::RAWRGB => Some(3),
+        FrameFormat::GRAY | FrameFormat::RAWBGR => None,
+    }
+}
+
+fn repack_padded_yuyv(data: &[u8], width: u32, height: u32) -> std::borrow::Cow<'_, [u8]> {
+    let expected = width as usize * height as usize * 2;
+    if data.len() <= expected {
+        return std::borrow::Cow::Borrowed(data);
+    }
+    let row_bytes = width as usize * 2;
+    let height = height as usize;
+    if height > 0 && data.len().is_multiple_of(height) {
+        let stride = data.len() / height;
+        if stride >= row_bytes {
+            let mut packed = Vec::with_capacity(expected);
+            for row in data.chunks_exact(stride).take(height) {
+                packed.extend_from_slice(&row[..row_bytes]);
+            }
+            return std::borrow::Cow::Owned(packed);
+        }
+    }
+    std::borrow::Cow::Borrowed(&data[..expected])
 }
 
 /// A local camera reported by the native backend.
@@ -925,5 +1032,23 @@ mod tests {
         assert_eq!(latest.seq, 4);
         assert!(slot.take_latest().is_none());
         assert_eq!(slot.total_dropped(), 4);
+    }
+
+    #[test]
+    fn choose_camera_format_prefers_nearest_yuyv_without_mjpeg() {
+        let formats = [
+            CameraFormat::new_from(640, 480, FrameFormat::YUYV, 30),
+            CameraFormat::new_from(1280, 720, FrameFormat::YUYV, 30),
+            CameraFormat::new_from(1280, 720, FrameFormat::YUYV, 15),
+            CameraFormat::new_from(1920, 1080, FrameFormat::RAWRGB, 30),
+            CameraFormat::new_from(1280, 720, FrameFormat::GRAY, 30),
+        ];
+
+        let chosen = choose_camera_format(&formats, 1280, 720, 30).expect("camera format");
+
+        assert_eq!(chosen.width(), 1280);
+        assert_eq!(chosen.height(), 720);
+        assert_eq!(chosen.frame_rate(), 30);
+        assert_eq!(chosen.format(), FrameFormat::YUYV);
     }
 }

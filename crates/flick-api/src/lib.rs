@@ -2216,16 +2216,16 @@ fn mjpeg_stream(
     preview: Arc<dyn PreviewSource>,
 ) -> impl Stream<Item = Result<Bytes, Infallible>> {
     stream::unfold((camera_id, preview), |(camera_id, preview)| async move {
-        tokio::time::sleep(Duration::from_millis(66)).await;
-        let chunk = match preview
-            .next_frame(&camera_id)
-            .await
-            .and_then(encode_mjpeg_chunk)
-        {
-            Some(chunk) => chunk,
-            None => Bytes::from_static(b"--flick--\r\n"),
-        };
-        Some((Ok(chunk), (camera_id, preview)))
+        loop {
+            tokio::time::sleep(Duration::from_millis(66)).await;
+            if let Some(chunk) = preview
+                .next_frame(&camera_id)
+                .await
+                .and_then(encode_mjpeg_chunk)
+            {
+                return Some((Ok(chunk), (camera_id, preview)));
+            }
+        }
     })
 }
 

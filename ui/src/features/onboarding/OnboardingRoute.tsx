@@ -10,7 +10,7 @@ import {
 } from "../../api/hooks";
 import { ConfidenceMeter, DevicePill, GestureGlyph, PreviewCanvas } from "../../components/domain";
 import { Badge, Button, GlassPanel, Input, ListRow, Select } from "../../components/ui";
-import { useLiveHands } from "../../events/useLiveHands";
+import { useCameraLive, useLiveHands } from "../../events/useLiveHands";
 import {
   type CameraPermission,
   cameraPermissionStatus,
@@ -56,7 +56,7 @@ function normalizeStatusPermission(value: unknown): CameraPermission | null {
     : null;
 }
 
-function cameraStateCopy(permission: CameraPermissionView, started: boolean) {
+function cameraStateCopy(permission: CameraPermissionView, running: boolean) {
   if (permission === "unknown") {
     return {
       tone: "neutral" as const,
@@ -85,11 +85,11 @@ function cameraStateCopy(permission: CameraPermissionView, started: boolean) {
       body: "The next action opens the system camera prompt. Flick stores hand points, never camera images.",
     };
   }
-  if (!started) {
+  if (!running) {
     return {
       tone: "accent" as const,
       title: "Camera access is allowed",
-      body: "Start the selected camera to confirm the local preview before continuing.",
+      body: "Start the selected camera and wait for the local preview before continuing.",
     };
   }
   return {
@@ -131,12 +131,28 @@ export function OnboardingRoute() {
   const [demoMode, setDemoMode] = useState(false);
   const [tryState, setTryState] = useState<"idle" | "listening" | "done">("idle");
   const activeIndex = steps.findIndex((item) => item.id === step);
-  const cameraCopy = cameraStateCopy(cameraPermission, cameraStarted);
   const selectedLight = lightEntities.data?.[0];
   const cameraBusy = cameraSetup.busy;
-  const preview = useCameraPreviewTicket(startedCameraId, cameraStarted);
+  const liveCamera = useCameraLive(startedCameraId);
+  const liveState = liveCamera?.state;
+  const liveError = liveCamera?.error;
+  const cameraRunning = liveState === "running";
+  const cameraFailed = liveState === "error" || liveState === "permission_denied" || Boolean(liveError);
+  const cameraStarting = cameraStarted && !cameraRunning && !cameraFailed;
+  const cameraCopy = cameraStateCopy(cameraPermission, cameraRunning);
+  const preview = useCameraPreviewTicket(startedCameraId, cameraRunning);
   const liveHands = useLiveHands(startedCameraId);
-  const handTracked = cameraStarted && Boolean(liveHands?.hands.length);
+  const handTracked = cameraRunning && Boolean(liveHands?.hands.length);
+  const cameraInlineError = cameraFailed
+    ? `The camera couldn't start: ${liveError ?? "Check the camera connection and try again."}`
+    : cameraError;
+  const cameraDetail = cameraRunning
+    ? "running locally"
+    : cameraStarting
+      ? "starting…"
+      : cameraFailed
+        ? "couldn't start"
+        : "not started";
 
   const currentCamera = useMemo(
     () =>
@@ -331,28 +347,26 @@ export function OnboardingRoute() {
                   <strong>{cameraCopy.title}</strong>
                   <p>{cameraCopy.body}</p>
                 </div>
-                {cameraError ? (
+                {cameraInlineError ? (
                   <p className="inline-error" role="alert">
-                    {cameraError}
+                    {cameraInlineError}
                   </p>
                 ) : null}
               </div>
               <div>
                 <PreviewCanvas
                   alt={`${currentCamera?.name ?? "Camera"} preview with a tracked hand`}
-                  src={cameraStarted ? preview.data?.src || undefined : undefined}
-                  hands={cameraStarted ? liveHands?.hands : []}
-                  ray={cameraStarted ? liveHands?.ray : null}
+                  src={cameraRunning ? preview.data?.src || undefined : undefined}
+                  hands={cameraRunning ? liveHands?.hands : []}
+                  ray={cameraRunning ? liveHands?.ray : null}
                 />
                 <div className="preview-overlay-card onboarding-preview-card">
-                  <DevicePill
-                    name={currentCamera?.name ?? "Camera"}
-                    domain="camera"
-                    detail={cameraStarted ? "running locally" : "not started"}
-                  />
+                  <DevicePill name={currentCamera?.name ?? "Camera"} domain="camera" detail={cameraDetail} />
                   <ConfidenceMeter
-                    value={handTracked ? 0.92 : 0.12}
-                    label={handTracked ? "Hand tracked" : "Show a hand"}
+                    value={handTracked ? 0.92 : cameraRunning ? 0.12 : 0}
+                    label={
+                      handTracked ? "Hand tracked" : cameraRunning ? "Show a hand" : "Camera not running"
+                    }
                   />
                 </div>
               </div>
@@ -374,17 +388,21 @@ export function OnboardingRoute() {
               ) : (
                 <Button
                   variant="primary"
-                  loading={cameraBusy}
+                  loading={cameraBusy || cameraStarting}
                   onClick={() => {
-                    if (cameraStarted) next();
+                    if (cameraRunning) next();
                     else void allowCameraAndStart();
                   }}
                 >
-                  {cameraStarted
+                  {cameraRunning
                     ? "Continue"
-                    : cameraPermission === "authorized"
-                      ? "Start camera"
-                      : "Allow camera"}
+                    : cameraFailed
+                      ? "Try again"
+                      : cameraStarting
+                        ? "Starting…"
+                        : cameraPermission === "authorized"
+                          ? "Start camera"
+                          : "Allow camera"}
                 </Button>
               )}
               <Button variant="ghost" onClick={() => setStep("ha")}>
