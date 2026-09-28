@@ -17,15 +17,20 @@ use std::{
 };
 
 use flick_core::{
-    ExecutionProvider, FaceKeypoints, Frame, HandFrame, HandPipeline, Handedness, PixelFormat,
-    RectF, StageTimings, VisionError,
+    ExecutionProvider, FaceKeypoints, Frame, HandFrame, HandObservation, HandPipeline, Handedness,
+    PixelFormat, RectF, StageTimings, VisionError,
 };
 use nalgebra::{Matrix2, Vector2};
 use ndarray::Array4;
-use ort::{ep, session::Session};
+use ort::{
+    ep,
+    session::{Session, SessionInputValue, builder::GraphOptimizationLevel},
+    value::TensorRef,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use smallvec::SmallVec;
+use tracing::warn;
 
 const PALM_INPUT_SIZE: u32 = 192;
 const LANDMARK_INPUT_SIZE: u32 = 224;
@@ -116,6 +121,25 @@ impl ModelSet {
     #[must_use]
     pub fn path(&self, id: &str) -> Option<&Path> {
         self.verified.get(id).map(PathBuf::as_path)
+    }
+
+    /// Verifies and returns an optional cache path when the manifest entry and file are present.
+    pub fn optional_path(&self, id: &str) -> Result<Option<PathBuf>, VisionError> {
+        let Some(model) = self.model(id) else {
+            return Ok(None);
+        };
+        let cache_path = self.root.join(&model.cache_path);
+        if !cache_path.exists() {
+            return Ok(None);
+        }
+        verify_model_file(&cache_path, &model.sha256).map_err(|err| {
+            VisionError::ModelUnavailable(format!(
+                "optional model {} failed verification at {}: {err}",
+                model.id,
+                cache_path.display()
+            ))
+        })?;
+        Ok(Some(cache_path))
     }
 
     /// Returns all verified model ids and paths.
@@ -329,7 +353,7 @@ impl OrtSessionFactory {
         })))
     }
 
-    /// Performs a load-only first-run provider choice. The engine persists the returned [`EpChoice`].
+    /// Performs a bounded first-run provider benchmark. The engine persists the returned [`EpChoice`].
     pub fn auto_benchmark(&self, models: &ModelSet) -> EpChoice {
         let started = Instant::now();
         let mut choice = EpChoice::default();
@@ -338,38 +362,84 @@ impl OrtSessionFactory {
                 choice.insert(id, EpKind::Cpu);
                 continue;
             }
-            let requested = models
-                .model(id)
-                .and_then(|model| model.preferred_ep.first())
-                .and_then(|name| parse_ep_name(name))
-                .unwrap_or(EpKind::Auto);
+            let Some(model) = models.model(id) else {
+                choice.insert(id, EpKind::Cpu);
+                continue;
+            };
+            let mut candidates = model
+                .preferred_ep
+                .iter()
+                .filter_map(|name| parse_ep_name(name))
+                .filter(|ep| *ep != EpKind::Auto)
+                .collect::<Vec<_>>();
+            candidates.push(default_ep_for_model(id));
+            candidates.push(EpKind::Cpu);
+            candidates.sort();
+            candidates.dedup();
             let selected = self
-                .build_session(path, requested)
-                .map(|(_, ep)| ep)
-                .unwrap_or(EpKind::Cpu);
+                .benchmark_model(path, model, &candidates, started)
+                .unwrap_or_else(|| default_ep_for_model(id));
             choice.insert(id, selected);
         }
         choice
     }
 
+    fn benchmark_model(
+        &self,
+        model_path: &Path,
+        model: &ModelEntry,
+        candidates: &[EpKind],
+        started: Instant,
+    ) -> Option<EpKind> {
+        let inputs = prepare_dummy_inputs(model).ok()?;
+        let mut best: Option<(EpKind, f32)> = None;
+        for ep in candidates {
+            if started.elapsed().as_secs() >= 10 {
+                break;
+            }
+            let Ok((mut session, selected)) = self.build_session(model_path, *ep) else {
+                continue;
+            };
+            let Ok(ms) = benchmark_session(&mut session, &inputs, 5, 10) else {
+                continue;
+            };
+            if best.is_none_or(|(_, best_ms)| ms < best_ms) {
+                best = Some((selected, ms));
+            }
+        }
+        best.map(|(ep, _)| ep)
+    }
+
     fn try_build_session(&self, model_path: &Path, ep_kind: EpKind) -> Result<Session, String> {
+        let _ = ort::init().commit();
         let mut builder = Session::builder()
+            .map_err(|err| err.to_string())?
+            .with_optimization_level(GraphOptimizationLevel::Level3)
             .map_err(|err| err.to_string())?
             .with_intra_threads(self.intra_op)
             .map_err(|err| err.to_string())?
             .with_inter_threads(self.inter_op)
             .map_err(|err| err.to_string())?;
 
-        if ep_kind == EpKind::CoreMl {
-            fs::create_dir_all(&self.coreml_cache_dir).map_err(|err| err.to_string())?;
-            let coreml = ep::CoreML::default()
-                .with_model_format(ep::coreml::ModelFormat::MLProgram)
-                .with_compute_units(ep::coreml::ComputeUnits::CPUAndNeuralEngine)
-                .with_model_cache_dir(self.coreml_cache_dir.to_string_lossy())
-                .build();
-            builder = builder
-                .with_execution_providers([coreml.error_on_failure()])
-                .map_err(|err| err.to_string())?;
+        match ep_kind {
+            EpKind::Cpu => {}
+            EpKind::CoreMl => {
+                fs::create_dir_all(&self.coreml_cache_dir).map_err(|err| err.to_string())?;
+                let coreml = ep::CoreML::default()
+                    .with_model_format(ep::coreml::ModelFormat::NeuralNetwork)
+                    .with_compute_units(ep::coreml::ComputeUnits::CPUAndNeuralEngine)
+                    .with_model_cache_dir(self.coreml_cache_dir.to_string_lossy())
+                    .build();
+                builder = builder
+                    .with_execution_providers([coreml.error_on_failure()])
+                    .map_err(|err| err.to_string())?;
+            }
+            EpKind::Auto => return Err("auto EP must be expanded before session build".to_owned()),
+            EpKind::DirectMl | EpKind::Cuda | EpKind::OpenVino | EpKind::Xnnpack => {
+                return Err(format!(
+                    "{ep_kind:?} execution provider is not enabled in this build"
+                ));
+            }
         }
 
         builder
@@ -389,6 +459,94 @@ fn parse_ep_name(name: &str) -> Option<EpKind> {
         "cpu" => Some(EpKind::Cpu),
         _ => None,
     }
+}
+
+fn default_ep_for_model(model_id: &str) -> EpKind {
+    match model_id {
+        "hand_landmark_full" => EpKind::CoreMl,
+        "palm_detection_full" | "face_detection_short" | "scene_embedder" => EpKind::Cpu,
+        _ => EpKind::Cpu,
+    }
+}
+
+#[derive(Debug, Clone)]
+struct PreparedInput {
+    name: String,
+    shape: Vec<i64>,
+    data: Vec<f32>,
+}
+
+fn prepare_dummy_inputs(model: &ModelEntry) -> Result<Vec<PreparedInput>, VisionError> {
+    model
+        .inputs
+        .iter()
+        .map(|input| {
+            let shape = parse_tensor_shape(&input.shape)?;
+            let len = shape.iter().try_fold(1_usize, |acc, dim| {
+                usize::try_from(*dim)
+                    .ok()
+                    .and_then(|dim| acc.checked_mul(dim))
+            });
+            let Some(len) = len else {
+                return Err(VisionError::InvalidModelOutput(format!(
+                    "invalid tensor shape {} for {}",
+                    input.shape, input.name
+                )));
+            };
+            Ok(PreparedInput {
+                name: input.name.clone(),
+                shape,
+                data: vec![0.0; len],
+            })
+        })
+        .collect()
+}
+
+fn parse_tensor_shape(shape: &str) -> Result<Vec<i64>, VisionError> {
+    shape
+        .split(['x', 'X'])
+        .map(|part| {
+            part.trim().parse::<i64>().map_err(|err| {
+                VisionError::InvalidModelOutput(format!("invalid tensor shape {shape}: {err}"))
+            })
+        })
+        .collect()
+}
+
+fn benchmark_session(
+    session: &mut Session,
+    inputs: &[PreparedInput],
+    warmup: usize,
+    iterations: usize,
+) -> Result<f32, VisionError> {
+    for _ in 0..warmup {
+        run_prepared(session, inputs)?;
+    }
+    let mut elapsed = Vec::with_capacity(iterations);
+    for _ in 0..iterations {
+        let started = Instant::now();
+        run_prepared(session, inputs)?;
+        elapsed.push(started.elapsed().as_secs_f32() * 1_000.0);
+    }
+    elapsed.sort_by(f32::total_cmp);
+    let index = ((elapsed.len().saturating_sub(1)) as f32 * 0.95).round() as usize;
+    elapsed
+        .get(index)
+        .copied()
+        .ok_or_else(|| VisionError::Inference("benchmark produced no timings".to_owned()))
+}
+
+fn run_prepared(session: &mut Session, inputs: &[PreparedInput]) -> Result<(), VisionError> {
+    let mut values: Vec<(String, SessionInputValue<'_>)> = Vec::with_capacity(inputs.len());
+    for input in inputs {
+        let tensor = TensorRef::from_array_view((input.shape.clone(), input.data.as_slice()))
+            .map_err(|err| VisionError::Inference(err.to_string()))?;
+        values.push((input.name.clone(), tensor.into()));
+    }
+    session
+        .run(values)
+        .map_err(|err| VisionError::Inference(err.to_string()))?;
+    Ok(())
 }
 
 /// One SSD anchor in normalized input coordinates.
@@ -946,36 +1104,65 @@ impl AdaptiveFrameRate {
 
 /// Main hand pipeline implementation.
 pub struct HandPipelineImpl {
-    models: Option<ModelSet>,
+    runtime: Option<HandRuntime>,
     ep_choice: EpChoice,
     anchors: Vec<Anchor>,
+    tracks: Vec<TrackState>,
+    next_track_id: u32,
     frame_count: u64,
     adaptive_fps: AdaptiveFrameRate,
+    started: Instant,
+    mirrored_input: bool,
+    max_hands: usize,
 }
 
 impl HandPipelineImpl {
     /// Builds a hand pipeline from a verified model set and persisted EP choices.
-    #[must_use]
-    pub fn new(models: ModelSet, ep_choice: EpChoice) -> Self {
-        Self {
-            models: Some(models),
+    pub fn new(models: ModelSet, ep_choice: EpChoice) -> Result<Self, VisionError> {
+        let runtime = HandRuntime::new(&models, &ep_choice)?;
+        Ok(Self {
+            runtime: Some(runtime),
             ep_choice,
             anchors: generate_palm_anchors(),
+            tracks: Vec::new(),
+            next_track_id: 1,
             frame_count: 0,
             adaptive_fps: AdaptiveFrameRate::new(5, 30),
-        }
+            started: Instant::now(),
+            mirrored_input: true,
+            max_hands: 2,
+        })
     }
 
     /// Builds a model-free pipeline for tests and fake-landmark flows.
     #[must_use]
     pub fn without_models() -> Self {
         Self {
-            models: None,
+            runtime: None,
             ep_choice: EpChoice::default(),
             anchors: generate_palm_anchors(),
+            tracks: Vec::new(),
+            next_track_id: 1,
             frame_count: 0,
             adaptive_fps: AdaptiveFrameRate::new(5, 30),
+            started: Instant::now(),
+            mirrored_input: true,
+            max_hands: 2,
         }
+    }
+
+    /// Sets whether MediaPipe should interpret the input as mirrored/selfie video.
+    #[must_use]
+    pub fn with_mirrored_input(mut self, mirrored_input: bool) -> Self {
+        self.mirrored_input = mirrored_input;
+        self
+    }
+
+    /// Sets the maximum number of hands to process per frame.
+    #[must_use]
+    pub fn with_max_hands(mut self, max_hands: usize) -> Self {
+        self.max_hands = max_hands.clamp(1, 2);
+        self
     }
 
     /// Returns the generated palm anchors.
@@ -995,6 +1182,104 @@ impl HandPipelineImpl {
     pub fn ep_choice(&self) -> &EpChoice {
         &self.ep_choice
     }
+
+    fn process_with_runtime(
+        &mut self,
+        runtime: &mut HandRuntime,
+        frame: &Frame,
+        timings: &mut StageTimings,
+    ) -> Result<SmallVec<[HandObservation; 2]>, VisionError> {
+        let mut candidates = self
+            .tracks
+            .iter()
+            .take(self.max_hands)
+            .map(|track| RoiCandidate {
+                roi: track.roi,
+                source: RoiSource::Tracking,
+            })
+            .collect::<Vec<_>>();
+
+        let should_run_palm = self.tracks.is_empty() || self.frame_count.is_multiple_of(10);
+        if should_run_palm {
+            let palm_started = Instant::now();
+            let palms = runtime.run_palm(frame, &self.anchors)?;
+            timings.palm_ms = palm_started.elapsed().as_secs_f32() * 1_000.0;
+            candidates.extend(palms.iter().take(self.max_hands).map(|palm| RoiCandidate {
+                roi: roi_from_palm(palm),
+                source: RoiSource::Palm,
+            }));
+        }
+
+        let landmark_started = Instant::now();
+        let mut raw = Vec::new();
+        for candidate in candidates.into_iter().take(self.max_hands * 2) {
+            if let Some(observation) =
+                runtime.run_landmarks(frame, candidate.roi, self.mirrored_input)?
+            {
+                raw.push((candidate.source, observation));
+            }
+        }
+        timings.landmarks_ms = landmark_started.elapsed().as_secs_f32() * 1_000.0;
+        dedupe_raw_observations(&mut raw);
+
+        let tracking_started = Instant::now();
+        let time_s = self.started.elapsed().as_secs_f32();
+        let mut assigned_tracks = vec![false; self.tracks.len()];
+        let mut hands = SmallVec::<[HandObservation; 2]>::new();
+        for (_, mut observation) in raw.into_iter().take(self.max_hands) {
+            let track_index = self.match_track(&observation, &assigned_tracks);
+            let index = if let Some(index) = track_index {
+                assigned_tracks[index] = true;
+                index
+            } else {
+                let id = self.next_track_id;
+                self.next_track_id = self.next_track_id.saturating_add(1);
+                self.tracks.push(TrackState::new(id, &observation));
+                assigned_tracks.push(true);
+                self.tracks.len() - 1
+            };
+            let track = &mut self.tracks[index];
+            let smoothed = track.update(time_s, &observation);
+            observation.image = smoothed;
+            observation.bbox = bbox_from_landmarks(&observation.image);
+            let (embedding, canned_scores) = runtime.run_gesture_models(&observation)?;
+            hands.push(HandObservation {
+                track_id: track.id,
+                hand: observation.hand,
+                handedness_score: observation.handedness_score,
+                presence: observation.presence,
+                image: observation.image,
+                world: observation.world,
+                bbox: observation.bbox,
+                embedding,
+                canned_scores,
+            });
+        }
+        for (index, track) in self.tracks.iter_mut().enumerate() {
+            if !assigned_tracks.get(index).copied().unwrap_or(false) {
+                track.missed = track.missed.saturating_add(1);
+            }
+        }
+        self.tracks.retain(|track| track.missed <= 5);
+        timings.tracking_ms = tracking_started.elapsed().as_secs_f32() * 1_000.0;
+        Ok(hands)
+    }
+
+    fn match_track(&self, observation: &RawHandObservation, assigned: &[bool]) -> Option<usize> {
+        let mut best = None;
+        let mut best_iou = 0.3_f32;
+        for (index, track) in self.tracks.iter().enumerate() {
+            if assigned.get(index).copied().unwrap_or(false) || track.hand != observation.hand {
+                continue;
+            }
+            let overlap = iou(track.bbox, observation.bbox);
+            if overlap >= best_iou {
+                best = Some(index);
+                best_iou = overlap;
+            }
+        }
+        best
+    }
 }
 
 impl HandPipeline for HandPipelineImpl {
@@ -1006,68 +1291,533 @@ impl HandPipeline for HandPipelineImpl {
             ));
         }
         self.frame_count = self.frame_count.saturating_add(1);
-        let _palm_every_tenth = self.frame_count.is_multiple_of(10);
-        let _models_loaded = self.models.is_some();
-        let now_ms = started.elapsed().as_millis() as u64;
-        let fps = self.adaptive_fps.update(now_ms, false);
-        let _ = fps;
+        let mut timings = StageTimings::default();
+        let mut runtime = self.runtime.take();
+        let hands = if let Some(runtime) = runtime.as_mut() {
+            self.process_with_runtime(runtime, frame, &mut timings)?
+        } else {
+            SmallVec::new()
+        };
+        self.runtime = runtime;
+        let now_ms = self.started.elapsed().as_millis() as u64;
+        self.adaptive_fps.update(now_ms, !hands.is_empty());
+        timings.total_ms = started.elapsed().as_secs_f32() * 1_000.0;
         Ok(HandFrame {
             camera_id: frame.camera_id,
             seq: frame.seq,
             captured_at: frame.captured_at,
-            hands: SmallVec::new(),
-            timings: StageTimings {
-                total_ms: started.elapsed().as_secs_f32() * 1_000.0,
-                ..StageTimings::default()
-            },
+            hands,
+            timings,
         })
+    }
+}
+
+struct HandRuntime {
+    palm: ModelRunner,
+    landmark: ModelRunner,
+    embedder: Option<ModelRunner>,
+    classifier: Option<ModelRunner>,
+}
+
+impl HandRuntime {
+    fn new(models: &ModelSet, ep_choice: &EpChoice) -> Result<Self, VisionError> {
+        let factory = OrtSessionFactory::new(models.root().join("models/cache"));
+        Ok(Self {
+            palm: build_required_runner(models, &factory, ep_choice, "palm_detection_full")?,
+            landmark: build_required_runner(models, &factory, ep_choice, "hand_landmark_full")?,
+            embedder: build_optional_runner(models, &factory, ep_choice, "gesture_embedder")?,
+            classifier: build_optional_runner(
+                models,
+                &factory,
+                ep_choice,
+                "canned_gesture_classifier",
+            )?,
+        })
+    }
+
+    fn run_palm(
+        &mut self,
+        frame: &Frame,
+        anchors: &[Anchor],
+    ) -> Result<Vec<PalmDetection>, VisionError> {
+        let (letterbox, input) = letterbox_rgb_to_nhwc(frame, PALM_INPUT_SIZE)?;
+        let outputs = run_single_input(
+            &mut self.palm.session,
+            "input_1",
+            vec![1, PALM_INPUT_SIZE as i64, PALM_INPUT_SIZE as i64, 3],
+            &input,
+        )?;
+        let regressors = output_tensor(&outputs, "Identity")?;
+        let logits = output_tensor(&outputs, "Identity_1")?;
+        let mut decoded = Vec::with_capacity(regressors.len() / 18);
+        for chunk in regressors.chunks_exact(18) {
+            let mut raw = [0.0_f32; 18];
+            raw.copy_from_slice(chunk);
+            decoded.push(raw);
+        }
+        decode_palms(&decoded, logits, anchors, letterbox, 0.5, 0.3)
+    }
+
+    fn run_landmarks(
+        &mut self,
+        frame: &Frame,
+        roi: RotatedRoi,
+        mirrored_input: bool,
+    ) -> Result<Option<RawHandObservation>, VisionError> {
+        let crop = warp_rgb_roi(frame, roi, LANDMARK_INPUT_SIZE)?;
+        let input = rgb_u8_to_nhwc_f32(&crop);
+        let outputs = run_single_input(
+            &mut self.landmark.session,
+            "input_1",
+            vec![1, LANDMARK_INPUT_SIZE as i64, LANDMARK_INPUT_SIZE as i64, 3],
+            &input,
+        )?;
+        let image = output_tensor(&outputs, "Identity")?;
+        let presence = output_tensor(&outputs, "Identity_1")?;
+        let handedness = output_tensor(&outputs, "Identity_2")?;
+        let world = output_tensor(&outputs, "Identity_3")?;
+        if image.len() < 63 || world.len() < 63 || presence.is_empty() || handedness.is_empty() {
+            return Err(VisionError::InvalidModelOutput(
+                "hand landmark outputs have unexpected lengths".to_owned(),
+            ));
+        }
+        let presence = normalize_score(presence[0]);
+        if presence < 0.5 {
+            return Ok(None);
+        }
+        let handedness_score = normalize_score(handedness[0]);
+        let mediapipe_hand = if handedness_score >= 0.5 {
+            Handedness::Right
+        } else {
+            Handedness::Left
+        };
+        let hand = mirror_aware_handedness(mediapipe_hand, mirrored_input);
+        let affine = RoiAffine::new(roi);
+        let mut projected = [[0.0_f32; 3]; 21];
+        let mut world_landmarks = [[0.0_f32; 3]; 21];
+        for index in 0..21 {
+            let base = index * 3;
+            let crop_x = normalize_model_coord(image[base], LANDMARK_INPUT_SIZE);
+            let crop_y = normalize_model_coord(image[base + 1], LANDMARK_INPUT_SIZE);
+            let projected_xy = affine.roi_to_image([crop_x, crop_y]);
+            projected[index] = [
+                projected_xy[0],
+                projected_xy[1],
+                normalize_model_coord(image[base + 2], LANDMARK_INPUT_SIZE),
+            ];
+            world_landmarks[index] = [world[base], world[base + 1], world[base + 2]];
+        }
+        let bbox = bbox_from_landmarks(&projected);
+        if bbox.h < 0.06 {
+            return Ok(None);
+        }
+        Ok(Some(RawHandObservation {
+            hand,
+            handedness_score,
+            presence,
+            image: projected,
+            world: world_landmarks,
+            bbox,
+        }))
+    }
+
+    fn run_gesture_models(
+        &mut self,
+        hand: &RawHandObservation,
+    ) -> Result<(Option<[f32; 128]>, Option<[f32; 8]>), VisionError> {
+        let Some(embedder) = self.embedder.as_mut() else {
+            return Ok((None, None));
+        };
+        let mut hand_input = Vec::with_capacity(63);
+        for point in hand.image {
+            hand_input.extend_from_slice(&point);
+        }
+        let mut world_input = Vec::with_capacity(63);
+        for point in hand.world {
+            world_input.extend_from_slice(&point);
+        }
+        let handedness_input = [hand.handedness_score];
+        let outputs = run_multi_input(
+            &mut embedder.session,
+            &[
+                ("hand", vec![1, 21, 3], hand_input.as_slice()),
+                ("handedness", vec![1, 1], handedness_input.as_slice()),
+                ("world_hand", vec![1, 21, 3], world_input.as_slice()),
+            ],
+        )?;
+        let embedding_values = output_tensor(&outputs, "Identity")?;
+        if embedding_values.len() < 128 {
+            return Err(VisionError::InvalidModelOutput(
+                "gesture embedder returned fewer than 128 values".to_owned(),
+            ));
+        }
+        let mut embedding = [0.0_f32; 128];
+        embedding.copy_from_slice(&embedding_values[..128]);
+        drop(outputs);
+
+        let Some(classifier) = self.classifier.as_mut() else {
+            return Ok((Some(embedding), None));
+        };
+        let outputs = run_single_input(
+            &mut classifier.session,
+            "hand_embedding",
+            vec![1, 128],
+            &embedding,
+        )?;
+        let scores = output_tensor(&outputs, "Identity")?;
+        if scores.len() < 8 {
+            return Err(VisionError::InvalidModelOutput(
+                "canned classifier returned fewer than 8 values".to_owned(),
+            ));
+        }
+        let mut canned_scores = [0.0_f32; 8];
+        canned_scores.copy_from_slice(&scores[..8]);
+        normalize_scores8(&mut canned_scores);
+        Ok((Some(embedding), Some(canned_scores)))
+    }
+}
+
+struct ModelRunner {
+    session: Session,
+    #[allow(dead_code)]
+    ep: EpKind,
+}
+
+fn build_required_runner(
+    models: &ModelSet,
+    factory: &OrtSessionFactory,
+    ep_choice: &EpChoice,
+    id: &str,
+) -> Result<ModelRunner, VisionError> {
+    let path = models
+        .path(id)
+        .ok_or_else(|| VisionError::ModelUnavailable(format!("{id} is not verified")))?;
+    let requested = requested_ep(id, ep_choice);
+    let (session, ep) = factory.build_session(path, requested)?;
+    Ok(ModelRunner { session, ep })
+}
+
+fn build_optional_runner(
+    models: &ModelSet,
+    factory: &OrtSessionFactory,
+    ep_choice: &EpChoice,
+    id: &str,
+) -> Result<Option<ModelRunner>, VisionError> {
+    let Some(model) = models.model(id) else {
+        return Ok(None);
+    };
+    if model.format != "onnx" {
+        return Ok(None);
+    }
+    let Some(path) = models.optional_path(id)? else {
+        return Ok(None);
+    };
+    let requested = requested_ep(id, ep_choice);
+    match factory.build_session(&path, requested) {
+        Ok((session, ep)) => Ok(Some(ModelRunner { session, ep })),
+        Err(err) => {
+            warn!(model = id, error = %err, "optional gesture model disabled");
+            Ok(None)
+        }
+    }
+}
+
+fn requested_ep(model_id: &str, ep_choice: &EpChoice) -> EpKind {
+    let requested = ep_choice.get(model_id);
+    if requested == EpKind::Auto {
+        default_ep_for_model(model_id)
+    } else {
+        requested
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum RoiSource {
+    Tracking,
+    Palm,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RoiCandidate {
+    roi: RotatedRoi,
+    source: RoiSource,
+}
+
+#[derive(Debug, Clone)]
+struct RawHandObservation {
+    hand: Handedness,
+    handedness_score: f32,
+    presence: f32,
+    image: [[f32; 3]; 21],
+    world: [[f32; 3]; 21],
+    bbox: RectF,
+}
+
+#[derive(Debug, Clone)]
+struct TrackState {
+    id: u32,
+    hand: Handedness,
+    bbox: RectF,
+    roi: RotatedRoi,
+    missed: u8,
+    filters: [[OneEuroFilter; 3]; 21],
+}
+
+impl TrackState {
+    fn new(id: u32, observation: &RawHandObservation) -> Self {
+        Self {
+            id,
+            hand: observation.hand,
+            bbox: observation.bbox,
+            roi: roi_from_landmarks(&observation.image),
+            missed: 0,
+            filters: std::array::from_fn(|_| std::array::from_fn(|_| OneEuroFilter::new())),
+        }
+    }
+
+    fn update(&mut self, time_s: f32, observation: &RawHandObservation) -> [[f32; 3]; 21] {
+        self.hand = observation.hand;
+        self.bbox = observation.bbox;
+        self.roi = roi_from_landmarks(&observation.image);
+        self.missed = 0;
+        let mut smoothed = observation.image;
+        for (point_index, point) in smoothed.iter_mut().enumerate() {
+            for (axis, value) in point.iter_mut().enumerate() {
+                *value = self.filters[point_index][axis].filter(time_s, *value);
+            }
+        }
+        smoothed
+    }
+}
+
+fn dedupe_raw_observations(observations: &mut Vec<(RoiSource, RawHandObservation)>) {
+    observations.sort_by(|a, b| {
+        a.0.cmp(&b.0)
+            .then_with(|| b.1.presence.total_cmp(&a.1.presence))
+    });
+    let mut kept: Vec<(RoiSource, RawHandObservation)> = Vec::new();
+    'outer: for observation in observations.drain(..) {
+        for (_, kept_observation) in &kept {
+            if iou(observation.1.bbox, kept_observation.bbox) > 0.5 {
+                continue 'outer;
+            }
+        }
+        kept.push(observation);
+    }
+    *observations = kept;
+}
+
+fn run_single_input<'s>(
+    session: &'s mut Session,
+    name: &str,
+    shape: Vec<i64>,
+    data: &[f32],
+) -> Result<ort::session::SessionOutputs<'s>, VisionError> {
+    run_multi_input(session, &[(name, shape, data)])
+}
+
+fn run_multi_input<'s>(
+    session: &'s mut Session,
+    inputs: &[(&str, Vec<i64>, &[f32])],
+) -> Result<ort::session::SessionOutputs<'s>, VisionError> {
+    let mut values: Vec<(String, SessionInputValue<'_>)> = Vec::with_capacity(inputs.len());
+    for (name, shape, data) in inputs {
+        let tensor = TensorRef::from_array_view((shape.clone(), *data))
+            .map_err(|err| VisionError::Inference(err.to_string()))?;
+        values.push(((*name).to_owned(), tensor.into()));
+    }
+    session
+        .run(values)
+        .map_err(|err| VisionError::Inference(err.to_string()))
+}
+
+fn output_tensor<'a>(
+    outputs: &'a ort::session::SessionOutputs<'_>,
+    name: &str,
+) -> Result<&'a [f32], VisionError> {
+    let Some(value) = outputs.get(name) else {
+        let names = outputs.keys().collect::<Vec<_>>().join(", ");
+        return Err(VisionError::InvalidModelOutput(format!(
+            "missing output {name}; available outputs: {names}"
+        )));
+    };
+    let (_, data) = value
+        .try_extract_tensor::<f32>()
+        .map_err(|err| VisionError::InvalidModelOutput(err.to_string()))?;
+    Ok(data)
+}
+
+fn letterbox_rgb_to_nhwc(frame: &Frame, size: u32) -> Result<(Letterbox, Vec<f32>), VisionError> {
+    if frame.width == 0 || frame.height == 0 {
+        return Err(VisionError::UnsupportedFrame("empty frame".to_owned()));
+    }
+    let letterbox = Letterbox::new(frame.width, frame.height, size, size);
+    let mut out = vec![0.0_f32; (size * size * 3) as usize];
+    for y in 0..size {
+        for x in 0..size {
+            let dst_x = x as f32 + 0.5;
+            let dst_y = y as f32 + 0.5;
+            let src_x = (dst_x - letterbox.pad_x) / letterbox.scale;
+            let src_y = (dst_y - letterbox.pad_y) / letterbox.scale;
+            if src_x < 0.0
+                || src_y < 0.0
+                || src_x >= frame.width as f32
+                || src_y >= frame.height as f32
+            {
+                continue;
+            }
+            let nx = if frame.width > 1 {
+                src_x / (frame.width - 1) as f32
+            } else {
+                0.0
+            };
+            let ny = if frame.height > 1 {
+                src_y / (frame.height - 1) as f32
+            } else {
+                0.0
+            };
+            let rgb = bilinear_rgb(frame, nx, ny);
+            let offset = ((y * size + x) * 3) as usize;
+            out[offset] = rgb[0] as f32 / 255.0;
+            out[offset + 1] = rgb[1] as f32 / 255.0;
+            out[offset + 2] = rgb[2] as f32 / 255.0;
+        }
+    }
+    Ok((letterbox, out))
+}
+
+fn rgb_u8_to_nhwc_f32(data: &[u8]) -> Vec<f32> {
+    data.iter().map(|value| f32::from(*value) / 255.0).collect()
+}
+
+fn normalize_model_coord(value: f32, input_size: u32) -> f32 {
+    if value.abs() > 2.0 {
+        value / input_size as f32
+    } else {
+        value
+    }
+}
+
+fn normalize_score(value: f32) -> f32 {
+    if (0.0..=1.0).contains(&value) {
+        value
+    } else {
+        sigmoid(value)
+    }
+}
+
+fn normalize_scores8(scores: &mut [f32; 8]) {
+    let sum = scores.iter().sum::<f32>();
+    let already_probabilities =
+        scores.iter().all(|score| (0.0..=1.0).contains(score)) && (sum - 1.0).abs() < 0.05;
+    if already_probabilities {
+        return;
+    }
+    let max = scores.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    let mut exp_sum = 0.0_f32;
+    for score in scores.iter_mut() {
+        *score = (*score - max).exp();
+        exp_sum += *score;
+    }
+    if exp_sum > f32::EPSILON {
+        for score in scores.iter_mut() {
+            *score /= exp_sum;
+        }
+    }
+}
+
+fn bbox_from_landmarks(landmarks: &[[f32; 3]; 21]) -> RectF {
+    let mut min_x = f32::INFINITY;
+    let mut min_y = f32::INFINITY;
+    let mut max_x = f32::NEG_INFINITY;
+    let mut max_y = f32::NEG_INFINITY;
+    for point in landmarks {
+        min_x = min_x.min(point[0]);
+        min_y = min_y.min(point[1]);
+        max_x = max_x.max(point[0]);
+        max_y = max_y.max(point[1]);
+    }
+    RectF {
+        x: min_x,
+        y: min_y,
+        w: max_x - min_x,
+        h: max_y - min_y,
     }
 }
 
 /// BlazeFace short-range keypoint runner, invoked only by targeting while point pose is active.
 pub struct FaceKeypointRunner {
-    model_path: Option<PathBuf>,
+    runner: Option<ModelRunner>,
+    anchors: Vec<[f32; 2]>,
 }
 
 impl FaceKeypointRunner {
     /// Creates a runner from a verified model set.
     #[must_use]
     pub fn new(models: &ModelSet) -> Self {
+        let factory = OrtSessionFactory::new(models.root().join("models/cache"));
+        let runner = build_required_runner(
+            models,
+            &factory,
+            &EpChoice::default(),
+            "face_detection_short",
+        )
+        .map_err(|err| {
+            warn!(error = %err, "face keypoint runner disabled");
+            err
+        })
+        .ok();
         Self {
-            model_path: models.path("face_detection_short").map(Path::to_path_buf),
+            runner,
+            anchors: generate_face_anchors(),
         }
     }
 
     /// Detects face keypoints on demand. Returns `Ok(None)` when the optional model is absent.
     pub fn detect(&mut self, frame: &Frame) -> Result<Option<FaceKeypoints>, VisionError> {
-        if self.model_path.is_none() {
-            return Ok(None);
-        }
         if frame.format != PixelFormat::Rgb8 {
             return Err(VisionError::UnsupportedFrame(
                 "FaceKeypointRunner expects RGB8".to_owned(),
             ));
         }
-        let _input = resize_rgb_nearest(frame, FACE_INPUT_SIZE, FACE_INPUT_SIZE)?;
-        Ok(None)
+        let Some(runner) = self.runner.as_mut() else {
+            return Ok(None);
+        };
+        let input = resize_rgb_nearest(frame, FACE_INPUT_SIZE, FACE_INPUT_SIZE)?;
+        let input = rgb_u8_to_nhwc_f32(&input);
+        let outputs = run_single_input(
+            &mut runner.session,
+            "input",
+            vec![1, FACE_INPUT_SIZE as i64, FACE_INPUT_SIZE as i64, 3],
+            &input,
+        )?;
+        let regressors = output_tensor(&outputs, "regressors")?;
+        let logits = output_tensor(&outputs, "classificators")?;
+        decode_face_keypoints(regressors, logits, &self.anchors)
     }
 }
 
 /// DINOv2-small scene signature embedder with person/hand-box masking.
 pub struct SceneEmbedder {
-    model_path: Option<PathBuf>,
+    runner: Option<ModelRunner>,
 }
 
 impl SceneEmbedder {
     /// Creates an on-demand scene embedder from a verified model set.
     #[must_use]
     pub fn new(models: &ModelSet) -> Self {
-        Self {
-            model_path: models.path("scene_embedder").map(Path::to_path_buf),
-        }
+        let factory = OrtSessionFactory::new(models.root().join("models/cache"));
+        let runner =
+            build_required_runner(models, &factory, &EpChoice::default(), "scene_embedder")
+                .map_err(|err| {
+                    warn!(error = %err, "scene embedder disabled");
+                    err
+                })
+                .ok();
+        Self { runner }
     }
 
-    /// Produces a normalized 384-d scene vector. Returns a deterministic zero vector until the ONNX runner is wired.
+    /// Produces a normalized 384-d scene vector.
     pub fn embed(
         &mut self,
         frame: &Frame,
@@ -1080,9 +1830,92 @@ impl SceneEmbedder {
         }
         let mut masked = frame.data.to_vec();
         apply_masks(&mut masked, frame.width, frame.height, mask_boxes);
-        let _tensor = rgb_to_nchw_224(&masked, frame.width, frame.height)?;
-        let _model_available = self.model_path.is_some();
-        Ok([0.0; SCENE_EMBEDDING_DIMS])
+        let tensor = rgb_to_nchw_224(&masked, frame.width, frame.height)?;
+        let Some(runner) = self.runner.as_mut() else {
+            return Ok([0.0; SCENE_EMBEDDING_DIMS]);
+        };
+        let input = tensor.iter().copied().collect::<Vec<_>>();
+        let outputs = run_single_input(
+            &mut runner.session,
+            "pixel_values",
+            vec![1, 3, LANDMARK_INPUT_SIZE as i64, LANDMARK_INPUT_SIZE as i64],
+            &input,
+        )?;
+        let values = output_tensor(&outputs, "last_hidden_state")?;
+        if values.len() < SCENE_EMBEDDING_DIMS {
+            return Err(VisionError::InvalidModelOutput(
+                "scene embedder returned too few values".to_owned(),
+            ));
+        }
+        let mut embedding = [0.0_f32; SCENE_EMBEDDING_DIMS];
+        embedding.copy_from_slice(&values[..SCENE_EMBEDDING_DIMS]);
+        normalize_l2(&mut embedding);
+        Ok(embedding)
+    }
+}
+
+fn generate_face_anchors() -> Vec<[f32; 2]> {
+    let strides = [8_u32, 16, 16, 16];
+    let mut anchors = Vec::with_capacity(896);
+    for stride in strides {
+        let feature = FACE_INPUT_SIZE.div_ceil(stride);
+        for y in 0..feature {
+            for x in 0..feature {
+                let center = [
+                    (x as f32 + 0.5) / feature as f32,
+                    (y as f32 + 0.5) / feature as f32,
+                ];
+                anchors.push(center);
+                anchors.push(center);
+            }
+        }
+    }
+    anchors
+}
+
+fn decode_face_keypoints(
+    regressors: &[f32],
+    logits: &[f32],
+    anchors: &[[f32; 2]],
+) -> Result<Option<FaceKeypoints>, VisionError> {
+    let count = logits.len().min(anchors.len()).min(regressors.len() / 16);
+    if count == 0 {
+        return Err(VisionError::InvalidModelOutput(
+            "empty BlazeFace outputs".to_owned(),
+        ));
+    }
+    let mut best_index = None;
+    let mut best_score = 0.5_f32;
+    for (index, logit) in logits.iter().take(count).enumerate() {
+        let score = sigmoid(*logit);
+        if score > best_score {
+            best_score = score;
+            best_index = Some(index);
+        }
+    }
+    let Some(index) = best_index else {
+        return Ok(None);
+    };
+    let anchor = anchors[index];
+    let raw = &regressors[index * 16..index * 16 + 16];
+    let mut points = [[0.0_f32; 2]; 6];
+    for (point_index, point) in points.iter_mut().enumerate() {
+        let base = 4 + point_index * 2;
+        point[0] = (raw[base] / FACE_INPUT_SIZE as f32 + anchor[0]).clamp(0.0, 1.0);
+        point[1] = (raw[base + 1] / FACE_INPUT_SIZE as f32 + anchor[1]).clamp(0.0, 1.0);
+    }
+    Ok(Some(FaceKeypoints {
+        points,
+        confidence: Some(best_score),
+    }))
+}
+
+fn normalize_l2<const N: usize>(values: &mut [f32; N]) {
+    let norm = values.iter().map(|value| value * value).sum::<f32>().sqrt();
+    if norm > f32::EPSILON {
+        for value in values {
+            *value /= norm;
+        }
     }
 }
 
@@ -1124,6 +1957,8 @@ fn rgb_to_nchw_224(data: &[u8], width: u32, height: u32) -> Result<Array4<f32>, 
             "empty scene frame".to_owned(),
         ));
     }
+    let mean = [0.485_f32, 0.456, 0.406];
+    let std = [0.229_f32, 0.224, 0.225];
     let mut tensor = Array4::<f32>::zeros((
         1,
         3,
@@ -1136,7 +1971,9 @@ fn rgb_to_nchw_224(data: &[u8], width: u32, height: u32) -> Result<Array4<f32>, 
             let src_x = x * width / LANDMARK_INPUT_SIZE;
             let src = ((src_y * width + src_x) * 3) as usize;
             for c in 0..3 {
-                tensor[(0, c, y as usize, x as usize)] = data[src + c] as f32 / 255.0;
+                let value = data[src + c] as f32 / 255.0;
+                tensor[(0, c, y as usize, x as usize)] =
+                    (value - mean[c as usize]) / std[c as usize];
             }
         }
     }
@@ -1149,7 +1986,7 @@ mod tests {
     use std::{fs, sync::Arc, time::SystemTime};
 
     #[test]
-    fn palm_decode_and_weighted_nms_merges_overlapping_boxes() {
+    fn palm_decode_and_weighted_nms_merges_overlapping_boxes() -> Result<(), VisionError> {
         let anchors = vec![
             Anchor {
                 x_center: 0.5,
@@ -1185,8 +2022,7 @@ mod tests {
             Letterbox::new(192, 192, 192, 192),
             0.5,
             0.3,
-        )
-        .expect("decode succeeds");
+        )?;
         assert_eq!(detections.len(), 2);
         assert!(detections.iter().any(|detection| detection.bbox.w < 0.11));
         assert!(
@@ -1194,6 +2030,7 @@ mod tests {
                 .iter()
                 .any(|detection| (detection.bbox.x - 0.402).abs() < 0.01)
         );
+        Ok(())
     }
 
     #[test]
@@ -1234,11 +2071,11 @@ mod tests {
     }
 
     #[test]
-    fn tampered_model_refuses_to_load() {
+    fn tampered_model_refuses_to_load() -> Result<(), Box<dyn std::error::Error>> {
         let base = PathBuf::from("target/flick-vision-tamper-test");
         let _ = fs::remove_dir_all(&base);
-        fs::create_dir_all(base.join("models/cache")).expect("create test model dir");
-        fs::write(base.join("models/cache/model.onnx"), b"tampered").expect("write test model");
+        fs::create_dir_all(base.join("models/cache"))?;
+        fs::write(base.join("models/cache/model.onnx"), b"tampered")?;
         fs::write(
             base.join("manifest.toml"),
             r#"
@@ -1253,11 +2090,14 @@ source_url = "file://model.onnx"
 sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
 cache_path = "models/cache/model.onnx"
 "#,
-        )
-        .expect("write manifest");
-        let err = ModelSet::load(base.join("manifest.toml")).expect_err("tampered hash fails");
+        )?;
+        let err = match ModelSet::load(base.join("manifest.toml")) {
+            Ok(_) => panic!("tampered hash fails"),
+            Err(err) => err,
+        };
         assert!(err.to_string().contains("sha256 mismatch"));
         let _ = fs::remove_dir_all(base);
+        Ok(())
     }
 
     #[test]

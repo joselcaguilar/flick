@@ -870,7 +870,9 @@ mod tests {
         for seq in 0..5 {
             slot.store(frame(seq));
         }
-        let latest = slot.take_latest().expect("slot has latest frame");
+        let Some(latest) = slot.take_latest() else {
+            panic!("slot has latest frame");
+        };
         assert_eq!(latest.seq, 4);
         assert!(slot.take_latest().is_none());
         assert_eq!(slot.total_dropped(), 4);

@@ -46,7 +46,7 @@ fn gesture_id_parse_display_contract() {
 }
 
 #[test]
-fn action_json_round_trips_spec_examples() {
+fn action_json_round_trips_spec_examples() -> Result<(), serde_json::Error> {
     let cases = [
         json!({
             "kind": "call_service",
@@ -75,7 +75,8 @@ fn action_json_round_trips_spec_examples() {
     ];
 
     for value in cases {
-        let action: Action = serde_json::from_value(value.clone()).unwrap();
-        assert_eq!(serde_json::to_value(action).unwrap(), value);
+        let action: Action = serde_json::from_value(value.clone())?;
+        assert_eq!(serde_json::to_value(action)?, value);
     }
+    Ok(())
 }

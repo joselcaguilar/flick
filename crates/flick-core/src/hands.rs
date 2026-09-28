@@ -80,6 +80,13 @@ pub struct HandObservation {
         skip_serializing_if = "Option::is_none"
     )]
     pub embedding: Option<[f32; 128]>,
+    /// Optional Tier 0 canned-classifier scores in spec label order.
+    #[serde(
+        default,
+        with = "canned_scores_serde",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub canned_scores: Option<[f32; 8]>,
 }
 
 /// All tracked hands for one processed camera frame.
@@ -126,5 +133,37 @@ mod embedding_serde {
         let mut embedding = [0.0_f32; 128];
         embedding.copy_from_slice(&values);
         Ok(Some(embedding))
+    }
+}
+
+mod canned_scores_serde {
+    use serde::{Deserialize, Serialize, de};
+
+    pub fn serialize<S>(value: &Option<[f32; 8]>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match value {
+            Some(scores) => scores.as_slice().serialize(serializer),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<[f32; 8]>, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let Some(values) = Option::<Vec<f32>>::deserialize(deserializer)? else {
+            return Ok(None);
+        };
+        if values.len() != 8 {
+            return Err(de::Error::invalid_length(
+                values.len(),
+                &"8 canned gesture score values",
+            ));
+        }
+        let mut scores = [0.0_f32; 8];
+        scores.copy_from_slice(&values);
+        Ok(Some(scores))
     }
 }
