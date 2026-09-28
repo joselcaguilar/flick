@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
-use crate::CameraId;
+use crate::{BuiltinGesture, CameraId};
 
 /// The user's physical hand after mirror normalization.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -56,6 +56,60 @@ pub struct FaceKeypoints {
     pub confidence: Option<f32>,
 }
 
+/// MediaPipe canned gesture classifier scores in the verified label order.
+///
+/// The order matches `02-vision-pipeline.md` §4.1:
+/// `None, Closed_Fist, Open_Palm, Pointing_Up, Thumb_Down, Thumb_Up, Victory, ILoveYou`.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct CannedGestureScores {
+    /// Softmax scores from the canned classifier.
+    pub scores: [f32; 8],
+}
+
+impl CannedGestureScores {
+    /// Index of the negative class in [`Self::scores`].
+    pub const NONE: usize = 0;
+    /// Index of `builtin.closed_fist`.
+    pub const CLOSED_FIST: usize = 1;
+    /// Index of `builtin.open_palm`.
+    pub const OPEN_PALM: usize = 2;
+    /// Index of `builtin.pointing_up`.
+    pub const POINTING_UP: usize = 3;
+    /// Index of `builtin.thumb_down`.
+    pub const THUMB_DOWN: usize = 4;
+    /// Index of `builtin.thumb_up`.
+    pub const THUMB_UP: usize = 5;
+    /// Index of `builtin.victory`.
+    pub const VICTORY: usize = 6;
+    /// Index of `builtin.i_love_you`.
+    pub const I_LOVE_YOU: usize = 7;
+
+    /// Returns the score for a built-in canned gesture, if the classifier owns it.
+    #[must_use]
+    pub fn score_for(self, gesture: BuiltinGesture) -> Option<f32> {
+        let index = match gesture {
+            BuiltinGesture::ClosedFist => Self::CLOSED_FIST,
+            BuiltinGesture::OpenPalm => Self::OPEN_PALM,
+            BuiltinGesture::PointingUp => Self::POINTING_UP,
+            BuiltinGesture::ThumbDown => Self::THUMB_DOWN,
+            BuiltinGesture::ThumbUp => Self::THUMB_UP,
+            BuiltinGesture::Victory => Self::VICTORY,
+            BuiltinGesture::ILoveYou => Self::I_LOVE_YOU,
+            BuiltinGesture::Point
+            | BuiltinGesture::SwipeLeft
+            | BuiltinGesture::SwipeRight
+            | BuiltinGesture::SwipeUp
+            | BuiltinGesture::SwipeDown
+            | BuiltinGesture::PinchDial
+            | BuiltinGesture::CircleCw
+            | BuiltinGesture::CircleCcw
+            | BuiltinGesture::CircleAny
+            | BuiltinGesture::TwoHandSeparate => return None,
+        };
+        Some(self.scores[index])
+    }
+}
+
 /// One tracked hand in a processed frame.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HandObservation {
@@ -80,6 +134,9 @@ pub struct HandObservation {
         skip_serializing_if = "Option::is_none"
     )]
     pub embedding: Option<[f32; 128]>,
+    /// Optional canned classifier scores produced by the vision pipeline.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub canned_scores: Option<CannedGestureScores>,
 }
 
 /// All tracked hands for one processed camera frame.
