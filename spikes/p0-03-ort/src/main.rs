@@ -114,6 +114,32 @@ const MODELS: &[ModelSpec] = &[
             },
         ],
     },
+    ModelSpec {
+        id: "gesture_embedder",
+        file: "gesture_embedder.onnx",
+        inputs: &[
+            InputSpec {
+                name: "hand",
+                shape: &[1, 21, 3],
+            },
+            InputSpec {
+                name: "handedness",
+                shape: &[1, 1],
+            },
+            InputSpec {
+                name: "world_hand",
+                shape: &[1, 21, 3],
+            },
+        ],
+    },
+    ModelSpec {
+        id: "canned_gesture_classifier",
+        file: "canned_gesture_classifier.onnx",
+        inputs: &[InputSpec {
+            name: "hand_embedding",
+            shape: &[1, 128],
+        }],
+    },
 ];
 
 fn main() -> Result<()> {
