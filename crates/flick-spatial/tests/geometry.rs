@@ -402,6 +402,7 @@ fn projected_hand(
             h: 1.0,
         },
         embedding: None,
+        canned_scores: None,
     })
 }
 
