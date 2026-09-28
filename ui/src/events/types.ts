@@ -206,6 +206,7 @@ export interface HudState {
   title: string;
   detail?: string;
   icon?: string;
+  verbs?: Array<{ gesture_id: string; label: string }>;
   progress?: number;
   expiresAt?: string;
   updatedAt?: string;

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import {
   useCamerasAvailable,
   useHaConnect,
@@ -72,10 +72,10 @@ function cameraStateCopy(permission: CameraPermission) {
   };
 }
 
-function PromiseItem({ icon, title, body }: { icon: string; title: string; body: string }) {
+function PromiseItem({ mark, title, body }: { mark: ReactNode; title: string; body: string }) {
   return (
     <div className="onboarding-promise">
-      <span aria-hidden="true">{icon}</span>
+      <span aria-hidden="true">{mark}</span>
       <strong>{title}</strong>
       <p>{body}</p>
     </div>
@@ -167,13 +167,13 @@ export function OnboardingRoute() {
             </div>
             <div className="onboarding-promises">
               <PromiseItem
-                icon="⌂"
+                mark="Local"
                 title="Private"
                 body="Video stays local; Flick stores hand points only."
               />
-              <PromiseItem icon="⚡" title="Instant" body="Point, lock, flick, then see the result." />
+              <PromiseItem mark="Fast" title="Instant" body="Point, lock, flick, then see the result." />
               <PromiseItem
-                icon="✋"
+                mark={<GestureGlyph name="open-palm" animated={false} />}
                 title="No training needed"
                 body="Built-ins work first; custom gestures come later."
               />
@@ -407,11 +407,11 @@ export function OnboardingRoute() {
                         ? "Demo HUD · no action sent"
                         : "Done · Home Assistant confirmed"
                       : tryState === "listening"
-                        ? "Listening for 👍"
-                        : "Ready for 👍"}
+                        ? "Listening for Thumbs up"
+                        : "Ready for Thumbs up"}
                   </strong>
                   <p>{selectedLight?.name ?? "Living room lights"} → Toggle</p>
-                  <span>{tryState === "done" ? "✓" : "⌁"}</span>
+                  <span>{tryState === "done" ? "Done" : "Ready"}</span>
                 </div>
               </div>
             </div>
@@ -453,14 +453,18 @@ export function OnboardingRoute() {
               </p>
             </div>
             <div className="control-grid">
-              <PromiseItem icon="⌥" title="Pause instantly" body="Menu bar or ⌥⌘F pauses recognition." />
               <PromiseItem
-                icon="✋"
+                mark="Pause"
+                title="Pause instantly"
+                body="Menu bar or Option-Command-F pauses recognition."
+              />
+              <PromiseItem
+                mark={<GestureGlyph name="open-palm" animated={false} />}
                 title="Arm mode optional"
                 body="Require a deliberate open-palm gesture first."
               />
               <PromiseItem
-                icon="🔒"
+                mark="Safe"
                 title="Sensitive devices locked"
                 body="Locks, alarms and garage doors need Safety enabled plus confirmation."
               />

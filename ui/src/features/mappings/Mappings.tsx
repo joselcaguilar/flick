@@ -99,7 +99,7 @@ function MappingRow({ mapping }: { mapping: Mapping }) {
       <div className="mapping-row-meta">
         <Badge tone={mappingTone(mapping)}>{mapping.enabled ? "enabled" : "off"}</Badge>
         <Badge tone="accent">{mapping.mode}</Badge>
-        {mapping.sensitive ? <Badge tone="warning">🔒 sensitive</Badge> : null}
+        {mapping.sensitive ? <Badge tone="warning">Sensitive</Badge> : null}
         <Button variant="ghost" size="sm" loading={test.isPending} onClick={() => test.mutate()}>
           Test
         </Button>

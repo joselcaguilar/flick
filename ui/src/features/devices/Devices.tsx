@@ -8,7 +8,13 @@ import {
   useTestMapping,
 } from "../../api/hooks";
 import type { Anchor, HaEntity } from "../../api/types";
-import { ConfidenceMeter, DevicePill, EntityIcon, PreviewCanvas } from "../../components/domain";
+import {
+  ConfidenceMeter,
+  DevicePill,
+  EntityIcon,
+  GestureGlyph,
+  PreviewCanvas,
+} from "../../components/domain";
 import { Badge, Button, GlassPanel, ListRow, Skeleton } from "../../components/ui";
 import { useEventStore } from "../../events/store";
 import { formatTime } from "../../lib/utils";
@@ -27,6 +33,19 @@ function statusTone(status?: string | null): "neutral" | "accent" | "success" | 
   if (status === "needs_realign" || status === "needs_reteach" || status === "error") return "danger";
   if (status === "capturing" || status === "aiming") return "warning";
   return "neutral";
+}
+
+function actionLabel(label: string) {
+  return label.replace(/^(Circle clockwise|Two hands apart|Thumbs up)\s*→\s*/i, "");
+}
+
+function VerbChip({ gestureId, label }: { gestureId: string; label: string }) {
+  return (
+    <span className="verb-chip">
+      <GestureGlyph name={gestureId} animated={false} />
+      {actionLabel(label)}
+    </span>
+  );
 }
 
 function RoomSketch({ anchors }: { anchors: Anchor[] }) {
@@ -113,7 +132,11 @@ export function DevicesRoute() {
                   </div>
                   <div className="verb-list">
                     {anchor.verbs.map((verb) => (
-                      <span key={`${anchor.id}-${verb.gesture_id}`}>{verb.label}</span>
+                      <VerbChip
+                        key={`${anchor.id}-${verb.gesture_id}`}
+                        gestureId={verb.gesture_id}
+                        label={verb.label}
+                      />
                     ))}
                   </div>
                   <div className="device-card-actions">
@@ -143,12 +166,10 @@ export function OnboardingTeachDeviceStep() {
         <p>Point at something in this room — like the ceiling fan — and Flick will remember it.</p>
       </div>
       <DevicePill name="Ventilador dormitorio" domain="fan" detail="Tuya · percentage step 1" />
-      <Link className="ui-button ui-button-primary ui-button-md" to="/devices/teach">
-        Teach a device
-      </Link>
-      <Link className="ui-button ui-button-ghost ui-button-md" to="/">
-        Later
-      </Link>
+      <div className="verb-list">
+        <VerbChip gestureId="builtin.circle_cw" label="Circle clockwise → Speed 1" />
+        <VerbChip gestureId="builtin.two_hand_separate" label="Two hands apart → Off" />
+      </div>
     </GlassPanel>
   );
 }
@@ -220,9 +241,15 @@ export function TeachDeviceRoute() {
           <GlassPanel className="teach-step-card">
             <span>Default verbs</span>
             <div className="sentence-stack">
-              <p>Point + ↻ → speed 1</p>
-              <p>Point + ✋✋ apart → off</p>
-              <p>Point + 👍 → on</p>
+              <p>
+                Point + <VerbChip gestureId="builtin.circle_cw" label="Circle clockwise → Speed 1" />
+              </p>
+              <p>
+                Point + <VerbChip gestureId="builtin.two_hand_separate" label="Two hands apart → Off" />
+              </p>
+              <p>
+                Point + <VerbChip gestureId="builtin.thumb_up" label="Thumbs up → On" />
+              </p>
             </div>
           </GlassPanel>
           <GlassPanel className="teach-step-card">
@@ -230,10 +257,10 @@ export function TeachDeviceRoute() {
             <p>Point at it again, then try a verb. The HUD shows angular error and the action result.</p>
             <div className="level-actions">
               <Button variant="primary" loading={testSpeed.isPending} onClick={() => testSpeed.mutate()}>
-                Try ↻ speed 1
+                Try speed 1
               </Button>
               <Button variant="ghost" loading={testOff.isPending} onClick={() => testOff.mutate()}>
-                Try ✋✋ off
+                Try off
               </Button>
             </div>
             {testSpeed.data?.message ? <Badge tone="success">{testSpeed.data.message}</Badge> : null}

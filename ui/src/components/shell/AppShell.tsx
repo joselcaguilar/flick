@@ -107,7 +107,7 @@ export function AppShell() {
             onClick={() => setMobileOpen(true)}
             aria-label="Open navigation"
           >
-            ☰
+            Menu
           </button>
           <StatusIndicator label="Engine" value={engineValue} />
           <StatusIndicator label="HA" value={haValue} />

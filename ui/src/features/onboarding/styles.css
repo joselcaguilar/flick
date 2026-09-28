@@ -126,8 +126,7 @@
   margin: 0;
 }
 
-.onboarding-actions,
-.teach-slot-actions {
+.onboarding-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -262,70 +261,6 @@
 .hud-demo span:last-child {
   color: var(--flick-accent-mint);
   font-size: 1.4rem;
-  font-weight: 850;
-}
-
-.onboarding-teach-slot {
-  display: grid;
-  gap: 1rem;
-  border: 1px solid var(--flick-border);
-  border-radius: var(--radius-2xl);
-  padding: 1rem;
-}
-
-.onboarding-teach-slot h3 {
-  margin: 0.55rem 0 0;
-  font-size: 1.45rem;
-  letter-spacing: -0.03em;
-}
-
-.teach-slot-preview {
-  position: relative;
-  min-block-size: 10rem;
-  overflow: hidden;
-  border: 1px solid var(--flick-border);
-  border-radius: var(--radius-xl);
-  background:
-    radial-gradient(
-      circle at 75% 24%,
-      color-mix(in srgb, var(--flick-accent-mint) 24%, transparent),
-      transparent 8rem
-    ),
-    color-mix(in srgb, var(--flick-surface) 70%, transparent);
-}
-
-.teach-camera-dot,
-.teach-device-dot,
-.teach-ray {
-  position: absolute;
-}
-
-.teach-camera-dot {
-  inset-inline-start: 14%;
-  inset-block-end: 20%;
-  inline-size: 1rem;
-  block-size: 1rem;
-  border-radius: 50%;
-  background: var(--flick-accent-blue);
-}
-
-.teach-ray {
-  inset-inline-start: 17%;
-  inset-block-end: 26%;
-  inline-size: 58%;
-  block-size: 2px;
-  rotate: -20deg;
-  transform-origin: left;
-  background: linear-gradient(90deg, var(--flick-accent-blue), transparent);
-}
-
-.teach-device-dot {
-  inset-inline-end: 14%;
-  inset-block-start: 18%;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--flick-accent-mint) 20%, var(--flick-surface));
-  color: var(--flick-text);
-  padding: 0.45rem 0.65rem;
   font-weight: 850;
 }
 

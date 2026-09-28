@@ -45,8 +45,8 @@ const sequence: WsServerMessage[] = [
     domain: "fan",
     expires_at: "2026-09-28T15:39:04.360Z",
     verbs: [
-      { gesture_id: "builtin.circle_cw", label: "↻ speed 1" },
-      { gesture_id: "builtin.two_hand_separate", label: "✋✋ off" },
+      { gesture_id: "builtin.circle_cw", label: "Circle clockwise → Speed 1" },
+      { gesture_id: "builtin.two_hand_separate", label: "Two hands apart → Off" },
     ],
   },
   {

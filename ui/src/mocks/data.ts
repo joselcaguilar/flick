@@ -173,8 +173,8 @@ export const anchors: Anchor[] = [
     created_at: now,
     updated_at: now,
     verbs: [
-      { gesture_id: "builtin.circle_cw", label: "↻ speed 1" },
-      { gesture_id: "builtin.two_hand_separate", label: "✋✋ off" },
+      { gesture_id: "builtin.circle_cw", label: "Circle clockwise → Speed 1" },
+      { gesture_id: "builtin.two_hand_separate", label: "Two hands apart → Off" },
     ],
   },
   {
@@ -192,7 +192,7 @@ export const anchors: Anchor[] = [
     last_used_at: now,
     created_at: now,
     updated_at: now,
-    verbs: [{ gesture_id: "builtin.thumb_up", label: "👍 toggle" }],
+    verbs: [{ gesture_id: "builtin.thumb_up", label: "Thumbs up → Toggle" }],
   },
 ];
 
@@ -307,7 +307,7 @@ export const gestures: Gesture[] = [
 export const mappings: Mapping[] = [
   {
     id: "map-fan-speed-1",
-    name: "Point at Ventilador dormitorio + ↻ → Speed 1",
+    name: "Point at Ventilador dormitorio + Circle clockwise → Speed 1",
     enabled: true,
     gesture_id: "builtin.circle_cw",
     gesture_name: "Circle clockwise",
@@ -329,7 +329,7 @@ export const mappings: Mapping[] = [
   },
   {
     id: "map-fan-off",
-    name: "Point at Ventilador dormitorio + ✋✋ apart → Off",
+    name: "Point at Ventilador dormitorio + Two hands apart → Off",
     enabled: true,
     gesture_id: "builtin.two_hand_separate",
     gesture_name: "Two hands apart",
@@ -351,7 +351,7 @@ export const mappings: Mapping[] = [
   },
   {
     id: "map-living-lights-toggle",
-    name: "👍 Thumbs up → Toggle Living room lights",
+    name: "Thumbs up → Toggle Living room lights",
     enabled: true,
     gesture_id: "builtin.thumb_up",
     gesture_name: "Thumbs up",
