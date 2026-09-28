@@ -1,8 +1,17 @@
-import { useCameras, useCamerasAvailable, useStatus } from "../../api/hooks";
-import type { Camera, CameraAvailable } from "../../api/types";
+import { useState } from "react";
+import {
+  useCameraPreviewTicket,
+  useCameras,
+  useCamerasAvailable,
+  useStartCamera,
+  useStatus,
+  useStopCamera,
+} from "../../api/hooks";
+import type { Camera, CameraAvailable, CameraStatus } from "../../api/types";
 import { PreviewCanvas } from "../../components/domain";
-import { Badge, Button, GlassPanel, ListRow, Skeleton } from "../../components/ui";
+import { Badge, Button, GlassPanel, ListRow, Skeleton, useToast } from "../../components/ui";
 import { useEventStore } from "../../events/store";
+import { isTauri } from "../../platform/tauri";
 
 function permissionTone(permission?: string | null) {
   if (permission === "authorized") return "success";
@@ -24,11 +33,26 @@ function bestFormat(camera: CameraAvailable) {
   return `${format.width}×${format.height} · ${format.fps} fps · ${format.format}`;
 }
 
-function ConfiguredCameraCard({ camera }: { camera: Camera }) {
-  const status = useStatus();
-  const live = status.data?.cameras.find(
-    (item) => item.camera_id === camera.id || (item as { id?: string }).id === camera.id,
+function findLiveCamera(cameras: CameraStatus[] | undefined, camera: Camera) {
+  return cameras?.find(
+    (item) => item.camera_id === camera.id || item.id === camera.id || item.camera_id === camera.device_ref,
   );
+}
+
+function ConfiguredCameraCard({ camera, live }: { camera: Camera; live?: CameraStatus }) {
+  const start = useStartCamera();
+  const stop = useStopCamera();
+  const running = live?.state === "running" || live?.state === "starting" || live?.state === "reconnecting";
+  const pending = start.isPending || stop.isPending;
+
+  function toggleCamera() {
+    if (running) {
+      stop.mutate(camera.id);
+      return;
+    }
+    start.mutate(camera.id);
+  }
+
   return (
     <GlassPanel className="camera-card">
       <div className="panel-heading">
@@ -52,12 +76,12 @@ function ConfiguredCameraCard({ camera }: { camera: Camera }) {
         <ListRow title="Rotation" description={`${camera.rotation}°`} trailing="ROI saved" />
       </div>
       <div className="camera-actions">
-        <Button variant="secondary" size="sm">
-          Set as active
+        <Button variant={running ? "ghost" : "primary"} size="sm" loading={pending} onClick={toggleCamera}>
+          {running ? "Stop camera" : camera.enabled ? "Start camera" : "Enable camera"}
         </Button>
-        <Button variant="ghost" size="sm">
-          Open preview
-        </Button>
+        <Badge tone={permissionTone(live?.camera_permission)}>
+          {live?.camera_permission ?? "permission unknown"}
+        </Badge>
       </div>
     </GlassPanel>
   );
@@ -78,9 +102,34 @@ export function CamerasRoute() {
   const cameras = useCameras();
   const available = useCamerasAvailable();
   const status = useStatus();
+  const { show } = useToast();
+  const [openingSettings, setOpeningSettings] = useState(false);
   const hands = useEventStore((state) => state.hands["camera-main"]);
   const permission =
     status.data?.camera_permission ?? status.data?.cameras[0]?.camera_permission ?? "unknown";
+  const activeCamera = cameras.data?.[0];
+  const activeLive = activeCamera
+    ? findLiveCamera(status.data?.cameras, activeCamera)
+    : status.data?.cameras[0];
+  const running = activeLive?.state === "running";
+  const preview = useCameraPreviewTicket(activeCamera?.id ?? activeLive?.camera_id, running);
+
+  async function openCameraPrivacySettings() {
+    if (!isTauri()) return;
+    setOpeningSettings(true);
+    try {
+      const tauri = await import("@tauri-apps/api/core");
+      await tauri.invoke("open_camera_privacy_settings");
+    } catch (error) {
+      show({
+        tone: "danger",
+        title: "Could not open System Settings",
+        description: error instanceof Error ? error.message : "Open Privacy & Security → Camera manually.",
+      });
+    } finally {
+      setOpeningSettings(false);
+    }
+  }
 
   return (
     <section className="feature-screen cameras-screen" aria-labelledby="screen-title">
@@ -90,7 +139,16 @@ export function CamerasRoute() {
           <h1 id="screen-title">Local cameras</h1>
           <p>Phase 1 keeps setup local: built-in and Continuity cameras, permission state and live health.</p>
         </div>
-        <Badge tone={permissionTone(permission)}>Permission · {String(permission).replace(/_/g, " ")}</Badge>
+        <div className="header-actions">
+          <Badge tone={permissionTone(permission)}>
+            Permission · {String(permission).replace(/_/g, " ")}
+          </Badge>
+          {permission === "denied" && isTauri() ? (
+            <Button variant="primary" size="sm" loading={openingSettings} onClick={openCameraPrivacySettings}>
+              Open System Settings
+            </Button>
+          ) : null}
+        </div>
       </header>
 
       <div className="cameras-grid">
@@ -98,15 +156,39 @@ export function CamerasRoute() {
           <div className="preview-header">
             <div>
               <span>Active camera</span>
-              <strong>{cameras.data?.[0]?.name ?? "MacBook Camera"}</strong>
+              <strong>{activeCamera?.name ?? activeLive?.name ?? "MacBook Camera"}</strong>
             </div>
-            <Badge tone={cameraTone(status.data?.cameras[0]?.state)}>
-              {status.data?.cameras[0]?.fps ?? 0} fps
+            <Badge tone={cameraTone(activeLive?.state)}>
+              {running ? `${activeLive?.fps ?? 0} fps` : (activeLive?.state ?? "stopped")}
             </Badge>
           </div>
-          <PreviewCanvas alt="Active camera preview" hands={hands?.hands} ray={hands?.ray} />
+          {permission === "denied" || permission === "restricted" ? (
+            <div className="camera-permission-panel" role="alert">
+              <strong>Camera permission is {String(permission).replace(/_/g, " ")}.</strong>
+              <span>Grant access in macOS System Settings, then start the camera again.</span>
+              {isTauri() ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  loading={openingSettings}
+                  onClick={openCameraPrivacySettings}
+                >
+                  Open System Settings
+                </Button>
+              ) : null}
+            </div>
+          ) : (
+            <PreviewCanvas
+              src={running ? preview.data?.src : undefined}
+              alt={running ? "Live camera preview" : "Start a camera to show live preview"}
+              hands={running ? hands?.hands : []}
+              ray={running ? hands?.ray : undefined}
+            />
+          )}
           <p className="camera-note">
-            MJPEG preview uses the engine ticket flow. RTSP setup, ROI drawing and Unifi guidance are Phase 2.
+            {running
+              ? "Live MJPEG preview uses the engine ticket flow; hand geometry overlays stay local."
+              : "Start a local camera to show the live preview. RTSP setup, ROI drawing and Unifi guidance are Phase 2."}
           </p>
         </GlassPanel>
 
@@ -114,7 +196,13 @@ export function CamerasRoute() {
           {cameras.isLoading ? (
             <Skeleton />
           ) : (
-            cameras.data?.map((camera) => <ConfiguredCameraCard key={camera.id} camera={camera} />)
+            cameras.data?.map((camera) => (
+              <ConfiguredCameraCard
+                key={camera.id}
+                camera={camera}
+                live={findLiveCamera(status.data?.cameras, camera)}
+              />
+            ))
           )}
           <GlassPanel className="camera-card">
             <div className="panel-heading">

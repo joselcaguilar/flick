@@ -5,6 +5,7 @@ import { retryEngineConnection } from "../../api/client";
 import { usePauseEngine, useResumeEngine, useStatus } from "../../api/hooks";
 import { restartEventStream, startEventStream } from "../../events/client";
 import { useEventStore } from "../../events/store";
+import { isMacApp } from "../../platform/tauri";
 import { routes } from "../../routes/routes";
 import { useTheme } from "../../theme";
 import { Button, Kbd, Sheet, useToast } from "../ui";
@@ -26,6 +27,18 @@ function StatusIndicator({ label, value }: { label: string; value: string }) {
   );
 }
 
+function liveStatus(cameraState?: string, paused?: boolean) {
+  if (paused) return { label: "Paused", detail: "Recognition paused", tone: "warning" };
+  if (cameraState === "running" || cameraState === "starting" || cameraState === "reconnecting") {
+    return { label: "Watching", detail: "Local camera only", tone: "online" };
+  }
+  return {
+    label: "Camera off",
+    detail: "No active capture",
+    tone: cameraState === "error" ? "error" : "warning",
+  };
+}
+
 export function AppShell() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -40,6 +53,8 @@ export function AppShell() {
   const theme = useTheme();
   const navRoutes = useMemo(() => routes.filter((route) => route.nav), []);
   const mobileRoutes = useMemo(() => routes.filter((route) => route.mobile), []);
+  const shellOverride = new URLSearchParams(location.search).get("shell");
+  const macShell = isMacApp() || shellOverride === "macos";
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -65,6 +80,7 @@ export function AppShell() {
   const engineValue = status.data?.paused ? "paused" : (status.data?.cameras[0]?.state ?? events.connection);
   const haValue = status.data?.ha.state ?? events.ha.state;
   const engineRecoverable = status.isError || events.connection === "error" || events.connection === "closed";
+  const live = liveStatus(status.data?.cameras[0]?.state, status.data?.paused);
 
   async function retryEngine() {
     setRetryingEngine(true);
@@ -102,13 +118,18 @@ export function AppShell() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-shell={macShell ? "macos" : undefined}>
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
       <aside className="flick-glass shell-sidebar" aria-label="Primary navigation">
+        {macShell ? (
+          <div className="mac-sidebar-drag-inset" data-tauri-drag-region aria-hidden="true" />
+        ) : null}
         <Link className="brand-mark" to="/">
-          <span aria-hidden="true">F</span>
+          <span className="brand-mark-slot" aria-hidden="true">
+            F
+          </span>
           <strong>Flick</strong>
         </Link>
         <nav aria-label="Main navigation">
@@ -123,9 +144,17 @@ export function AppShell() {
           <span>Command palette</span>
           <Kbd>⌘K</Kbd>
         </button>
+        <div className="sidebar-live-status" data-tone={live.tone}>
+          <i aria-hidden="true" />
+          <div>
+            <strong>{live.label}</strong>
+            <span>{live.detail}</span>
+          </div>
+        </div>
       </aside>
 
       <header className="flick-glass shell-toolbar">
+        {macShell ? <div className="toolbar-drag-region" data-tauri-drag-region aria-hidden="true" /> : null}
         <div className="toolbar-left">
           <button
             className="mobile-menu-button"
@@ -164,6 +193,7 @@ export function AppShell() {
       </header>
 
       <main id="main-content" className="shell-content" data-route={location.pathname}>
+        {macShell ? <div className="content-drag-region" data-tauri-drag-region aria-hidden="true" /> : null}
         {engineRecoverable ? (
           <section className="engine-recovery-banner flick-glass" role="alert" aria-live="polite">
             <div>

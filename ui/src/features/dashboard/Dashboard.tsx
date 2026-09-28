@@ -185,12 +185,6 @@ export function DashboardRoute() {
               </Link>
             </div>
           </GlassPanel>
-
-          <GlassPanel className="dashboard-hud-card">
-            <span>HUD now</span>
-            <strong>{eventState.hud.title}</strong>
-            {eventState.hud.detail ? <p>{eventState.hud.detail}</p> : null}
-          </GlassPanel>
         </aside>
       </div>
     </section>

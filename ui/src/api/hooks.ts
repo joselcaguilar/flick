@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "./client";
+import { api, getEndpoint } from "./client";
 import type {
   Action,
   ActionOutcome,
@@ -7,6 +7,7 @@ import type {
   Anchor,
   Camera,
   CameraAvailable,
+  CameraStatus,
   CaptureSession,
   ClassifierReport,
   EngineStatus,
@@ -21,6 +22,7 @@ import type {
   ModelPack,
   MotionTake,
   Place,
+  PreviewTicket,
   RealignSession,
   SettingsMap,
   SettingsPatch,
@@ -42,6 +44,7 @@ export const queryKeys = {
   haEntities: (params = "") => ["ha", "entities", params] as const,
   haServices: (domain = "") => ["ha", "services", domain] as const,
   cameras: ["cameras"] as const,
+  cameraPreview: (id = "") => ["cameras", id, "preview-ticket"] as const,
   camerasAvailable: ["cameras", "available"] as const,
   gestures: ["gestures"] as const,
   gestureMotionTakes: (id: string) => ["gestures", id, "motion-takes"] as const,
@@ -137,6 +140,65 @@ export function useCamerasAvailable() {
 
 export function useCameras() {
   return useQuery({ queryKey: queryKeys.cameras, queryFn: () => api.get<Camera[]>("/api/v1/cameras") });
+}
+
+export function useStartCamera() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post<CameraStatus>(`/api/v1/cameras/${id}/start`),
+    onSuccess: (camera) => {
+      client.setQueryData<EngineStatus>(queryKeys.status, (status) =>
+        status
+          ? {
+              ...status,
+              cameras: status.cameras.map((item) =>
+                item.camera_id === camera.camera_id ? { ...item, ...camera } : item,
+              ),
+            }
+          : status,
+      );
+      client.invalidateQueries({ queryKey: queryKeys.status });
+    },
+  });
+}
+
+export function useStopCamera() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post<CameraStatus>(`/api/v1/cameras/${id}/stop`),
+    onSuccess: (camera) => {
+      client.setQueryData<EngineStatus>(queryKeys.status, (status) =>
+        status
+          ? {
+              ...status,
+              cameras: status.cameras.map((item) =>
+                item.camera_id === camera.camera_id ? { ...item, ...camera } : item,
+              ),
+            }
+          : status,
+      );
+      client.invalidateQueries({ queryKey: queryKeys.status });
+    },
+  });
+}
+
+export function useCameraPreviewTicket(cameraId?: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.cameraPreview(cameraId),
+    enabled: Boolean(cameraId && enabled),
+    staleTime: 45_000,
+    queryFn: async () => {
+      if (!cameraId) throw new Error("camera id required");
+      const [ticket, endpoint] = await Promise.all([
+        api.post<Omit<PreviewTicket, "src">>(`/api/v1/cameras/${cameraId}/preview-ticket`),
+        getEndpoint(),
+      ]);
+      return {
+        ...ticket,
+        src: endpoint.mock ? "" : new URL(ticket.url, `${endpoint.baseUrl}/`).toString(),
+      };
+    },
+  });
 }
 
 export function useGestures() {
