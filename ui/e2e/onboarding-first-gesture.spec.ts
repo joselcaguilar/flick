@@ -11,7 +11,7 @@ test("onboarding connects mock HA, fires first gesture, and supports demo mode",
   await page.getByRole("button", { name: "Skip camera for now" }).click();
   await page.getByRole("button", { name: /Mock Home/ }).click();
   await page.getByRole("button", { name: "Connect" }).click();
-  await expect(page.getByText(/Connected to Home/)).toBeVisible();
+  await expect(page.getByText(/Connected to .*Home/)).toBeVisible();
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("heading", { name: "Try your first flick." })).toBeVisible();
 

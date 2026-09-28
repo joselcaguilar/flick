@@ -27,6 +27,8 @@ import { OnboardingTeachDeviceStep } from "../devices/Devices";
 type StepId = "welcome" | "camera" | "ha" | "try" | "teach" | "control";
 type CameraPermissionView = CameraPermission | "unknown";
 
+const devTools = import.meta.env.DEV;
+
 const steps: Array<{ id: StepId; label: string }> = [
   { id: "welcome", label: "Welcome" },
   { id: "camera", label: "Camera" },
@@ -127,9 +129,10 @@ export function OnboardingRoute() {
   const [cameraStarted, setCameraStarted] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [baseUrl, setBaseUrl] = useState("http://homeassistant.local:8123");
-  const [token, setToken] = useState("demo-valid-token");
+  const [token, setToken] = useState(devTools ? "demo-valid-token" : "");
   const [haError, setHaError] = useState<string | null>(null);
   const [haConnected, setHaConnected] = useState(false);
+  const [haInstance, setHaInstance] = useState<{ name: string; version?: string | null }>();
   const [demoMode, setDemoMode] = useState(false);
   const [tryState, setTryState] = useState<"idle" | "listening" | "done">("idle");
   const activeIndex = steps.findIndex((item) => item.id === step);
@@ -242,7 +245,8 @@ export function OnboardingRoute() {
   async function connectHomeAssistant() {
     setHaError(null);
     try {
-      await connect.mutateAsync({ base_url: baseUrl, token });
+      const instance = await connect.mutateAsync({ base_url: baseUrl.trim(), token: token.trim() });
+      setHaInstance({ name: instance.name, version: instance.ha_version });
       setHaConnected(true);
     } catch (error) {
       setHaError(errorMessage(error));
@@ -476,23 +480,30 @@ export function OnboardingRoute() {
                     type="password"
                   />
                 </label>
-                <div className="error-presets">
-                  <button type="button" onClick={() => setBaseUrl("http://offline.local:8123")}>
-                    Unreachable
-                  </button>
-                  <button type="button" onClick={() => setToken("invalid")}>
-                    Invalid token
-                  </button>
-                  <button type="button" onClick={() => setBaseUrl("https://self-signed.local:8123")}>
-                    TLS
-                  </button>
-                </div>
+                {devTools ? (
+                  <div className="error-presets">
+                    <button type="button" onClick={() => setBaseUrl("http://offline.local:8123")}>
+                      Unreachable
+                    </button>
+                    <button type="button" onClick={() => setToken("invalid")}>
+                      Invalid token
+                    </button>
+                    <button type="button" onClick={() => setBaseUrl("https://self-signed.local:8123")}>
+                      TLS
+                    </button>
+                  </div>
+                ) : null}
                 {haError ? (
                   <p className="inline-error" role="alert">
                     {haError}
                   </p>
                 ) : null}
-                {haConnected ? <p className="inline-success">Connected to Home (2026.9).</p> : null}
+                {haConnected ? (
+                  <p className="inline-success">
+                    Connected to {haInstance?.name ?? "Home Assistant"}
+                    {haInstance?.version ? ` (${haInstance.version})` : ""}.
+                  </p>
+                ) : null}
                 <div className="onboarding-actions">
                   <Button variant="primary" loading={connect.isPending} type="submit">
                     Connect
