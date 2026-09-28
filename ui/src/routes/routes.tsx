@@ -3,6 +3,7 @@ import { GestureGlyph } from "../components/domain";
 import { GlassPanel } from "../components/ui";
 import { DashboardRoute } from "../features/dashboard/Dashboard";
 import { DevicesRoute, PlacesRoute, RealignRoute, TeachDeviceRoute } from "../features/devices/Devices";
+import { MappingEditorRoute, MappingsRoute } from "../features/mappings/Mappings";
 
 export interface RouteMeta {
   path: string;
@@ -117,25 +118,13 @@ export const routes: RouteMeta[] = [
     nav: true,
     mobile: true,
     shortcut: "⌘4",
-    element: (
-      <EmptyRoute
-        title="Mappings"
-        description="No mappings yet. Pick a gesture and tell Flick what it should do."
-        action="Sentence builder scaffold"
-      />
-    ),
+    element: <MappingsRoute />,
   },
   {
     path: "/mappings/new",
     title: "Mapping editor",
     description: "Sentence builder for actions and safety behavior.",
-    element: (
-      <EmptyRoute
-        title="Mapping editor"
-        description="When I point at a taught device and make a gesture, Flick sends a Home Assistant action."
-        action="New sentence"
-      />
-    ),
+    element: <MappingEditorRoute />,
   },
   {
     path: "/cameras",

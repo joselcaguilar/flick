@@ -1447,8 +1447,305 @@ body.hud-window {
   gap: 0.8rem;
 }
 
+.ui-tabs-list,
+.ui-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--flick-surface) 72%, transparent);
+  padding: 0.3rem;
+}
+
+.ui-tabs-trigger,
+.ui-segmented label span {
+  border: 0;
+  border-radius: var(--radius-pill);
+  color: var(--flick-muted);
+  background: transparent;
+  padding: 0.55rem 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.ui-tabs-trigger[data-state="active"],
+.ui-segmented input:checked + span {
+  color: var(--flick-text);
+  background: color-mix(in srgb, var(--flick-accent-blue) 18%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--flick-accent-blue) 32%, transparent);
+}
+
+.ui-segmented {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.ui-segmented legend {
+  margin-block-end: 0.45rem;
+  color: var(--flick-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.ui-segmented label {
+  cursor: pointer;
+}
+
+.ui-segmented input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+}
+
+.ui-switch {
+  position: relative;
+  inline-size: 3.1rem;
+  block-size: 1.75rem;
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--flick-text) 14%, transparent);
+}
+
+.ui-switch[data-state="checked"] {
+  background: linear-gradient(135deg, var(--flick-accent-blue), var(--flick-accent-violet));
+}
+
+.ui-switch-thumb {
+  display: block;
+  inline-size: 1.35rem;
+  block-size: 1.35rem;
+  border-radius: 50%;
+  background: white;
+  translate: 0.16rem 0.14rem;
+  transition: translate var(--animate-fast) var(--ease-fluid);
+}
+
+.ui-switch[data-state="checked"] .ui-switch-thumb {
+  translate: 1.45rem 0.14rem;
+}
+
+.ui-slider-field {
+  display: grid;
+  grid-template-columns: auto minmax(7rem, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.ui-slider-field > span {
+  color: var(--flick-muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.ui-slider {
+  position: relative;
+  display: flex;
+  align-items: center;
+  block-size: 1.5rem;
+}
+
+.ui-slider-track {
+  position: relative;
+  overflow: hidden;
+  flex: 1;
+  block-size: 0.45rem;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--flick-text) 12%, transparent);
+}
+
+.ui-slider-range {
+  position: absolute;
+  block-size: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--flick-accent-blue), var(--flick-accent-mint));
+}
+
+.ui-slider-thumb {
+  display: block;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: var(--flick-accent-blue);
+  box-shadow: var(--flick-shadow-glass);
+}
+
+.mappings-screen,
+.mapping-editor-screen {
+  display: grid;
+  gap: 1rem;
+}
+
+.mapping-tabs,
+.mapping-tab-content,
+.mapping-list,
+.sentence-builder-card,
+.mapping-safety-panel,
+.mapping-checks-card,
+.sensitive-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.mapping-tab-content {
+  margin-block-start: 1rem;
+}
+
+.mapping-group,
+.sentence-builder-card,
+.mapping-checks-card,
+.sensitive-card,
+.dial-preview-card {
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--flick-shadow-glass);
+  padding: 1rem;
+}
+
+.mapping-row {
+  display: grid;
+  gap: 0.65rem;
+  border: 1px solid var(--flick-border);
+  border-radius: 1.25rem;
+  background: color-mix(in srgb, var(--flick-surface) 62%, transparent);
+  padding: 0.85rem;
+}
+
+.mapping-row-main,
+.mapping-row-meta,
+.ack-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+.mapping-row-main {
+  justify-content: space-between;
+}
+
+.mapping-row-main > div {
+  min-inline-size: min(30rem, 100%);
+  flex: 1;
+}
+
+.mapping-row-main strong,
+.mapping-row-main span {
+  display: block;
+}
+
+.mapping-row-main span,
+.field-help,
+.inline-result {
+  color: var(--flick-muted);
+}
+
+.inline-result {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.mapping-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(20rem, 0.75fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.sentence-preview {
+  border: 1px solid color-mix(in srgb, var(--flick-accent-blue) 38%, var(--flick-border));
+  border-radius: 1.4rem;
+  background: color-mix(in srgb, var(--flick-accent-blue) 12%, transparent);
+  padding: 1rem;
+  font-size: clamp(1.1rem, 2vw, 1.5rem);
+  font-weight: 780;
+  letter-spacing: -0.025em;
+}
+
+.sentence-field {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.sentence-field > span,
+.mapping-checks-card > span {
+  color: var(--flick-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.55rem;
+}
+
+.choice-grid.compact {
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+
+.choice-grid button {
+  display: grid;
+  justify-items: start;
+  gap: 0.35rem;
+  min-block-size: 4rem;
+  border: 1px solid var(--flick-border);
+  border-radius: 1.1rem;
+  color: var(--flick-text);
+  background: color-mix(in srgb, var(--flick-surface) 58%, transparent);
+  padding: 0.75rem;
+  text-align: start;
+}
+
+.choice-grid button[data-active="true"] {
+  border-color: color-mix(in srgb, var(--flick-accent-blue) 52%, var(--flick-border));
+  background: color-mix(in srgb, var(--flick-accent-blue) 16%, transparent);
+}
+
+.choice-grid button span {
+  color: var(--flick-muted);
+  font-size: 0.8rem;
+}
+
+.dial-preview-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.sensitive-card.needs-attention {
+  border-color: color-mix(in srgb, var(--flick-accent-amber) 62%, var(--flick-border));
+}
+
+.sensitive-card p {
+  margin: 0;
+  color: var(--flick-muted);
+}
+
+.ack-row {
+  align-items: start;
+  color: var(--flick-text);
+}
+
+.ack-row input {
+  margin-block-start: 0.2rem;
+}
+
+.mapping-issues {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 @media (max-width: 980px) {
   .teach-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .mapping-editor-grid {
     grid-template-columns: 1fr;
   }
 }

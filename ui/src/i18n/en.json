@@ -131,5 +131,12 @@
     "places": "Places",
     "realign": "Re-align devices",
     "onboardingStep5": "Point at a device"
+  },
+  "mappings": {
+    "title": "Gesture sentences",
+    "devicesTab": "Devices",
+    "globalTab": "Global",
+    "editor": "Build a sentence",
+    "sensitive": "Sensitive flow"
   }
 }
