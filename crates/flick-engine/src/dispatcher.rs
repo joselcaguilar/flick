@@ -324,7 +324,7 @@ impl Dispatcher {
                     SafetyDecision::Execute(resolved) => {
                         report
                             .outcomes
-                            .push(self.execute_resolved(event, resolved).await);
+                            .push(self.execute_resolved(event, *resolved).await);
                     }
                     SafetyDecision::Suppressed(reason, message) => {
                         self.insert_suppressed_activity(
@@ -402,7 +402,7 @@ impl Dispatcher {
         };
         match self.resolve_action(&event, &mapping).await {
             Ok(resolved) => match self.apply_safety(&event, &mapping, resolved).await {
-                SafetyDecision::Execute(resolved) => self.execute_resolved(&event, resolved).await,
+                SafetyDecision::Execute(resolved) => self.execute_resolved(&event, *resolved).await,
                 SafetyDecision::Suppressed(reason, message) => suppressed_outcome(
                     &format!("{reason:?}"),
                     message.as_deref().unwrap_or("suppressed"),
@@ -516,7 +516,7 @@ impl Dispatcher {
                 SuppressionReason::BlockedDomain,
                 Some("Action is denied by the safety policy".to_owned()),
             ),
-            SafetyClass::Normal => SafetyDecision::Execute(resolved),
+            SafetyClass::Normal => SafetyDecision::Execute(Box::new(resolved)),
             SafetyClass::Sensitive => {
                 if !self.inner.settings.allow_sensitive_actions || !mapping.sensitive_ack {
                     return SafetyDecision::Suppressed(
@@ -894,7 +894,7 @@ struct ResolvedActionParts {
 }
 
 enum SafetyDecision {
-    Execute(ResolvedAction),
+    Execute(Box<ResolvedAction>),
     Suppressed(SuppressionReason, Option<String>),
     ConfirmationQueued,
 }

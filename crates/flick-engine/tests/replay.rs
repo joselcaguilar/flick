@@ -42,11 +42,7 @@ async fn replay_owner_scenario_dispatches_mock_ha() -> anyhow::Result<()> {
 
     let no_target =
         dispatch_fixture(&dispatcher, "landmarks/owner_fan_circle.jsonl", &idle).await?;
-    assert!(
-        no_target
-            .iter()
-            .any(|reason| *reason == SuppressionReason::NoTarget)
-    );
+    assert!(no_target.contains(&SuppressionReason::NoTarget));
     assert_eq!(mock.calls().await.len(), 1);
 
     dispatch_fixture(&dispatcher, "landmarks/owner_fan_circle.jsonl", &selected).await?;
@@ -73,11 +69,7 @@ async fn replay_owner_scenario_dispatches_mock_ha() -> anyhow::Result<()> {
 
     let target_selected =
         dispatch_fixture(&dispatcher, "landmarks/thumb_up.jsonl", &selected).await?;
-    assert!(
-        target_selected
-            .iter()
-            .any(|reason| *reason == SuppressionReason::TargetSelected)
-    );
+    assert!(target_selected.contains(&SuppressionReason::TargetSelected));
     assert_eq!(mock.calls().await.len(), 3);
 
     let conn = store.connection();
