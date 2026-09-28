@@ -103,7 +103,7 @@ impl Tier0Scorer for GeometricLandmarkScorer {
                 score: 0.92,
             });
         }
-        if curled_count == 4 {
+        if curled_count == 4 && !thumb {
             scores.push(Tier0Score {
                 gesture: Some(BuiltinGesture::ClosedFist),
                 score: 0.90,

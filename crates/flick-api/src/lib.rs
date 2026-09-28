@@ -39,7 +39,7 @@ use axum::{
 use bytes::Bytes;
 use futures::{SinkExt, Stream, StreamExt, stream};
 use image::{ColorType, codecs::jpeg::JpegEncoder, imageops::FilterType};
-use serde::de::DeserializeOwned;
+use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::sync::broadcast;
@@ -65,6 +65,8 @@ pub struct ApiConfig {
     pub allowed_origins: HashSet<String>,
     /// Whether debug/dev mode is enabled.
     pub dev: bool,
+    /// Whether `/health` requires the launch bearer token.
+    pub protect_health: bool,
 }
 
 impl ApiConfig {
@@ -85,6 +87,7 @@ impl ApiConfig {
             allowed_hosts,
             allowed_origins,
             dev: false,
+            protect_health: false,
         }
     }
 
@@ -209,6 +212,7 @@ pub fn router(state: ApiState) -> Router {
 
     Router::new()
         .route("/health", get(health))
+        .route("/updates", get(sidecar_updates))
         .route("/stream/{*camera_path}", get(stream_mjpeg))
         .route("/api/v1/openapi.json", get(openapi_json))
         .route("/api/v1/events", get(ws_events))
@@ -310,14 +314,18 @@ async fn security_middleware(
     let method = request.method().clone();
     check_host(&state, request.headers())?;
     check_origin(&state, request.headers())?;
-    if method != Method::OPTIONS && requires_bearer(&path) {
+    if method != Method::OPTIONS && requires_bearer(&state, &path) {
         check_bearer(&state, request.headers())?;
     }
     Ok(next.run(request).await)
 }
 
-fn requires_bearer(path: &str) -> bool {
-    path != "/health" && !path.starts_with("/stream/") && path != "/api/v1/events"
+fn requires_bearer(state: &ApiState, path: &str) -> bool {
+    if path == "/health" {
+        state.config.protect_health
+    } else {
+        !path.starts_with("/stream/") && path != "/api/v1/events"
+    }
 }
 
 fn check_host(state: &ApiState, headers: &HeaderMap) -> Result<(), ApiProblem> {
@@ -1094,6 +1102,17 @@ async fn health(State(state): State<Arc<ApiState>>) -> Json<HealthResponse> {
         status: "ok".to_owned(),
         version: DEFAULT_VERSION.to_owned(),
         uptime_s: state.started_at.elapsed().as_secs(),
+    })
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct SidecarUpdatesResponse {
+    busy_reason: Option<String>,
+}
+
+async fn sidecar_updates(State(state): State<Arc<ApiState>>) -> Json<SidecarUpdatesResponse> {
+    Json(SidecarUpdatesResponse {
+        busy_reason: state.updates.state().await.busy_reason,
     })
 }
 
