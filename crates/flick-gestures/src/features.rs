@@ -114,7 +114,8 @@ impl Point2 {
 
 impl Point3 {
     pub fn dot(self, other: Self) -> f32 {
-        self.x.mul_add(other.x, self.y.mul_add(other.y, self.z * other.z))
+        self.x
+            .mul_add(other.x, self.y.mul_add(other.y, self.z * other.z))
     }
 
     pub fn norm(self) -> f32 {
@@ -207,12 +208,8 @@ pub(crate) fn finger_extended(hand: &HandObservation, finger: Finger) -> bool {
                 world_point(hand, dip),
                 world_point(hand, tip),
             );
-            let wrist_distance = world_point(hand, tip)
-                .sub(world_point(hand, WRIST))
-                .norm();
-            let pip_distance = world_point(hand, pip)
-                .sub(world_point(hand, WRIST))
-                .norm();
+            let wrist_distance = world_point(hand, tip).sub(world_point(hand, WRIST)).norm();
+            let pip_distance = world_point(hand, pip).sub(world_point(hand, WRIST)).norm();
             pip_angle >= 155.0 && dip_angle >= 145.0 && wrist_distance > pip_distance * 1.25
         }
     }
@@ -223,12 +220,8 @@ pub(crate) fn finger_curled(hand: &HandObservation, finger: Finger) -> bool {
         return !thumb_extended(hand);
     }
     let (_, pip, _, tip) = finger_indices(finger);
-    let tip_distance = world_point(hand, tip)
-        .sub(world_point(hand, WRIST))
-        .norm();
-    let pip_distance = world_point(hand, pip)
-        .sub(world_point(hand, WRIST))
-        .norm();
+    let tip_distance = world_point(hand, tip).sub(world_point(hand, WRIST)).norm();
+    let pip_distance = world_point(hand, pip).sub(world_point(hand, WRIST)).norm();
     tip_distance <= pip_distance * 1.08 || !finger_extended(hand, finger)
 }
 
@@ -278,7 +271,11 @@ fn thumb_extended(hand: &HandObservation) -> bool {
 
 fn finger_angle_feature(hand: &HandObservation, finger: Finger) -> f32 {
     if matches!(finger, Finger::Thumb) {
-        return if finger_extended(hand, finger) { 1.0 } else { 0.0 };
+        return if finger_extended(hand, finger) {
+            1.0
+        } else {
+            0.0
+        };
     }
     let (mcp, pip, dip, _tip) = finger_indices(finger);
     (joint_angle(

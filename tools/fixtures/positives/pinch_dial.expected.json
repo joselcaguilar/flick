@@ -1,0 +1,38 @@
+[
+  {
+    "t_ms": 330,
+    "gesture_id": "builtin.pinch_dial",
+    "phase": "fired",
+    "value_milli": 100
+  },
+  {
+    "t_ms": 462,
+    "gesture_id": "builtin.pinch_dial",
+    "phase": "update",
+    "value_milli": 180
+  },
+  {
+    "t_ms": 594,
+    "gesture_id": "builtin.pinch_dial",
+    "phase": "update",
+    "value_milli": 260
+  },
+  {
+    "t_ms": 726,
+    "gesture_id": "builtin.pinch_dial",
+    "phase": "update",
+    "value_milli": 340
+  },
+  {
+    "t_ms": 858,
+    "gesture_id": "builtin.pinch_dial",
+    "phase": "update",
+    "value_milli": 420
+  },
+  {
+    "t_ms": 1155,
+    "gesture_id": "builtin.pinch_dial",
+    "phase": "end",
+    "value_milli": 420
+  }
+]

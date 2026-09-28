@@ -164,7 +164,10 @@ impl From<&GestureCandidate> for UiCandidate {
             gesture_id: candidate.gesture_id,
             track_id: candidate.track_id,
             confidence: candidate.confidence,
-            progress: candidate.progress.unwrap_or(candidate.confidence).clamp(0.0, 1.0),
+            progress: candidate
+                .progress
+                .unwrap_or(candidate.confidence)
+                .clamp(0.0, 1.0),
             value: candidate.value,
         }
     }

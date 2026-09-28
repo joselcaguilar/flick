@@ -203,7 +203,11 @@ impl ProtoKnn {
                 .collect();
             distances.sort_by(f32::total_cmp);
             let spread_index = ((distances.len().saturating_sub(1)) as f32 * 0.9).round() as usize;
-            let spread = distances.get(spread_index).copied().unwrap_or(0.05).max(0.05);
+            let spread = distances
+                .get(spread_index)
+                .copied()
+                .unwrap_or(0.05)
+                .max(0.05);
             prototypes.push(Prototype {
                 gesture_id: first_sample.gesture_id,
                 values,

@@ -291,10 +291,9 @@ impl TriggerFsmSet {
                         result.suppressed.push(suppression.clone());
                     }
                 } else if let Some(first) = resolved.first() {
-                    result.suppressed.push(suppressed(
-                        &first.candidate,
-                        SuppressionReason::Ambiguous,
-                    ));
+                    result
+                        .suppressed
+                        .push(suppressed(&first.candidate, SuppressionReason::Ambiguous));
                 }
                 if let Some(track) = self.tracks.get_mut(track_id) {
                     result.events.extend(track.update_absent(
@@ -307,9 +306,10 @@ impl TriggerFsmSet {
             };
 
             let track = self.tracks.entry(*track_id).or_default();
-            if track.active_gesture_id().is_some_and(|gesture_id| {
-                gesture_id != resolved_candidate.candidate.gesture_id
-            }) {
+            if track
+                .active_gesture_id()
+                .is_some_and(|gesture_id| gesture_id != resolved_candidate.candidate.gesture_id)
+            {
                 result.events.extend(track.update_absent(
                     frame.camera_id,
                     frame.captured_at,
@@ -344,9 +344,11 @@ impl TriggerFsmSet {
                 continue;
             }
             if let Some(track) = self.tracks.get_mut(&track_id) {
-                result
-                    .events
-                    .extend(track.update_absent(frame.camera_id, frame.captured_at, &self.config));
+                result.events.extend(track.update_absent(
+                    frame.camera_id,
+                    frame.captured_at,
+                    &self.config,
+                ));
             }
         }
         result
@@ -401,11 +403,12 @@ impl TriggerFsmSet {
         }
 
         if selected.is_some() {
-            if let Some(targeted) = matching
-                .iter()
-                .copied()
-                .find(|mapping| matches!(mapping.target_mode, TargetMode::Targeted | TargetMode::Either))
-            {
+            if let Some(targeted) = matching.iter().copied().find(|mapping| {
+                matches!(
+                    mapping.target_mode,
+                    TargetMode::Targeted | TargetMode::Either
+                )
+            }) {
                 return Ok((targeted, selected));
             }
             if matching
@@ -477,7 +480,9 @@ impl TrackState {
         if self
             .last_fire
             .get(&candidate.gesture_id)
-            .is_some_and(|last| now.duration_since(*last) < Duration::from_millis(mapping.cooldown_ms))
+            .is_some_and(|last| {
+                now.duration_since(*last) < Duration::from_millis(mapping.cooldown_ms)
+            })
             && !matches!(mapping.mode, TriggerMode::Repeat | TriggerMode::Dial)
         {
             return TrackProduced::Suppressed(SuppressionReason::Cooldown);
@@ -544,9 +549,10 @@ impl TrackState {
                 if now.duration_since(hold_since) < Duration::from_millis(config.hold_ms) {
                     return TrackProduced::None;
                 }
-                let should_fire = self.active.as_ref().map_or(true, |active| {
-                    !active.fired || now >= active.next_at
-                });
+                let should_fire = self
+                    .active
+                    .as_ref()
+                    .map_or(true, |active| !active.fired || now >= active.next_at);
                 if !should_fire {
                     return TrackProduced::None;
                 }
@@ -571,7 +577,10 @@ impl TrackState {
                     .as_ref()
                     .is_some_and(|active| active.gesture_id == candidate.gesture_id)
                 {
-                    let can_update = self.active.as_ref().is_some_and(|active| now >= active.next_at);
+                    let can_update = self
+                        .active
+                        .as_ref()
+                        .is_some_and(|active| now >= active.next_at);
                     if !can_update {
                         return TrackProduced::None;
                     }
@@ -609,8 +618,10 @@ impl TrackState {
         let Some(active) = active else {
             return Vec::new();
         };
-        if matches!(active.mode, TriggerMode::Hold | TriggerMode::Repeat | TriggerMode::Dial)
-            && active.fired
+        if matches!(
+            active.mode,
+            TriggerMode::Hold | TriggerMode::Repeat | TriggerMode::Dial
+        ) && active.fired
         {
             vec![GestureEvent {
                 id: GestureEventId::new(),

@@ -255,7 +255,11 @@ impl MotionTrack {
             {
                 continue;
             }
-            let open_count = self.samples.iter().filter(|sample| sample.open_palm).count();
+            let open_count = self
+                .samples
+                .iter()
+                .filter(|sample| sample.open_palm)
+                .count();
             if open_count * 5 < self.samples.len() * 3 {
                 continue;
             }
@@ -509,7 +513,10 @@ pub struct MotionTemplateSet {
 impl MotionTemplateSet {
     /// Trains templates from positive takes and returns quality metrics.
     #[must_use]
-    pub fn train(takes: &[MotionTake], feature_version: impl Into<String>) -> (Self, MotionQualityReport) {
+    pub fn train(
+        takes: &[MotionTake],
+        feature_version: impl Into<String>,
+    ) -> (Self, MotionQualityReport) {
         let set = Self {
             feature_version: feature_version.into(),
             templates: build_templates(takes),

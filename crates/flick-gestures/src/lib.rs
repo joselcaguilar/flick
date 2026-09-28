@@ -32,7 +32,7 @@ pub mod replay;
 pub mod tier0;
 
 pub use engine::{EngineUpdate, GestureEngine, GestureEngineConfig, UiCandidate};
-pub use features::{FeatureVector, FEATURE_VERSION_EMBEDDING, FEATURE_VERSION_LANDMARKS};
+pub use features::{FEATURE_VERSION_EMBEDDING, FEATURE_VERSION_LANDMARKS, FeatureVector};
 pub use fsm::{
     ArmConfig, FsmUpdate, GestureMapping, HandConstraint, PauseGestureConfig, SuppressedCandidate,
     TargetMode, TriggerConfig, TriggerFsmSet, TriggerMode,
@@ -47,7 +47,7 @@ pub use proto::{
 };
 pub use replay::{
     ExpectedEvent, HandFrameRecord, ReplayError, ReplayOutcome, ReplayRunner, compare_expected,
-    read_jsonl_str,
+    read_expected_str, read_jsonl_str,
 };
 pub use tier0::{
     CannedClassifierScorer, GeometricLandmarkScorer, Tier0Config, Tier0Recognizer, Tier0Score,
