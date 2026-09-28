@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Fetch, inspect, and document Flick Phase 0 model candidates.
 
-The default code path intentionally uses only the Python standard library so it
-can run under Homebrew Python 3.14 without downloading wheels. If `onnx` is
-available it is used; otherwise a tiny ONNX protobuf reader extracts model I/O.
+The fetch/inspect path intentionally uses only the Python standard library so it
+can run without downloading wheels. Gesture conversion uses the project-local
+uv environment pinned to Homebrew Python 3.12 plus Apache/MIT-licensed tools.
 """
 
 from __future__ import annotations
@@ -288,27 +288,41 @@ def inspect_onnx(path: Path) -> dict[str, object]:
         return inspect_onnx_fallback(path)
 
 
-def convert_gesture_with_tflite2onnx() -> int:
-    sources = [
-        CACHE / "gesture_task" / "hand_gesture_recognizer" / "gesture_embedder.tflite",
-        CACHE / "gesture_task" / "hand_gesture_recognizer" / "canned_gesture_classifier.tflite",
+def convert_gesture_with_tf2onnx() -> int:
+    conversions = [
+        (
+            CACHE / "gesture_task" / "hand_gesture_recognizer" / "gesture_embedder.tflite",
+            CACHE / "gesture_embedder.onnx",
+        ),
+        (
+            CACHE / "gesture_task" / "hand_gesture_recognizer" / "canned_gesture_classifier.tflite",
+            CACHE / "canned_gesture_classifier.onnx",
+        ),
     ]
-    missing = [str(p) for p in sources if not p.exists()]
+    missing = [str(src) for src, _ in conversions if not src.exists()]
     if missing:
         print(f"missing extracted TFLite sources: {missing}", file=sys.stderr)
         return 2
     try:
-        import tflite2onnx  # noqa: F401
+        import tf2onnx  # noqa: F401
     except ModuleNotFoundError:
-        print("tflite2onnx is not installed. Run with the 'tflite' extra, or use Python 3.12 for TensorFlow/tf2onnx.", file=sys.stderr)
+        print("tf2onnx is not installed. Run with the 'tensorflow' extra under Python 3.12.", file=sys.stderr)
         return 2
 
-    out_dir = CACHE / "converted"
-    out_dir.mkdir(parents=True, exist_ok=True)
     status = 0
-    for src in sources:
-        out = out_dir / f"{src.stem}.onnx"
-        cmd = [sys.executable, "-m", "tflite2onnx.convert", "--tflite_path", str(src), "--onnx_path", str(out)]
+    for src, out in conversions:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        cmd = [
+            sys.executable,
+            "-m",
+            "tf2onnx.convert",
+            "--tflite",
+            str(src),
+            "--output",
+            str(out),
+            "--opset",
+            "17",
+        ]
         print("+", " ".join(cmd))
         result = subprocess.run(cmd, cwd=ROOT, check=False)
         status = max(status, result.returncode)
@@ -348,7 +362,7 @@ def main() -> int:
     hash_cmd.add_argument("paths", nargs="+")
     hash_cmd.set_defaults(func=cmd_hash)
     conv = sub.add_parser("convert-gesture")
-    conv.set_defaults(func=lambda _args: sys.exit(convert_gesture_with_tflite2onnx()))
+    conv.set_defaults(func=lambda _args: sys.exit(convert_gesture_with_tf2onnx()))
     args = parser.parse_args()
     args.func(args)
     return 0
