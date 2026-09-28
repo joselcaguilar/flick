@@ -12,6 +12,7 @@ import { PreviewCanvas } from "../../components/domain";
 import { Badge, Button, GlassPanel, ListRow, Skeleton, useToast } from "../../components/ui";
 import { useLiveHands } from "../../events/useLiveHands";
 import { isTauri } from "../../platform/tauri";
+import { useCameraSetup } from "./useCameraSetup";
 
 function permissionTone(permission?: string | null) {
   if (permission === "authorized") return "success";
@@ -113,6 +114,29 @@ export function CamerasRoute() {
   const running = activeLive?.state === "running";
   const preview = useCameraPreviewTicket(activeCamera?.id ?? activeLive?.camera_id, running);
   const hands = useLiveHands(activeLive?.camera_id ?? activeCamera?.id);
+  const setup = useCameraSetup();
+  const blocked = permission === "denied" || permission === "restricted";
+  const setupLabel =
+    permission !== "authorized" ? "Allow camera" : cameras.data?.length ? "Start camera" : "Set up camera";
+
+  async function setUpCamera() {
+    try {
+      const result = await setup.allowAndStart(activeCamera?.device_ref ?? undefined);
+      if (result.permission !== "authorized") {
+        show({
+          tone: "warning",
+          title: "Camera access was not granted",
+          description: "Allow Flick in System Settings → Privacy & Security → Camera.",
+        });
+      }
+    } catch (error) {
+      show({
+        tone: "danger",
+        title: "Could not start the camera",
+        description: error instanceof Error ? error.message : "Check the camera connection and try again.",
+      });
+    }
+  }
 
   async function openCameraPrivacySettings() {
     if (!isTauri()) return;
@@ -137,7 +161,7 @@ export function CamerasRoute() {
         <div>
           <p className="route-path">Cameras</p>
           <h1 id="screen-title">Local cameras</h1>
-          <p>Phase 1 keeps setup local: built-in and Continuity cameras, permission state and live health.</p>
+          <p>Built-in and Continuity cameras. Video never leaves this Mac.</p>
         </div>
         <div className="header-actions">
           <Badge tone={permissionTone(permission)}>
@@ -146,6 +170,11 @@ export function CamerasRoute() {
           {permission === "denied" && isTauri() ? (
             <Button variant="primary" size="sm" loading={openingSettings} onClick={openCameraPrivacySettings}>
               Open System Settings
+            </Button>
+          ) : null}
+          {!blocked && !running ? (
+            <Button variant="primary" size="sm" loading={setup.busy} onClick={() => void setUpCamera()}>
+              {setupLabel}
             </Button>
           ) : null}
         </div>
@@ -187,8 +216,8 @@ export function CamerasRoute() {
           )}
           <p className="camera-note">
             {running
-              ? "Live MJPEG preview uses the engine ticket flow; hand geometry overlays stay local."
-              : "Start a local camera to show the live preview. RTSP setup, ROI drawing and Unifi guidance are Phase 2."}
+              ? "Video stays on this Mac. Flick keeps hand points, never images."
+              : "Start the camera to see the live preview. Network cameras (RTSP, UniFi Protect) come in a later release."}
           </p>
         </GlassPanel>
 

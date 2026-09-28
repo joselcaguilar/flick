@@ -1,8 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { retryEngineConnection } from "../../api/client";
-import { usePauseEngine, useResumeEngine, useStatus } from "../../api/hooks";
+import { usePauseEngine, useResumeEngine, useSettings, useStatus } from "../../api/hooks";
 import { restartEventStream, startEventStream } from "../../events/client";
 import { useEventStore } from "../../events/store";
 import { isMacApp } from "../../platform/tauri";
@@ -45,8 +45,11 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [retryingEngine, setRetryingEngine] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const status = useStatus();
+  const settings = useSettings();
+  const firstRunChecked = useRef(false);
   const events = useEventStore();
   const pause = usePauseEngine();
   const resume = useResumeEngine();
@@ -56,6 +59,14 @@ export function AppShell() {
   const mobileRoutes = useMemo(() => routes.filter((route) => route.mobile), []);
   const shellOverride = new URLSearchParams(location.search).get("shell");
   const macShell = isMacApp() || shellOverride === "macos";
+
+  useEffect(() => {
+    if (firstRunChecked.current || !settings.data) return;
+    firstRunChecked.current = true;
+    if (settings.data["onboarding.completed"] !== true && location.pathname === "/") {
+      navigate("/onboarding", { replace: true });
+    }
+  }, [settings.data, location.pathname, navigate]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

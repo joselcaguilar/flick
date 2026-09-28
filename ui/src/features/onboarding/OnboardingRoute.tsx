@@ -1,14 +1,11 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
   useCameraPreviewTicket,
-  useCameras,
   useCamerasAvailable,
-  useCreateCamera,
   useHaConnect,
   useHaDiscover,
   useHaEntities,
   usePatchSettings,
-  useStartCamera,
   useStatus,
 } from "../../api/hooks";
 import { ConfidenceMeter, DevicePill, GestureGlyph, PreviewCanvas } from "../../components/domain";
@@ -17,10 +14,10 @@ import { useLiveHands } from "../../events/useLiveHands";
 import {
   type CameraPermission,
   cameraPermissionStatus,
-  cameraRequestAccess,
   isTauri,
   openCameraPrivacySettings,
 } from "../../platform/tauri";
+import { useCameraSetup } from "../cameras/useCameraSetup";
 import "./styles.css";
 import { OnboardingTeachDeviceStep } from "../devices/Devices";
 
@@ -115,9 +112,7 @@ function PromiseItem({ mark, title, body }: { mark: ReactNode; title: string; bo
 export function OnboardingRoute() {
   const status = useStatus();
   const availableCameras = useCamerasAvailable();
-  const configuredCameras = useCameras();
-  const createCamera = useCreateCamera();
-  const startCamera = useStartCamera();
+  const cameraSetup = useCameraSetup();
   const [startedCameraId, setStartedCameraId] = useState<string>();
   const discovery = useHaDiscover();
   const lightEntities = useHaEntities("?domain=light");
@@ -138,7 +133,7 @@ export function OnboardingRoute() {
   const activeIndex = steps.findIndex((item) => item.id === step);
   const cameraCopy = cameraStateCopy(cameraPermission, cameraStarted);
   const selectedLight = lightEntities.data?.[0];
-  const cameraBusy = createCamera.isPending || startCamera.isPending;
+  const cameraBusy = cameraSetup.busy;
   const preview = useCameraPreviewTicket(startedCameraId, cameraStarted);
   const liveHands = useLiveHands(startedCameraId);
   const handTracked = cameraStarted && Boolean(liveHands?.hands.length);
@@ -193,40 +188,21 @@ export function OnboardingRoute() {
   }
 
   async function ensureCameraStarted() {
-    const availableResult = await availableCameras.refetch();
-    const cameraResult = await configuredCameras.refetch();
-    const availableList = availableResult.data ?? availableCameras.data ?? [];
-    const configuredList = cameraResult.data ?? configuredCameras.data ?? [];
-    const selectedAvailable =
-      availableList.find((camera) => camera.device_ref === cameraRef) ?? availableList[0];
-    const existing =
-      configuredList.find(
-        (camera) => camera.device_ref && camera.device_ref === selectedAvailable?.device_ref,
-      ) ?? configuredList[0];
-    const camera =
-      existing ??
-      (selectedAvailable
-        ? await createCamera.mutateAsync({
-            name: selectedAvailable.name,
-            kind: selectedAvailable.kind,
-            device_ref: selectedAvailable.device_ref,
-          })
-        : null);
-    if (!camera) throw new Error("No camera was found. Connect a camera, then check again.");
-
-    await startCamera.mutateAsync(camera.id);
+    const camera = await cameraSetup.ensureStarted(cameraRef);
+    setCameraRef(camera.device_ref ?? cameraRef);
     setStartedCameraId(camera.id);
-    setCameraRef(camera.device_ref ?? selectedAvailable?.device_ref ?? cameraRef);
     setCameraStarted(true);
   }
 
   async function allowCameraAndStart() {
     setCameraError(null);
     try {
-      const permission = isTauri() ? await cameraRequestAccess() : "authorized";
-      setCameraPermission(permission);
-      if (permission === "authorized") {
-        await ensureCameraStarted();
+      const result = await cameraSetup.allowAndStart(cameraRef);
+      setCameraPermission(result.permission);
+      if (result.camera) {
+        setCameraRef(result.camera.device_ref ?? cameraRef);
+        setStartedCameraId(result.camera.id);
+        setCameraStarted(true);
       }
     } catch (error) {
       setCameraError(errorMessage(error));

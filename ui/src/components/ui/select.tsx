@@ -28,6 +28,11 @@ export function Select({
             {items.map((item) => (
               <SelectPrimitive.Item key={item.value} className={cn("ui-select-item")} value={item.value}>
                 <SelectPrimitive.ItemText>{item.label}</SelectPrimitive.ItemText>
+                <SelectPrimitive.ItemIndicator className="ui-select-check">
+                  <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path d="m3.5 8.5 3 3 6-7" />
+                  </svg>
+                </SelectPrimitive.ItemIndicator>
               </SelectPrimitive.Item>
             ))}
           </SelectPrimitive.Viewport>
