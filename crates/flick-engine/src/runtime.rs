@@ -15,7 +15,7 @@ use std::{
 
 use anyhow::Context;
 use async_trait::async_trait;
-use axum::{Json, Router, routing::get};
+use axum::Router;
 use flick_api::{
     ActionDto, ActionOutcomeDto, ActionTargetDto, Anchor as ApiAnchor, ApiConfig, ApiGateways,
     ApiProblem, ApiState, AvailableCamera, CameraFormat, CameraStatus, EngineControl, EngineStatus,
@@ -48,7 +48,6 @@ use flick_spatial::{
 };
 use flick_store::Store;
 use flick_vision::{EpChoice, HandPipelineImpl, ModelSet};
-use serde::Serialize;
 use serde_json::json;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::{net::TcpListener, sync::Mutex};
@@ -69,7 +68,8 @@ pub async fn serve(runtime: RuntimeConfig, token: String) -> anyhow::Result<()> 
         .await
         .with_context(|| format!("failed to bind {bind_addr}"))?;
     let actual_port = listener.local_addr()?.port();
-    let api_config = api_config(&runtime, actual_port, token);
+    let mut api_config = api_config(&runtime, actual_port, token);
+    api_config.protect_health = runtime.sidecar;
 
     let store = Arc::new(Store::open(&runtime.data_dir)?);
     let app = Arc::new(EngineApp::new(runtime.clone(), Arc::clone(&store)));
@@ -113,20 +113,10 @@ pub async fn serve(runtime: RuntimeConfig, token: String) -> anyhow::Result<()> 
     if let Some(path) = runtime.fake_camera.as_deref() {
         app.start_file_camera(path).await?;
     }
-    let app_router = app_router.route("/updates", get(sidecar_updates));
     axum::serve(listener, app_router)
         .with_graceful_shutdown(shutdown_signal())
         .await
         .context("API server failed")
-}
-
-#[derive(Debug, Serialize)]
-struct SidecarUpdatesResponse {
-    busy_reason: Option<String>,
-}
-
-async fn sidecar_updates() -> Json<SidecarUpdatesResponse> {
-    Json(SidecarUpdatesResponse { busy_reason: None })
 }
 
 fn api_config(runtime: &RuntimeConfig, port: u16, token: String) -> ApiConfig {
