@@ -164,7 +164,52 @@
 .error-presets button {
   min-block-size: 2.25rem;
   padding-inline: 0.7rem;
-  text-transform: capitalize;
+}
+
+.camera-prime-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.8rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.camera-prime-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.camera-prime-list li::before {
+  content: "";
+  flex: 0 0 auto;
+  inline-size: 0.45rem;
+  block-size: 0.45rem;
+  border-radius: 50%;
+  background: var(--flick-accent-mint);
+}
+
+.camera-state-card {
+  display: grid;
+  gap: 0.35rem;
+  margin-block-start: 0.85rem;
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--flick-surface) 62%, transparent);
+  padding: 0.85rem;
+}
+
+.camera-state-card strong,
+.camera-state-card p {
+  margin: 0;
+}
+
+.camera-state-card[data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--flick-accent-red) 38%, var(--flick-border));
+}
+
+.camera-state-card[data-tone="warning"] {
+  border-color: color-mix(in srgb, var(--flick-accent-amber) 42%, var(--flick-border));
 }
 
 .onboarding-preview-card {

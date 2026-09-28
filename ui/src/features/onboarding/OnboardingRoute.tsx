@@ -1,20 +1,31 @@
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
+  useCameraPreviewTicket,
+  useCameras,
   useCamerasAvailable,
+  useCreateCamera,
   useHaConnect,
   useHaDiscover,
   useHaEntities,
   usePatchSettings,
+  useStartCamera,
   useStatus,
 } from "../../api/hooks";
 import { ConfidenceMeter, DevicePill, GestureGlyph, PreviewCanvas } from "../../components/domain";
 import { Badge, Button, GlassPanel, Input, ListRow, Select } from "../../components/ui";
 import type { HandObservationEvent } from "../../events/types";
+import {
+  type CameraPermission,
+  cameraPermissionStatus,
+  cameraRequestAccess,
+  isTauri,
+  openCameraPrivacySettings,
+} from "../../platform/tauri";
 import "./styles.css";
 import { OnboardingTeachDeviceStep } from "../devices/Devices";
 
 type StepId = "welcome" | "camera" | "ha" | "try" | "teach" | "control";
-type CameraPermission = "authorized" | "denied" | "restricted" | "not_determined";
+type CameraPermissionView = CameraPermission | "unknown";
 
 const steps: Array<{ id: StepId; label: string }> = [
   { id: "welcome", label: "Welcome" },
@@ -43,7 +54,28 @@ function errorMessage(error: unknown) {
   );
 }
 
-function cameraStateCopy(permission: CameraPermission) {
+const permissionLabels: Record<CameraPermissionView, string> = {
+  authorized: "Authorized",
+  denied: "Denied",
+  restricted: "Restricted",
+  not_determined: "Not determined",
+  unknown: "Checking",
+};
+
+function normalizeStatusPermission(value: unknown): CameraPermission | null {
+  return value === "authorized" || value === "denied" || value === "restricted" || value === "not_determined"
+    ? value
+    : null;
+}
+
+function cameraStateCopy(permission: CameraPermissionView, started: boolean) {
+  if (permission === "unknown") {
+    return {
+      tone: "neutral" as const,
+      title: "Checking camera permission",
+      body: "Flick is reading the engine and desktop permission state before it asks for anything.",
+    };
+  }
   if (permission === "denied") {
     return {
       tone: "danger" as const,
@@ -65,9 +97,16 @@ function cameraStateCopy(permission: CameraPermission) {
       body: "The next action opens the system camera prompt. Flick stores hand points, never camera images.",
     };
   }
+  if (!started) {
+    return {
+      tone: "accent" as const,
+      title: "Camera access is allowed",
+      body: "Start the selected camera to confirm the local preview before continuing.",
+    };
+  }
   return {
     tone: "success" as const,
-    title: "Hand tracked for 1 second",
+    title: "Live preview confirmed",
     body: "The skeleton overlay is live. You can pick another camera if this is not the room you want.",
   };
 }
@@ -84,16 +123,20 @@ function PromiseItem({ mark, title, body }: { mark: ReactNode; title: string; bo
 
 export function OnboardingRoute() {
   const status = useStatus();
-  const cameras = useCamerasAvailable();
+  const availableCameras = useCamerasAvailable();
+  const configuredCameras = useCameras();
+  const createCamera = useCreateCamera();
+  const startCamera = useStartCamera();
+  const previewTicket = useCameraPreviewTicket();
   const discovery = useHaDiscover();
   const lightEntities = useHaEntities("?domain=light");
   const connect = useHaConnect();
   const patchSettings = usePatchSettings();
   const [step, setStep] = useState<StepId>("welcome");
-  const [cameraPermission, setCameraPermission] = useState<CameraPermission>(
-    (status.data?.camera_permission as CameraPermission | undefined) ?? "authorized",
-  );
+  const [cameraPermission, setCameraPermission] = useState<CameraPermissionView>("unknown");
   const [cameraRef, setCameraRef] = useState("avfoundation:0");
+  const [cameraStarted, setCameraStarted] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const [baseUrl, setBaseUrl] = useState("http://homeassistant.local:8123");
   const [token, setToken] = useState("demo-valid-token");
   const [haError, setHaError] = useState<string | null>(null);
@@ -101,13 +144,108 @@ export function OnboardingRoute() {
   const [demoMode, setDemoMode] = useState(false);
   const [tryState, setTryState] = useState<"idle" | "listening" | "done">("idle");
   const activeIndex = steps.findIndex((item) => item.id === step);
-  const cameraCopy = cameraStateCopy(cameraPermission);
+  const cameraCopy = cameraStateCopy(cameraPermission, cameraStarted);
   const selectedLight = lightEntities.data?.[0];
+  const cameraBusy = createCamera.isPending || startCamera.isPending || previewTicket.isPending;
 
   const currentCamera = useMemo(
-    () => cameras.data?.find((camera) => camera.device_ref === cameraRef) ?? cameras.data?.[0],
-    [cameraRef, cameras.data],
+    () =>
+      availableCameras.data?.find((camera) => camera.device_ref === cameraRef) ?? availableCameras.data?.[0],
+    [availableCameras.data, cameraRef],
   );
+
+  useEffect(() => {
+    const enginePermission = normalizeStatusPermission(status.data?.camera_permission);
+    const cameraPermission = normalizeStatusPermission(status.data?.cameras?.[0]?.camera_permission);
+    const nextPermission = enginePermission ?? cameraPermission;
+    if (nextPermission) setCameraPermission(nextPermission);
+  }, [status.data?.camera_permission, status.data?.cameras]);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let canceled = false;
+    cameraPermissionStatus()
+      .then((permission) => {
+        if (!canceled) setCameraPermission(permission);
+      })
+      .catch((error) => {
+        if (!canceled) setCameraError(errorMessage(error));
+      });
+    return () => {
+      canceled = true;
+    };
+  }, []);
+
+  async function checkCameraPermission() {
+    setCameraError(null);
+    try {
+      if (isTauri()) {
+        const permission = await cameraPermissionStatus();
+        setCameraPermission(permission);
+        if (permission === "authorized") await ensureCameraStarted();
+        return;
+      }
+      const nextStatus = await status.refetch();
+      const permission =
+        normalizeStatusPermission(nextStatus.data?.camera_permission) ??
+        normalizeStatusPermission(nextStatus.data?.cameras?.[0]?.camera_permission) ??
+        "not_determined";
+      setCameraPermission(permission);
+      if (permission === "authorized") await ensureCameraStarted();
+    } catch (error) {
+      setCameraError(errorMessage(error));
+    }
+  }
+
+  async function ensureCameraStarted() {
+    const availableResult = await availableCameras.refetch();
+    const cameraResult = await configuredCameras.refetch();
+    const availableList = availableResult.data ?? availableCameras.data ?? [];
+    const configuredList = cameraResult.data ?? configuredCameras.data ?? [];
+    const selectedAvailable =
+      availableList.find((camera) => camera.device_ref === cameraRef) ?? availableList[0];
+    const existing =
+      configuredList.find(
+        (camera) => camera.device_ref && camera.device_ref === selectedAvailable?.device_ref,
+      ) ?? configuredList[0];
+    const camera =
+      existing ??
+      (selectedAvailable
+        ? await createCamera.mutateAsync({
+            name: selectedAvailable.name,
+            kind: selectedAvailable.kind,
+            device_ref: selectedAvailable.device_ref,
+          })
+        : null);
+    if (!camera) throw new Error("No camera was found. Connect a camera, then check again.");
+
+    await startCamera.mutateAsync(camera.id);
+    await previewTicket.mutateAsync(camera.id).catch(() => undefined);
+    setCameraRef(camera.device_ref ?? selectedAvailable?.device_ref ?? cameraRef);
+    setCameraStarted(true);
+  }
+
+  async function allowCameraAndStart() {
+    setCameraError(null);
+    try {
+      const permission = isTauri() ? await cameraRequestAccess() : "authorized";
+      setCameraPermission(permission);
+      if (permission === "authorized") {
+        await ensureCameraStarted();
+      }
+    } catch (error) {
+      setCameraError(errorMessage(error));
+    }
+  }
+
+  async function openCameraSettings() {
+    setCameraError(null);
+    try {
+      await openCameraPrivacySettings();
+    } catch (error) {
+      setCameraError(errorMessage(error));
+    }
+  }
 
   async function connectHomeAssistant() {
     setHaError(null);
@@ -193,61 +331,88 @@ export function OnboardingRoute() {
           <GlassPanel className="onboarding-screen camera-screen">
             <div className="onboarding-split">
               <div>
-                <Badge tone={cameraCopy.tone}>{cameraPermission.replace("_", " ")}</Badge>
+                <Badge tone={cameraCopy.tone}>{permissionLabels[cameraPermission]}</Badge>
                 <h2>Allow camera access.</h2>
-                <p>{cameraCopy.body}</p>
+                <p>
+                  Flick needs a local camera stream only to calculate hand points. It does not save video.
+                </p>
+                <ul className="camera-prime-list">
+                  <li>macOS asks once; you can revoke access in System Settings.</li>
+                  <li>After access is allowed, Flick creates a camera row if none exists.</li>
+                  <li>The live skeleton preview confirms the selected camera is running.</li>
+                </ul>
                 <div className="onboarding-field">
                   <span>Camera</span>
                   <Select
                     label="Camera"
                     value={cameraRef}
                     onValueChange={setCameraRef}
-                    items={(cameras.data ?? []).map((camera) => ({
+                    items={(
+                      availableCameras.data ?? [{ device_ref: cameraRef, name: "Checking cameras…" }]
+                    ).map((camera) => ({
                       value: camera.device_ref,
                       label: camera.name,
                     }))}
                   />
                 </div>
-                <div className="permission-grid">
-                  {(["authorized", "not_determined", "denied", "restricted"] as CameraPermission[]).map(
-                    (state) => (
-                      <button
-                        key={state}
-                        type="button"
-                        data-active={cameraPermission === state}
-                        onClick={() => setCameraPermission(state)}
-                      >
-                        {state.replace("_", " ")}
-                      </button>
-                    ),
-                  )}
+                <div className="camera-state-card" data-tone={cameraCopy.tone}>
+                  <strong>{cameraCopy.title}</strong>
+                  <p>{cameraCopy.body}</p>
                 </div>
+                {cameraError ? (
+                  <p className="inline-error" role="alert">
+                    {cameraError}
+                  </p>
+                ) : null}
               </div>
               <div>
                 <PreviewCanvas
                   alt={`${currentCamera?.name ?? "Camera"} preview with a tracked hand`}
-                  hands={cameraPermission === "authorized" ? [mockHand] : []}
-                  ray={{ origin2d: [0.48, 0.64], tip2d: [0.73, 0.24], model: "eye" }}
+                  hands={cameraStarted ? [mockHand] : []}
+                  ray={cameraStarted ? { origin2d: [0.48, 0.64], tip2d: [0.73, 0.24], model: "eye" } : null}
                 />
                 <div className="preview-overlay-card onboarding-preview-card">
-                  <DevicePill name="Ventilador dormitorio" domain="fan" detail="demo target" />
-                  <ConfidenceMeter
-                    value={cameraPermission === "authorized" ? 0.92 : 0.12}
-                    label="Hand tracked"
+                  <DevicePill
+                    name={currentCamera?.name ?? "Camera"}
+                    domain="camera"
+                    detail={cameraStarted ? "running locally" : "not started"}
                   />
+                  <ConfidenceMeter value={cameraStarted ? 0.92 : 0.12} label="Hand tracked" />
                 </div>
               </div>
             </div>
             <div className="onboarding-actions">
-              <Button
-                variant="primary"
-                disabled={cameraPermission === "denied" || cameraPermission === "restricted"}
-                onClick={next}
-              >
-                {cameraPermission === "authorized" ? "Continue" : "Allow camera"}
-              </Button>
-              <Button variant="ghost" onClick={() => setCameraPermission("authorized")}>
-                Preview granted state
+              {cameraPermission === "denied" || cameraPermission === "restricted" ? (
+                <>
+                  <Button variant="primary" onClick={() => void openCameraSettings()}>
+                    Open System Settings
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => void checkCameraPermission()}
+                    loading={cameraBusy}
+                  >
+                    Check again
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="primary"
+                  loading={cameraBusy}
+                  onClick={() => {
+                    if (cameraStarted) next();
+                    else void allowCameraAndStart();
+                  }}
+                >
+                  {cameraStarted
+                    ? "Continue"
+                    : cameraPermission === "authorized"
+                      ? "Start camera"
+                      : "Allow camera"}
+                </Button>
+              )}
+              <Button variant="ghost" onClick={() => setStep("ha")}>
+                Skip camera for now
               </Button>
             </div>
           </GlassPanel>
