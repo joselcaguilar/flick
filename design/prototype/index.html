@@ -1,253 +1,227 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Flick P1-700 static prototype</title>
+  <title>Flick Liquid Command Remote prototype</title>
   <link rel="stylesheet" href="../tailwind-theme.css">
   <link rel="stylesheet" href="prototype.css">
 </head>
 <body>
 <!--
-THESIS: Flick is a sightline cue desk, not a generic smart-home dashboard; every view shows what the camera sees, what is selected, and what happened.
-OWN-WORLD: low-glare booth neutrals, cyan sightlines, amber waiting, green done, red failed, Atkinson Hyperlegible, clipped lens panels and cue-key controls.
-STORY: a user checks the local watcher, sees the hand overlay, teaches Ventilador dormitorio by pointing, then trusts the HUD from the couch.
-FIRST VIEWPORT: desktop app shell with status rail left, live preview stage center, activity/update rail right; primary action sits beside the status copy.
-FORM: grounded candidate 6 from seed dfb11cf8, staged as a cue desk with persistent sightline preview and glanceable HUD cards.
+THESIS: Flick is a Raycast-like Liquid Command Remote, not a cue-sheet dashboard; the live preview is the command surface and every action has a visible keyboard path.
+OWN-WORLD: dark-first macOS liquid glass, subtle blue/violet gradients, native system type, hairline alpha borders, floating sidebar/toolbar, glass HUD capsule, opaque fallbacks.
+STORY: the owner checks the local watcher, sees Ventilador dormitorio selected, opens ⌘K when needed, teaches by pointing, and trusts clear HUD outcomes.
+FIRST VIEWPORT: floating glass sidebar left, compact toolbar top, preview hero center with selected ring, recent activity and status as glass overlays; theme toggle sits in toolbar.
+FORM: owner-pinned Raycast-like pro tool adapted to macOS 27 Liquid Glass; old Sightline Cue Desk is the explicit anti-reference.
 -->
 <a class="skip-link" href="#main">Skip to prototype</a>
-<header class="page-hero" aria-labelledby="page-title">
-  <div>
-    <p class="system-label">P1-700 static prototype · Sightline Cue Desk</p>
-    <h1 id="page-title">Flick sees the hand, locks the device, then shows the cue.</h1>
-    <p class="hero-copy">No camera frames are stored here. The prototype uses skeleton placeholders, local fonts and bundled SVG glyphs.</p>
+<div class="ambient" aria-hidden="true"></div>
+
+<header class="topbar flick-glass" aria-label="Prototype toolbar">
+  <div class="brand-lockup" aria-label="Flick">
+    <span class="app-dot">F</span>
+    <span>Flick</span>
   </div>
-  <div class="theme-proof" aria-label="Theme coverage">
-    <span>Light</span>
-    <span data-theme="dark">Dark</span>
-    <span data-theme="high-contrast">High contrast HUD</span>
-  </div>
+  <button type="button" class="command-trigger" data-open-command>
+    <span>Search commands</span><kbd>⌘K</kbd>
+  </button>
+  <fieldset class="theme-toggle" aria-label="Theme">
+    <legend>Theme</legend>
+    <label><input type="radio" name="theme" value="system" checked> System</label>
+    <label><input type="radio" name="theme" value="light"> Light</label>
+    <label><input type="radio" name="theme" value="dark"> Dark</label>
+  </fieldset>
 </header>
 
-<main id="main">
-  <section class="app-frame" aria-labelledby="home-title">
-    <aside class="app-nav" aria-label="Flick sections">
-      <div class="brand-mark" aria-hidden="true">F</div>
-      <nav>
-        <a aria-current="page" href="#home-title">Home</a>
-        <a href="#teach-title">Devices</a>
-        <a href="#hud-title">HUD</a>
-      </nav>
-      <button type="button" class="quiet-button">Pause 15 min</button>
-    </aside>
+<main id="main" class="shell">
+  <aside class="sidebar flick-glass" aria-label="Primary navigation">
+    <nav>
+      <a href="#home" aria-current="page"><span>⌘1</span>Home</a>
+      <a href="#teach"><span>⌘2</span>Devices</a>
+      <a href="#hud"><span>⌘3</span>HUD</a>
+      <a href="#commands"><span>⌘K</span>Commands</a>
+    </nav>
+    <button type="button" class="pause-button">Pause 15 min <kbd>⌥⌘F</kbd></button>
+  </aside>
 
-    <div class="app-main">
+  <div class="content-stack">
+    <section id="home" class="dashboard surface-shell" aria-labelledby="home-title">
       <div class="section-heading">
         <div>
-          <p class="system-label">Home</p>
-          <h2 id="home-title">Dashboard</h2>
+          <p class="label-line">Home / Dashboard</p>
+          <h1 id="home-title">Point, lock, flick.</h1>
+          <p>Flick is watching locally. Video stays on this Mac.</p>
         </div>
-        <button type="button" class="primary-button">Teach a device</button>
+        <button type="button" class="primary-action">Teach a device <kbd>⌘T</kbd></button>
       </div>
 
-      <div class="update-banner" role="status" aria-live="polite">
-        <strong>Update ready</strong>
-        <span>Flick 1.3 is ready — restart to update</span>
-        <button type="button">Restart</button>
-      </div>
-
-      <div class="dashboard-grid">
-        <section class="status-card" aria-labelledby="camera-status">
-          <span class="status-icon">✓</span>
+      <section class="preview-hero" aria-labelledby="preview-title">
+        <div class="preview-toolbar flick-glass">
           <div>
-            <h3 id="camera-status">Camera</h3>
-            <p>MacBook Camera · watching</p>
+            <h2 id="preview-title">Live preview</h2>
+            <p>Skeleton overlay placeholder · MacBook Camera</p>
           </div>
-        </section>
-        <section class="status-card" aria-labelledby="ha-status">
-          <span class="status-icon">✓</span>
-          <div>
-            <h3 id="ha-status">Home Assistant</h3>
-            <p>Connected on the local network</p>
-          </div>
-        </section>
-        <section class="status-card" aria-labelledby="engine-status">
-          <span class="status-icon">●</span>
-          <div>
-            <h3 id="engine-status">Engine</h3>
-            <p>Watching · gestures enabled</p>
-          </div>
-        </section>
-        <section class="status-card" aria-labelledby="place-status">
-          <span class="status-icon">✓</span>
-          <div>
-            <h3 id="place-status">Place</h3>
-            <p>Bedroom desk · OK</p>
-          </div>
-        </section>
-      </div>
-
-      <section class="preview-card" aria-labelledby="preview-title">
-        <div class="card-heading">
-          <div>
-            <h3 id="preview-title">Live preview</h3>
-            <p>Skeleton overlay placeholder. Video stays on this Mac.</p>
-          </div>
-          <span class="chip active">Pointing ray on</span>
+          <span class="status-pill on"><span aria-hidden="true">●</span> Watching</span>
         </div>
-        <div class="preview-stage" role="img" aria-label="Skeleton overlay placeholder with a hand ray pointing toward Ventilador dormitorio">
-          <svg viewBox="0 0 720 390" aria-hidden="true" class="overlay-svg">
+        <div class="preview-stage" role="img" aria-label="Skeleton overlay placeholder with selected-device ring around Ventilador dormitorio">
+          <svg viewBox="0 0 980 560" aria-hidden="true" class="overlay-svg">
             <defs>
-              <pattern id="stage-grid" width="48" height="48" patternUnits="userSpaceOnUse">
-                <path d="M48 0H0v48" fill="none" stroke="currentColor" stroke-opacity="0.2" />
-              </pattern>
+              <linearGradient id="rayGradient" x1="0" x2="1">
+                <stop stop-color="#006DFF"/>
+                <stop offset="1" stop-color="#6D5DF7"/>
+              </linearGradient>
+              <radialGradient id="previewGlow" cx="72%" cy="20%" r="60%">
+                <stop stop-color="#006DFF" stop-opacity="0.20"/>
+                <stop offset="1" stop-color="#006DFF" stop-opacity="0"/>
+              </radialGradient>
             </defs>
-            <rect width="720" height="390" rx="28" fill="url(#stage-grid)" />
-            <path class="skeleton" d="M280 278l36-42 30 22 34-54 40 62" />
-            <path class="skeleton" d="M346 258l-14 42m14-42l28 36m6-90l-18-34m18 34l44-18" />
-            <path class="ray" d="M424 186L608 92" />
-            <circle class="target-ring" cx="608" cy="92" r="34" />
-            <text x="462" y="80" class="svg-label">Ventilador dormitorio?</text>
-            <text x="48" y="342" class="svg-label muted">Show me your hand ✋</text>
+            <rect width="980" height="560" rx="42" fill="url(#previewGlow)"/>
+            <path class="skeleton" d="M382 410l50-72 43 42 55-104 74 96"/>
+            <path class="skeleton fine" d="M475 380l-24 88m24-88 42 70m13-174-28-84m28 84 92-48"/>
+            <path class="ray" d="M622 228 808 126"/>
+            <circle class="selection-ring" cx="808" cy="126" r="58"/>
+            <path class="selection-ring-progress" d="M808 68a58 58 0 1 1-41 17"/>
           </svg>
-          <div class="skeleton-badge">Current top gesture · Point · steady</div>
+          <div class="device-chip flick-glass">
+            <img src="../icons/fan.svg" alt="" width="22" height="22">
+            <div><strong>Ventilador dormitorio</strong><span>selected · 4 s</span></div>
+          </div>
+          <div class="confidence-sheet flick-glass">
+            <span>Ray steady</span><strong>4° off — great</strong>
+          </div>
         </div>
       </section>
-    </div>
 
-    <aside class="activity-rail" aria-labelledby="activity-title">
-      <section class="rail-card">
-        <h3 id="activity-title">Recent activity</h3>
-        <ol class="activity-list">
-          <li><span>✓</span><strong>Ventilador dormitorio</strong><small>Speed 1 · done</small></li>
-          <li><span>↻</span><strong>Circle clockwise</strong><small>Waiting for a selected device</small></li>
-          <li><span>!</span><strong>Home Assistant</strong><small>Can't reach Home Assistant. Flick will keep trying — your camera is paused meanwhile.</small></li>
-        </ol>
-      </section>
-      <section class="rail-card">
-        <h3>Quick actions</h3>
-        <div class="action-stack">
-          <button type="button">Add mapping</button>
-          <button type="button">Record gesture</button>
-        </div>
-      </section>
-    </aside>
-  </section>
-
-  <section class="app-frame dark-showcase" data-theme="dark" aria-labelledby="dark-title">
-    <div class="dark-copy">
-      <p class="system-label">Dark mode</p>
-      <h2 id="dark-title">The same cue desk works when the room is dim.</h2>
-      <p>Dark mode keeps the preview quiet and raises cyan sightlines only when the user is aiming.</p>
-    </div>
-    <div class="mini-preview" role="img" aria-label="Dark-mode preview stage with cyan target ring">
-      <div class="mini-ray"></div>
-      <span>Ventilador dormitorio selected</span>
-    </div>
-  </section>
-
-  <section class="teach-frame" aria-labelledby="teach-title">
-    <div class="section-heading">
-      <div>
-        <p class="system-label">Teach a device · Point from spot 1</p>
-        <h2 id="teach-title">Point at Ventilador dormitorio and hold still.</h2>
+      <div class="dashboard-lower">
+        <section class="update-banner flick-glass" role="status" aria-live="polite">
+          <span class="banner-icon">↻</span>
+          <div><strong>Update ready</strong><span>Flick 1.3 is ready — restart to update</span></div>
+          <button type="button">Restart</button>
+        </section>
+        <section class="status-strip flick-glass" aria-label="Status">
+          <article><span>Camera</span><strong>MacBook · watching</strong></article>
+          <article><span>Home Assistant</span><strong>Connected</strong></article>
+          <article><span>Place</span><strong>Bedroom desk · OK</strong></article>
+        </section>
+        <section class="activity-panel flick-glass" aria-labelledby="activity-title">
+          <h2 id="activity-title">Recent activity</h2>
+          <ol>
+            <li><span class="state done">✓</span><div><strong>Ventilador dormitorio · speed 1</strong><small>Done · Home Assistant confirmed</small></div></li>
+            <li><span class="state selected">↻</span><div><strong>Circle clockwise</strong><small>Waiting for a selected device</small></div></li>
+            <li><span class="state failed">!</span><div><strong>Home Assistant</strong><small>Can't reach Home Assistant. Flick will keep trying — your camera is paused meanwhile.</small></div></li>
+          </ol>
+        </section>
       </div>
-      <span class="chip">1 s steady capture</span>
-    </div>
-    <div class="teach-layout">
-      <section class="teach-stage" aria-label="Teaching preview with live ray feedback">
-        <svg viewBox="0 0 740 430" aria-hidden="true" class="overlay-svg">
-          <rect x="0" y="0" width="740" height="430" rx="32" class="stage-fill" />
-          <path class="skeleton" d="M292 316l40-48 28 30 36-68 52 66" />
-          <path class="skeleton" d="M360 298l-16 54m16-54l30 44m6-112l-16-52m16 52l54-40" />
-          <path class="ray" d="M450 190L642 105" />
-          <circle class="dwell-ring" cx="642" cy="105" r="46" />
-          <path class="pinned-ray" d="M450 190L618 118" />
-          <text x="454" y="82" class="svg-label">Ray steady · capturing</text>
-          <text x="48" y="382" class="svg-label muted">No devices taught: Point at something in the room — Flick will remember it.</text>
-        </svg>
-      </section>
-      <aside class="teach-steps">
-        <h3>What Flick is saving</h3>
-        <ul>
-          <li><strong>Device:</strong> Ventilador dormitorio</li>
-          <li><strong>Entity:</strong> <code>fan.ventilador_dormitorio</code></li>
-          <li><strong>Spot:</strong> 1 of 2</li>
-          <li><strong>Capture:</strong> median pointing ray, not a camera image</li>
-        </ul>
-        <div class="coach-card" role="status">
-          <strong>Hold still</strong>
-          <span>The ring fills when the ray jitters less than 2°.</span>
-        </div>
-      </aside>
-    </div>
-  </section>
+    </section>
 
-  <section class="hud-section" aria-labelledby="hud-title">
-    <div class="section-heading">
-      <div>
-        <p class="system-label">HUD overlay</p>
-        <h2 id="hud-title">Selected, done and failed over light and dark wallpapers.</h2>
+    <section id="teach" class="teach surface-shell" aria-labelledby="teach-title">
+      <div class="section-heading compact">
+        <div>
+          <p class="label-line">Teach a device / Spot 1</p>
+          <h2 id="teach-title">Point at Ventilador dormitorio and hold still.</h2>
+        </div>
+        <span class="status-pill">1 s steady capture</span>
       </div>
-      <span class="chip">Text ≥ 20 px</span>
-    </div>
-    <div class="hud-grid">
-      <article class="wallpaper light-wall" aria-label="Selected HUD over light wallpaper">
-        <div class="hud-pill selected" role="status" aria-label="Ventilador dormitorio selected, four seconds remaining">
-          <div class="hud-ring" aria-hidden="true">4 s</div>
-          <div>
-            <strong>Ventilador dormitorio</strong>
-            <span>selected · ↻ speed 1 · ✋✋ off</span>
-          </div>
+      <div class="teach-grid">
+        <div class="teach-preview preview-stage" role="img" aria-label="Teaching preview with ray feedback">
+          <svg viewBox="0 0 900 520" aria-hidden="true" class="overlay-svg">
+            <defs><linearGradient id="teachRay" x1="0" x2="1"><stop stop-color="#006DFF"/><stop offset="1" stop-color="#6D5DF7"/></linearGradient></defs>
+            <path class="skeleton" d="M344 392l48-66 42 39 54-106 72 94"/>
+            <path class="skeleton fine" d="M434 365l-22 82m22-82 42 65m12-171-26-86m26 86 86-44"/>
+            <path class="ray teach-ray" d="M574 216 750 118"/>
+            <circle class="dwell-ring" cx="750" cy="118" r="64"/>
+          </svg>
+          <div class="device-chip flick-glass"><img src="../icons/fan.svg" alt="" width="22" height="22"><div><strong>Capturing spot 1</strong><span>Median ray only · no camera image saved</span></div></div>
         </div>
-      </article>
-      <article class="wallpaper dark-wall" data-theme="dark" aria-label="Selected HUD over dark wallpaper">
-        <div class="hud-pill selected" role="status" aria-label="Ventilador dormitorio selected, four seconds remaining">
-          <div class="hud-ring" aria-hidden="true">4 s</div>
-          <div>
-            <strong>Ventilador dormitorio</strong>
-            <span>selected · ↻ speed 1 · ✋✋ off</span>
-          </div>
+        <aside class="teach-sheet flick-glass">
+          <h3>What Flick is saving</h3>
+          <dl>
+            <div><dt>Device</dt><dd>Ventilador dormitorio</dd></div>
+            <div><dt>Entity</dt><dd><code>fan.ventilador_dormitorio</code></dd></div>
+            <div><dt>Spot</dt><dd>1 of 2</dd></div>
+            <div><dt>Next</dt><dd>Take one or two steps to the side and point again.</dd></div>
+          </dl>
+          <p class="coach">Hold still. The ring fills when the ray jitters less than 2°.</p>
+        </aside>
+      </div>
+    </section>
+
+    <section id="commands" class="commands-demo surface-shell" aria-labelledby="commands-title">
+      <div class="section-heading compact">
+        <div>
+          <p class="label-line">Command palette</p>
+          <h2 id="commands-title">Keyboard-first control path.</h2>
         </div>
-      </article>
-      <article class="wallpaper light-wall" aria-label="Done HUD over light wallpaper">
-        <div class="hud-pill done" role="status" aria-label="Ventilador dormitorio speed one done">
-          <div class="hud-result" aria-hidden="true">✓</div>
-          <div>
-            <strong>Ventilador dormitorio · speed 1</strong>
-            <span>Done · Home Assistant confirmed</span>
-          </div>
+        <button type="button" class="ghost-action" data-open-command>Open palette <kbd>⌘K</kbd></button>
+      </div>
+      <div class="command-card flick-glass" aria-label="Command palette preview">
+        <div class="command-search"><span>⌘K</span><input aria-label="Command search preview" value="teach" readonly></div>
+        <div class="command-row selected"><span>Teach a device</span><kbd>⌘T</kbd></div>
+        <div class="command-row"><span>Add mapping</span><kbd>⌘M</kbd></div>
+        <div class="command-row"><span>Pause 15 min</span><kbd>⌥⌘F</kbd></div>
+      </div>
+    </section>
+
+    <section id="hud" class="hud-section surface-shell" aria-labelledby="hud-title">
+      <div class="section-heading compact">
+        <div>
+          <p class="label-line">HUD / Desktop only</p>
+          <h2 id="hud-title">Floating glass capsule over light and dark wallpapers.</h2>
         </div>
-      </article>
-      <article class="wallpaper dark-wall" data-theme="dark" aria-label="Done HUD over dark wallpaper">
-        <div class="hud-pill done" role="status" aria-label="Ventilador dormitorio speed one done">
-          <div class="hud-result" aria-hidden="true">✓</div>
-          <div>
-            <strong>Ventilador dormitorio · speed 1</strong>
-            <span>Done · Home Assistant confirmed</span>
-          </div>
-        </div>
-      </article>
-      <article class="wallpaper light-wall" aria-label="Failed HUD over light wallpaper">
-        <div class="hud-pill failed" role="status" aria-label="Ventilador dormitorio failed because Home Assistant is unavailable">
-          <div class="hud-result" aria-hidden="true">✕</div>
-          <div>
-            <strong>Ventilador dormitorio</strong>
-            <span>Failed · Home Assistant unavailable</span>
-          </div>
-        </div>
-      </article>
-      <article class="wallpaper dark-wall" data-theme="dark" aria-label="Failed HUD over dark wallpaper">
-        <div class="hud-pill failed" role="status" aria-label="Ventilador dormitorio failed because Home Assistant is unavailable">
-          <div class="hud-result" aria-hidden="true">✕</div>
-          <div>
-            <strong>Ventilador dormitorio</strong>
-            <span>Failed · Home Assistant unavailable</span>
-          </div>
-        </div>
-      </article>
-    </div>
-  </section>
+        <span class="status-pill">Text ≥ 20 px</span>
+      </div>
+      <div class="hud-grid">
+        <article class="wallpaper light-wall"><div class="hud-pill selected flick-glass" role="status"><span class="hud-icon">4 s</span><div><strong>Ventilador dormitorio</strong><span>selected · ↻ speed 1 · ✋✋ off</span></div></div></article>
+        <article class="wallpaper dark-wall"><div class="hud-pill selected flick-glass" role="status"><span class="hud-icon">4 s</span><div><strong>Ventilador dormitorio</strong><span>selected · ↻ speed 1 · ✋✋ off</span></div></div></article>
+        <article class="wallpaper light-wall"><div class="hud-pill done flick-glass" role="status"><span class="hud-icon">✓</span><div><strong>Ventilador dormitorio · speed 1</strong><span>Done · Home Assistant confirmed</span></div></div></article>
+        <article class="wallpaper dark-wall"><div class="hud-pill done flick-glass" role="status"><span class="hud-icon">✓</span><div><strong>Ventilador dormitorio · speed 1</strong><span>Done · Home Assistant confirmed</span></div></div></article>
+        <article class="wallpaper light-wall"><div class="hud-pill failed flick-glass" role="status"><span class="hud-icon">✕</span><div><strong>Ventilador dormitorio</strong><span>Failed · Home Assistant unavailable</span></div></div></article>
+        <article class="wallpaper dark-wall"><div class="hud-pill failed flick-glass" role="status"><span class="hud-icon">✕</span><div><strong>Ventilador dormitorio</strong><span>Failed · Home Assistant unavailable</span></div></div></article>
+      </div>
+    </section>
+  </div>
 </main>
+
+<nav class="mobile-tabs flick-glass" aria-label="Mobile navigation">
+  <a href="#home" aria-current="page">Home</a>
+  <a href="#teach">Devices</a>
+  <a href="#commands">⌘K</a>
+  <a href="#hud">HUD</a>
+</nav>
+
+<div class="palette-backdrop" data-palette hidden>
+  <section class="palette flick-glass" role="dialog" aria-modal="true" aria-labelledby="palette-title">
+    <div class="command-search"><span>⌘K</span><input id="palette-title" aria-label="Search commands" value="" placeholder="Search Flick commands"></div>
+    <button class="command-row selected" type="button"><span>Teach a device</span><kbd>⌘T</kbd></button>
+    <button class="command-row" type="button"><span>Add mapping</span><kbd>⌘M</kbd></button>
+    <button class="command-row" type="button"><span>Record gesture</span><kbd>⌘R</kbd></button>
+    <button class="command-row" type="button"><span>Pause 15 min</span><kbd>⌥⌘F</kbd></button>
+    <button class="command-row" type="button" data-close-command><span>Close palette</span><kbd>Esc</kbd></button>
+  </section>
+</div>
+
+<script>
+  const root = document.documentElement;
+  const params = new URLSearchParams(location.search);
+  const saved = params.get('theme') || localStorage.getItem('flick-theme') || 'system';
+  function setTheme(value) {
+    localStorage.setItem('flick-theme', value);
+    root.dataset.theme = value === 'system' ? '' : value;
+    document.querySelectorAll('input[name="theme"]').forEach((input) => { input.checked = input.value === value; });
+  }
+  setTheme(saved);
+  document.querySelectorAll('input[name="theme"]').forEach((input) => input.addEventListener('change', () => setTheme(input.value)));
+  const palette = document.querySelector('[data-palette]');
+  const search = palette.querySelector('input');
+  function openPalette() { palette.hidden = false; search.focus(); }
+  function closePalette() { palette.hidden = true; }
+  document.querySelectorAll('[data-open-command]').forEach((button) => button.addEventListener('click', openPalette));
+  document.querySelectorAll('[data-close-command]').forEach((button) => button.addEventListener('click', closePalette));
+  window.addEventListener('keydown', (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); openPalette(); }
+    if (event.key === 'Escape') closePalette();
+  });
+</script>
 </body>
 </html>

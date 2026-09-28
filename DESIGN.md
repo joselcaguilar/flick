@@ -1,80 +1,86 @@
 ---
 name: Flick
-description: Local-first gesture remote for Home Assistant, shaped as a sightline cue desk.
+description: Raycast-like local gesture control for Home Assistant, rendered in dark-first Liquid Glass.
 colors:
-  light-bg: "#F4F7F2"
-  light-surface: "#FFFFFF"
-  light-surface-raised: "#E7EFE8"
-  light-text: "#13201B"
-  light-muted: "#4E625B"
-  light-border: "#C6D4CC"
-  dark-bg: "#07100E"
-  dark-surface: "#0E1816"
-  dark-surface-raised: "#172620"
-  dark-text: "#EAF3EE"
-  dark-muted: "#A8BBB2"
-  dark-border: "#2E433B"
-  cue-cyan: "#007A8C"
-  cue-cyan-bright: "#66E2F2"
-  cue-amber: "#B76B00"
-  cue-amber-bright: "#FFC857"
-  cue-green: "#176B46"
-  cue-green-bright: "#72E59A"
-  cue-red: "#A9282F"
-  cue-red-bright: "#FF7A84"
+  dark-bg: "#090B10"
+  dark-bg-elevated: "#11141C"
+  dark-glass: "rgba(22, 25, 34, 0.62)"
+  dark-glass-strong: "rgba(26, 30, 42, 0.78)"
+  dark-text: "#F6F8FF"
+  dark-muted: "#AEB7CA"
+  dark-border: "rgba(255, 255, 255, 0.14)"
+  light-bg: "#F5F7FB"
+  light-bg-elevated: "#FFFFFF"
+  light-glass: "rgba(255, 255, 255, 0.68)"
+  light-glass-strong: "rgba(255, 255, 255, 0.86)"
+  light-text: "#10131A"
+  light-muted: "#5B6475"
+  light-border: "rgba(17, 24, 39, 0.12)"
+  accent-blue: "#006DFF"
+  accent-violet: "#6D5DF7"
+  accent-mint: "#4EE6B8"
+  accent-amber: "#FFB84D"
+  accent-red: "#FF5D6C"
   hc-bg: "#000000"
   hc-text: "#FFFFFF"
   hc-focus: "#FFFF00"
 typography:
   display:
-    fontFamily: "Atkinson Hyperlegible, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "clamp(2.25rem, 4vw, 4rem)"
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif"
+    fontSize: "clamp(2.5rem, 5vw, 4.75rem)"
     fontWeight: 700
-    lineHeight: 0.98
-    letterSpacing: "-0.03em"
+    lineHeight: 0.94
+    letterSpacing: "-0.06em"
   headline:
-    fontFamily: "Atkinson Hyperlegible, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "clamp(1.5rem, 2.6vw, 2.5rem)"
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif"
+    fontSize: "clamp(1.75rem, 3vw, 3rem)"
     fontWeight: 700
-    lineHeight: 1.08
-    letterSpacing: "-0.02em"
+    lineHeight: 1
+    letterSpacing: "-0.045em"
   title:
-    fontFamily: "Atkinson Hyperlegible, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif"
     fontSize: "1.125rem"
-    fontWeight: 700
-    lineHeight: 1.25
+    fontWeight: 650
+    lineHeight: 1.18
+    letterSpacing: "-0.02em"
   body:
-    fontFamily: "Atkinson Hyperlegible, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif"
     fontSize: "1rem"
-    fontWeight: 400
-    lineHeight: 1.55
+    fontWeight: 450
+    lineHeight: 1.5
   label:
-    fontFamily: "Atkinson Hyperlegible, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif"
     fontSize: "0.8125rem"
-    fontWeight: 700
+    fontWeight: 650
     lineHeight: 1.2
-    letterSpacing: "0.04em"
+    letterSpacing: "0.01em"
+  small:
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif"
+    fontSize: "0.875rem"
+    fontWeight: 500
+    lineHeight: 1.35
   hud-title:
-    fontFamily: "Atkinson Hyperlegible, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif"
     fontSize: "1.375rem"
     fontWeight: 700
     lineHeight: 1.08
   hud-body:
-    fontFamily: "Atkinson Hyperlegible, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif"
     fontSize: "1.25rem"
-    fontWeight: 400
+    fontWeight: 550
     lineHeight: 1.25
-  overlay-label:
-    fontFamily: "Atkinson Hyperlegible, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1.5rem"
-    fontWeight: 700
-    lineHeight: 1.15
+  mono:
+    fontFamily: "ui-monospace, 'SF Mono', 'Geist Mono', 'Cascadia Mono', monospace"
+    fontSize: "0.8125rem"
+    fontWeight: 550
+    lineHeight: 1.3
 rounded:
-  xs: "6px"
-  sm: "10px"
-  md: "16px"
+  xs: "8px"
+  sm: "12px"
+  md: "18px"
   lg: "24px"
   xl: "32px"
+  xxl: "40px"
   pill: "999px"
 spacing:
   1: "4px"
@@ -89,164 +95,160 @@ spacing:
   16: "64px"
 components:
   button-primary:
-    backgroundColor: "{colors.cue-cyan}"
-    textColor: "{colors.light-surface}"
+    backgroundColor: "{colors.accent-blue}"
+    textColor: "{colors.hc-text}"
     rounded: "{rounded.pill}"
-    padding: "12px 20px"
+    padding: "10px 16px"
     typography: "{typography.label}"
-  button-secondary:
-    backgroundColor: "{colors.light-surface-raised}"
-    textColor: "{colors.light-text}"
+  button-ghost:
+    backgroundColor: "{colors.dark-glass}"
+    textColor: "{colors.dark-text}"
     rounded: "{rounded.pill}"
-    padding: "12px 18px"
+    padding: "10px 14px"
     typography: "{typography.label}"
-  card-surface:
-    backgroundColor: "{colors.light-surface}"
-    textColor: "{colors.light-text}"
-    rounded: "{rounded.lg}"
-    padding: "24px"
-  hud-pill:
-    backgroundColor: "{colors.dark-surface}"
+  glass-panel:
+    backgroundColor: "{colors.dark-glass}"
     textColor: "{colors.dark-text}"
     rounded: "{rounded.xl}"
-    width: "360px"
-    height: "96px"
+    padding: "20px"
+  hud-glass:
+    backgroundColor: "{colors.dark-glass-strong}"
+    textColor: "{colors.dark-text}"
+    rounded: "{rounded.xxl}"
+    width: "380px"
+    height: "104px"
 ---
 
 # Design System: Flick
 
 ## Overview
 
-**Creative North Star: "Sightline Cue Desk"**
+**Creative North Star: "Liquid Command Remote"**
 
-Flick treats the room as a small stage: the camera is the booth, the user's pointing hand casts a sightline, and every gesture is a cue that must visibly lock, fire and resolve. The visual world borrows from stage manager cue sheets, lighting plots and camera viewfinders rather than from generic smart-home cards. Lines, rings and tally chips show what Flick sees, what it selected and what happened.
+Flick now feels like a Raycast-class pro utility for the home: fast, keyboard-first, compact, dark-first and unmistakably modern. The operating surface is a translucent macOS-style command deck where the live camera preview is the hero, device status floats in layered glass, and every action has a visible shortcut path.
 
-The system is calm in the main window and unmistakable in the HUD. Most surfaces are neutral, gridded and low-glare; the live ray, countdown and result states carry the color. The design should feel like a reliable local instrument: precise, readable from the couch, and impossible to mistake for stock shadcn.
+The visual language follows a macOS 27 Liquid Glass interpretation: translucent materials, saturated backdrop blur, specular edge highlights, floating sidebars/toolbars, concentric rounded corners and a glass HUD capsule. The old cue-sheet/grid look is an anti-reference. Keep the product truth and copy, but remove anything that resembles 1990s/2000s web chrome, flat boxy cards, neon gamer HUDs or stock shadcn.
 
 **Key Characteristics:**
-- Sightlines and target rings are the signature visual primitives.
-- Cyan means aiming/selection, amber means waiting/needs attention, green means done, red means failed; text and icons always repeat the state.
-- Atkinson Hyperlegible is bundled and used everywhere for distance legibility.
-- Surfaces are layered by tone, soft shadow and hairline grids, not decorative glass.
-- Motion is a cue, not ornament: lock-on ring, countdown bar, sent pulse, then result.
+- Dark-first glass workspace with equally polished light mode and system/light/dark toggles.
+- Command palette and visible shortcuts make Flick feel like a pro desktop tool, not a smart-home dashboard.
+- Live preview is the largest element; status floats around it as glass, not card grids.
+- Hairline alpha borders, inner highlights and subtle gradients provide depth.
+- HUD is a desktop-only floating glass capsule with opaque high-contrast and reduced-transparency fallbacks.
 
 ## Colors
 
-The palette is a restrained stage booth: soft neutral work surfaces, near-black HUD layers and a small set of cue colors reserved for state and sightline feedback.
+The palette is cool, crisp and low-glare: near-black and platinum surfaces, blue/violet selection energy, mint success, amber attention and red failure. Saturated color is reserved for live state and commands.
 
 ### Primary
-- **Cue Cyan**: selection, pointing rays, focused primary actions and active device chips. Use sparingly so selection reads immediately.
-- **Cue Cyan Bright**: the dark-mode and HUD equivalent of Cue Cyan. It may draw lines, rings and focused states on dark surfaces.
+- **Command Blue**: selected device rings, primary buttons, focus halos and active command rows.
+- **Violet Beam**: secondary gradient stop for raycast effects and premium polish; never used for status alone.
 
 ### Secondary
-- **Cue Amber**: waiting, update-ready banners, coaching and attention states that are not failures.
-- **Cue Green**: successful completion and confirmed safe state.
-- **Cue Red**: failed, blocked or unsafe actions. Never rely on red alone; include an icon and reason.
+- **Mint Done**: successful Home Assistant confirmation and check states.
+- **Amber Attention**: update-ready banners, coaching and waiting states.
+- **Red Failure**: unavailable, failed or blocked states, always paired with ✕ and recovery text.
 
 ### Neutral
-- **Light Booth**: the default light background, low glare and slightly green so camera panels do not float in sterile white.
-- **Light Surface / Raised Surface**: cards, controls, step panels and preview chrome.
-- **Night Booth / Night Surface**: dark mode and HUD foundations.
-- **High-Contrast Black / White / Focus Yellow**: HUD and accessibility mode, built for ≥ 7:1 text contrast.
+- **Dark Workspace / Dark Glass**: default environment for macOS desktop use.
+- **Light Workspace / Light Glass**: first-class light theme, not an inverted afterthought.
+- **Hairline Border**: alpha white/dark borders for liquid material separation.
+- **High-Contrast Black / White / Focus Yellow**: HUD and accessibility mode; text pairs exceed 7:1.
 
 ### Named Rules
-**The Cue Rarity Rule.** At rest, no more than one cue color family should dominate a view; color marks live state, not decoration.
+**The Glass Has a Job Rule.** Glass appears for persistent navigation, preview overlays, command surfaces and HUD only. If a panel does not float above content, use an opaque surface.
 
-**The Red Needs Words Rule.** Any failed/unsafe state must include an icon plus a plain-language reason such as "Home Assistant unavailable".
+**The Blue Means Control Rule.** Blue/violet marks selection, focus and user command; success/warning/failure keep their own semantic colors and redundant text.
 
 ## Typography
 
-**Display Font:** Atkinson Hyperlegible (local TTF, OFL)
-**Body Font:** Atkinson Hyperlegible
-**Label/Mono Font:** Atkinson Hyperlegible with tabular numerals; system mono is only for code or raw identifiers.
+**Display Font:** `system-ui, -apple-system` first so macOS renders SF Pro natively. Inter is the bundled OFL fallback for Windows/Linux.
+**Body Font:** same native-first sans stack.
+**Label/Mono Font:** `ui-monospace` / SF Mono first with bundled Geist Mono fallback; use only for entity IDs, shortcuts and diagnostic values.
+**Accessibility Font:** Atkinson Hyperlegible remains bundled only for a future "Hyperlegible font" preference.
 
-**Character:** The face is accessible and plainspoken: distinctive letterforms for distance reading, enough warmth for household members, and no decorative tech costume.
+**Character:** Sharp, native, compact and airy. Use tight tracking for big headings and normal tracking for operational copy. Avoid decorative type and monospaced "tech" styling outside real identifiers and shortcuts.
 
 ### Hierarchy
-- **Display** (700, clamp 2.25rem-4rem, 0.98): major product and flow headings only.
-- **Headline** (700, clamp 1.5rem-2.5rem, 1.08): screen titles, step titles and dashboard group headings.
-- **Title** (700, 1.125rem, 1.25): cards, row headings, HUD secondary labels.
-- **Body** (400, 1rem, 1.55): explanatory copy and form help; keep line length to 65-75 characters.
-- **Label** (700, 0.8125rem, 0.04em): control labels, status tags and compact metadata. Use uppercase only for very short cue labels.
-- **HUD Title** (700, 1.375rem, 1.08) and **HUD Body** (400, 1.25rem, 1.25): always-on-top overlay text, never smaller.
-- **Overlay Label** (700, 1.5rem, 1.15): live preview labels and ray annotations.
+- **Display** (700, clamp 2.5rem-4.75rem, 0.94): rare product-level statements and prototype framing.
+- **Headline** (700, clamp 1.75rem-3rem, 1): screen and flow titles.
+- **Title** (650, 1.125rem, 1.18): glass panel headings and command names.
+- **Body** (450, 1rem, 1.5): explanatory copy and status details.
+- **Label** (650, 0.8125rem, 1.2): nav labels, chips, toolbar controls.
+- **Small** (500, 0.875rem, 1.35): secondary rows and helper text.
+- **HUD Title / Body** (1.375rem / 1.25rem): desktop HUD text; never below 20 px.
+- **Mono** (0.8125rem): entity IDs and keyboard shortcuts only.
 
 ### Named Rules
-**The Three-Meter Rule.** HUD primary text is never below 20 px; high-contrast HUD text uses black/white pairs that exceed 7:1.
+**The Native First Rule.** Never bundle SF; rely on the platform stack, with Inter and Geist Mono as local fallbacks.
 
-**The Identifier Rule.** Raw Home Assistant entity IDs may appear as metadata, never as the primary name. Show "Ventilador dormitorio" first, then `fan.ventilador_dormitorio`.
+**The Shortcut Is Visible Rule.** Primary desktop actions show their shortcut or command-palette equivalent when space allows.
 
 ## Layout
 
-Flick uses an instrument-panel layout: a live preview or active teaching pane owns the largest area, while status, steps and activity sit in compact rails. Desktop screens use a 12-column grid with 24 px gutters and 32-48 px section spacing. Narrow layouts stack preview first, then primary actions, then diagnostics.
+Desktop uses a floating glass sidebar and toolbar inside a spacious stage. The live preview is the hero, with status glass sitting around it and recent activity docked as a translucent rail. The sidebar floats rather than touching the viewport edge; toolbar controls float above the content with concentric rounding.
 
-The HUD is its own layout: a 360×96 pill with a 56 px icon/ring zone, a text block and a countdown/result slot. It never carries update banners and never takes focus.
+Tablet collapses the sidebar into a compact rail/menu while preserving the hero preview first. Phone (360 px and up) switches to a bottom tab bar and sheet-like panels; touch targets are at least 44 px. The HUD is desktop-only and omitted from mobile layout because it represents an always-on-top desktop overlay.
 
-Preview panels use an internal sightline grid: hand skeleton, ray, selected label, confidence ring and pinned observations all align to the video bounds. If the camera feed is unavailable or intentionally omitted in a prototype, use a skeleton overlay placeholder rather than a fake room photo.
+Command palette layout is centered, glassy and keyboard-first: search field, grouped commands, visible shortcuts and a selected row.
 
 ## Elevation & Depth
 
-Depth is functional. Panels are separated by tonal layers, 1 px borders and soft offset shadows. Blur is allowed only when a HUD sits over a live wallpaper or camera view; it must improve legibility, not decorate a card.
+Depth comes from layered liquid materials: backdrop blur, saturation, hairline alpha borders, inner specular highlights and soft shadows. Every glass surface has an opaque fallback for `prefers-reduced-transparency` and for browsers without `backdrop-filter`.
 
 ### Shadow Vocabulary
-- **Panel Rest** (`0 1px 2px rgba(19, 32, 27, 0.08), 0 10px 30px rgba(19, 32, 27, 0.08)`): cards and preview containers.
-- **Panel Lift** (`0 10px 20px rgba(19, 32, 27, 0.10), 0 24px 60px rgba(19, 32, 27, 0.12)`): active teaching pane or open popover.
-- **HUD Scrim** (`0 18px 60px rgba(0, 0, 0, 0.34)`): HUD pill over wallpapers.
+- **Glass Float** (`0 24px 80px rgba(0,0,0,.34), inset 0 1px rgba(255,255,255,.18)`): sidebar, toolbar, command palette and HUD.
+- **Preview Depth** (`0 32px 120px rgba(0,0,0,.38)`): live preview hero.
+- **Light Float** (`0 24px 70px rgba(31,41,55,.16), inset 0 1px rgba(255,255,255,.82)`): light-theme glass.
 
 ### Named Rules
-**The Useful Blur Rule.** Backdrop blur appears only behind the HUD or overlays on video/wallpaper, and must preserve contrast in high-contrast mode by switching to an opaque background.
+**The Opaque Fallback Rule.** Any use of blur/saturation must have an opaque background in `@supports not (backdrop-filter)` and `prefers-reduced-transparency`.
 
 ## Shapes
 
-Shapes come from lenses and cue keys: rounded enough to feel safe, precise enough to feel calibrated. Cards use 24 px corners, controls use pill shapes, small chips use 999 px pills, and preview panels use 32 px corners with clipped overlay content. Rings and arcs may be circular, but progress also needs text or a bar.
+Shapes are concentric and modern. App windows use 36-40 px outer corners; inner glass panes step down to 28/24/18 px; controls and chips use pills. Preview overlays and HUD capsules use larger radii than their internal controls so the hierarchy feels nested and native.
 
-Glyphs and domain icons use 64×64 SVGs, rounded strokes, no filled emoji assets and `currentColor` so state colors and high-contrast tokens can own them. Gesture paths use motion trails, arrows and separation marks; domain icons use simplified appliance silhouettes.
+Gesture glyphs and domain icons are SF Symbols-like: 24×24 viewBox, 1.5-2 px rounded strokes, no filled emoji assets, no mixed icon packs.
 
 ## Components
 
 ### shadcn/ui Re-skinning
-Use shadcn/ui only for behavior and accessibility. Replace the default CSS variables, radii, focus rings and shadows with Flick tokens before any component ships. No stock `slate`, `zinc`, default border radius, or generic `primary` palette may appear in app CSS.
+Use shadcn/ui for behavior and accessibility only. Replace the stock theme with Flick tokens: native-first type, glass/opaque surfaces, concentric radii, alpha hairline borders, command-blue focus rings and platform-style controls. Stock slate/zinc variables, default card grids and default shadcn buttons are prohibited.
 
 ### Buttons
-- **Shape:** cue-key pills (999 px) with a minimum 44 px touch target.
-- **Primary:** Cue Cyan background, light text, bold label, subtle downward press on active.
-- **Secondary:** raised neutral surface with text color and a 1 px border.
-- **Danger:** red outline or fill only when paired with action text that names the consequence.
-- **Focus:** 3 px focus ring using Cue Amber / high-contrast Focus Yellow.
+- **Shape:** compact pill controls, 44 px minimum target on touch.
+- **Primary:** blue/violet gradient with white text and subtle inner highlight.
+- **Ghost:** transparent glass with hairline border and hover fill.
+- **Focus:** 3 px command-blue or high-contrast yellow ring.
+- **Shortcuts:** desktop buttons may show keycaps like `⌘K` using the mono stack.
 
-### Cards / Containers
-Cards are not interchangeable tiles. Each card needs a named job: status, preview, step, activity, or banner. Status cards are compact and text-led; preview cards are large and visual; banners use amber with a restart/update action.
+### Glass Panels
+Glass panels use a material token (`--flick-material-*`), a hairline border, inner highlight and shadow. They must retain contrast over both light and dark wallpapers. Opaque fallbacks use `--flick-surface` without blur.
 
-### Inputs / Fields
-Fields sit on raised surfaces with a 1 px border, 10 px radius and visible focus ring. Search results use sentence labels and live state; raw HA IDs are secondary metadata.
+### Command Palette
+Palette opens with `⌘K`, contains a real search field, selected row, grouped commands and visible shortcuts. It is a first-class component, not a modal afterthought.
 
-### Chips and Status Tags
-Chips carry device state, camera state, gesture type and place status. They must include icon/text, not color alone. Active chips use Cue Cyan; warning chips use Cue Amber; success/failure chips include ✓ or ✕.
+### Preview Hero
+The live preview owns the dashboard and Teach screens. Skeleton overlay, selected-device ring and ray are thin, bright and modern. Place status and update banners float as glass over or near the preview, never as flat cue-sheet cells.
 
 ### HUD
-HUD states follow the grammar: selected = device + icon + "selected" + 4 s countdown; done = device + action + ✓; failed = device + reason + ✕. Text is ≥ 20 px and the pill uses an opaque high-contrast variant when requested.
-
-### Gesture Glyphs
-The gesture glyph set lives in `design/glyphs/`. Use it for point, circles, two-hand separate, thumbs up/down, pinch dial, swipes and open palm. Animate trails only as an enhancement; static glyphs are the source of truth under Reduce Motion.
-
-### Domain Icons
-The domain icon set lives in `design/icons/`. Use it for `light`, `fan`, `cover`, `media_player`, `climate`, `switch` and `lock`. Icons are line-based and theme-colored; do not mix in unrelated icon packs without a license review.
+Desktop-only floating glass capsule. Selected state shows device, countdown and verb hints; Done and Failed show the outcome with ✓/✕ and text. High-contrast and reduced-transparency variants are opaque and maintain ≥ 7:1 text contrast.
 
 ### Motion & Reduce Motion
-Motion has four roles: ray acquisition, dwell countdown, gesture vote progress and result pulse. Standard transitions use 180 ms ease-out; selection/dwell progress may run 500 ms or 4 s because those durations match the product state. Under Reduce Motion, replace ring animation with a static progress bar, explicit seconds remaining and immediate state changes. Disable confetti entirely.
+Motion is fast and native: 160-220 ms springs/ease-outs for panels, 500 ms dwell progress and a 4 s selected-device countdown. Under Reduce Motion, remove spring travel and continuous ring animation; preserve state with static bars and explicit text.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** make the live preview or HUD state immediately answer: what Flick sees, what it selected, what happened.
-- **Do** keep HUD text at 20 px or larger and repeat state with icons/text.
-- **Do** use local bundled fonts and SVG assets; the app must work offline.
-- **Do** use token variables from `design/tailwind-theme.css` in the UI scaffold.
-- **Do** keep main-window color calm and reserve saturated color for live state.
+- **Do** make dark mode feel primary and light mode equally crafted.
+- **Do** show `⌘K`, shortcuts and command-palette affordances on desktop.
+- **Do** provide opaque fallbacks for glass materials.
+- **Do** keep HUD text ≥ 20 px and state redundant through icon + text.
+- **Do** use system-ui first, bundled Inter fallback, and Geist Mono only for technical/shortcut text.
 
 ### Don't:
-- **Don't** ship the stock shadcn theme, default gray palette or generic rounded card grid.
+- **Don't** revive the rejected Sightline Cue Desk, gridded cue boards or 1990s/2000s web references.
+- **Don't** ship flat boxy cards, stock shadcn, Home Assistant mimicry or neon gamer HUDs.
+- **Don't** bundle SF or load fonts/icons from a runtime CDN.
 - **Don't** convey selected/done/failed by color alone.
-- **Don't** fake camera imagery, user metrics, testimonials or Home Assistant state that the product has not observed.
-- **Don't** load fonts, icons or images from a runtime CDN.
-- **Don't** use the old coral placeholder accent unless a future design decision explicitly replaces this system.
+- **Don't** let glass reduce accessibility; fall back to opaque surfaces when needed.

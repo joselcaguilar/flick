@@ -1,95 +1,65 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-28T17:03:56+02:00",
+  "generatedAt": "2026-09-28T17:21:11+02:00",
   "title": "Design System: Flick",
   "extensions": {
     "colorMeta": {
-      "cue-cyan": {
+      "accent-blue": {
         "role": "primary",
-        "displayName": "Cue Cyan",
-        "canonical": "#007A8C",
+        "displayName": "Command Blue",
+        "canonical": "#006DFF",
         "tonalRamp": [
-          "#002227",
-          "#003C45",
-          "#005966",
-          "#007A8C",
-          "#00A1B8",
-          "#66E2F2",
-          "#B9F5FB",
-          "#E8FDFF"
+          "#07172A",
+          "#0E3156",
+          "#185486",
+          "#2B7ECC",
+          "#006DFF",
+          "#66A8FF",
+          "#CFE3FF",
+          "#EEF7FF"
         ]
       },
-      "cue-amber": {
+      "accent-violet": {
         "role": "secondary",
-        "displayName": "Cue Amber",
-        "canonical": "#B76B00",
+        "displayName": "Violet Beam",
+        "canonical": "#6D5DF7",
         "tonalRamp": [
-          "#2A1600",
-          "#583100",
-          "#835000",
-          "#B76B00",
-          "#E99400",
-          "#FFC857",
-          "#FFE5A3",
-          "#FFF8DA"
+          "#1A1038",
+          "#332061",
+          "#5639A2",
+          "#775AE1",
+          "#6D5DF7",
+          "#C4B2FF",
+          "#E5DCFF",
+          "#F7F3FF"
         ]
       },
-      "cue-green": {
-        "role": "state",
-        "displayName": "Cue Green",
-        "canonical": "#176B46",
+      "dark-glass": {
+        "role": "material",
+        "displayName": "Dark Liquid Glass",
+        "canonical": "rgba(22, 25, 34, 0.62)",
         "tonalRamp": [
-          "#052013",
-          "#0A3A24",
-          "#105936",
-          "#176B46",
-          "#249460",
-          "#72E59A",
-          "#BDF6CF",
-          "#EBFFF0"
+          "#090B10",
+          "#11141C",
+          "#171B25",
+          "#242A38",
+          "#3A4357",
+          "#6F7A91",
+          "#AEB7CA",
+          "#F6F8FF"
         ]
       },
-      "cue-red": {
-        "role": "state",
-        "displayName": "Cue Red",
-        "canonical": "#A9282F",
+      "light-glass": {
+        "role": "material",
+        "displayName": "Light Liquid Glass",
+        "canonical": "rgba(255, 255, 255, 0.68)",
         "tonalRamp": [
-          "#30070A",
-          "#5A1016",
-          "#831D24",
-          "#A9282F",
-          "#D9434D",
-          "#FF7A84",
-          "#FFC2C7",
-          "#FFF0F1"
-        ]
-      },
-      "night-booth": {
-        "role": "neutral",
-        "displayName": "Night Booth",
-        "canonical": "#07100E",
-        "tonalRamp": [
-          "#000000",
-          "#07100E",
-          "#0E1816",
-          "#172620",
-          "#2E433B",
-          "#5E756B",
-          "#A8BBB2",
-          "#EAF3EE"
-        ]
-      },
-      "light-booth": {
-        "role": "neutral",
-        "displayName": "Light Booth",
-        "canonical": "#F4F7F2",
-        "tonalRamp": [
-          "#13201B",
-          "#4E625B",
-          "#93A69C",
-          "#C6D4CC",
-          "#E7EFE8",
-          "#F4F7F2",
+          "#10131A",
+          "#5B6475",
+          "#9CA6B8",
+          "#D9E0EC",
+          "#EEF2F8",
+          "#F5F7FB",
           "#FFFFFF",
           "#FFFFFF"
         ]
@@ -98,84 +68,66 @@
     "typographyMeta": {
       "display": {
         "displayName": "Display",
-        "purpose": "Major screen and flow statements."
+        "purpose": "Prototype framing and rare product statements."
       },
       "headline": {
         "displayName": "Headline",
-        "purpose": "Screen titles and major panel headings."
+        "purpose": "Screen and flow titles."
       },
       "body": {
         "displayName": "Body",
-        "purpose": "Plain-language product copy."
+        "purpose": "Native operational copy."
       },
-      "label": {
-        "displayName": "Cue Label",
-        "purpose": "Status chips, controls and compact metadata."
+      "mono": {
+        "displayName": "Geist Mono",
+        "purpose": "Entity IDs, shortcuts and diagnostics only."
       },
       "hud-title": {
         "displayName": "HUD Title",
-        "purpose": "Always-on-top device/action text at 3 m."
-      },
-      "hud-body": {
-        "displayName": "HUD Body",
-        "purpose": "HUD secondary state and reason text, 20 px minimum."
-      },
-      "overlay-label": {
-        "displayName": "Overlay Label",
-        "purpose": "Preview ray and skeleton annotations."
+        "purpose": "Desktop glass overlay text at 3 m."
       }
     },
     "shadows": [
       {
-        "name": "panel-rest",
-        "value": "0 1px 2px rgba(19, 32, 27, 0.08), 0 10px 30px rgba(19, 32, 27, 0.08)",
-        "purpose": "Cards and preview containers."
+        "name": "glass-float",
+        "value": "0 24px 80px rgba(0,0,0,.34), inset 0 1px rgba(255,255,255,.18)",
+        "purpose": "Floating sidebar, toolbar, command palette and HUD."
       },
       {
-        "name": "panel-lift",
-        "value": "0 10px 20px rgba(19, 32, 27, 0.10), 0 24px 60px rgba(19, 32, 27, 0.12)",
-        "purpose": "Active teaching pane or popover."
-      },
-      {
-        "name": "hud-scrim",
-        "value": "0 18px 60px rgba(0, 0, 0, 0.34)",
-        "purpose": "HUD pill over wallpaper."
+        "name": "preview-depth",
+        "value": "0 32px 120px rgba(0,0,0,.38)",
+        "purpose": "Live preview hero."
       }
     ],
     "motion": [
       {
-        "name": "cue-fast",
-        "value": "180ms cubic-bezier(0.16, 1, 0.3, 1)",
-        "purpose": "Button, chip and panel state changes."
+        "name": "fast-native",
+        "value": "160ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Controls and row selection."
       },
       {
-        "name": "dwell",
-        "value": "500ms linear with static fallback",
-        "purpose": "Point-to-select dwell ring."
-      },
-      {
-        "name": "selection-window",
-        "value": "4000ms linear with countdown text",
-        "purpose": "Selected device verb window."
+        "name": "panel",
+        "value": "220ms cubic-bezier(0.2,0,0,1)",
+        "purpose": "Palette/sheet movement."
       },
       {
         "name": "reduce-motion",
-        "value": "no continuous movement; show bars, labels and immediate state",
+        "value": "1ms and static bars",
         "purpose": "Accessibility fallback."
       }
     ],
     "breakpoints": [
       {
-        "name": "sm",
-        "value": "640px"
+        "name": "phone",
+        "value": "360px"
       },
       {
-        "name": "md",
-        "value": "880px"
+        "name": "tablet",
+        "value": "760px"
       },
       {
-        "name": "lg",
-        "value": "1180px"
+        "name": "desktop",
+        "value": "1120px"
       }
     ]
   },
@@ -184,76 +136,71 @@
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "Cue-key primary action.",
-      "html": "<button class=\"ds-btn-primary\">TEACH A DEVICE</button>",
-      "css": ".ds-btn-primary{font-family:var(--font-sans);font-weight:700;letter-spacing:.04em;border:0;border-radius:999px;background:var(--flick-cue-cyan);color:var(--flick-primary-foreground);padding:12px 20px;min-height:44px;box-shadow:var(--flick-shadow-panel-rest);transition:transform var(--animate-cue-fast) var(--ease-cue),box-shadow var(--animate-cue-fast) var(--ease-cue)}.ds-btn-primary:hover{transform:translateY(-1px);box-shadow:var(--flick-shadow-panel-lift)}.ds-btn-primary:focus-visible{outline:3px solid var(--flick-focus);outline-offset:3px}.ds-btn-primary:active{transform:translateY(1px)}"
+      "description": "Compact pro action with command-blue gradient.",
+      "html": "<button class=\"ds-primary\">Teach a device <kbd>\u2318T</kbd></button>",
+      "css": ".ds-primary{min-height:44px;border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:10px 16px;background:linear-gradient(135deg,#006DFF,#6D5DF7);color:#fff;font-family:var(--font-sans);font-weight:650;box-shadow:0 16px 44px rgba(77,163,255,.28),inset 0 1px rgba(255,255,255,.38);transition:transform 160ms cubic-bezier(.16,1,.3,1)}.ds-primary:hover{transform:translateY(-1px)}.ds-primary:focus-visible{outline:3px solid var(--flick-focus);outline-offset:3px}.ds-primary kbd{font-family:var(--font-mono);font-size:12px;margin-left:8px;opacity:.86}"
     },
     {
-      "name": "Status Chip",
-      "kind": "chip",
-      "refersTo": "chip-status",
-      "description": "Icon/text status that never relies on color alone.",
-      "html": "<span class=\"ds-chip\">\u2713 Watching</span>",
-      "css": ".ds-chip{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-sans);font-weight:700;font-size:13px;letter-spacing:.04em;border-radius:999px;background:var(--flick-surface-raised);color:var(--flick-text);border:1px solid var(--flick-border);padding:7px 10px}.ds-chip[data-state=success]{background:color-mix(in srgb,var(--flick-cue-green) 14%,var(--flick-surface));color:var(--flick-text)}"
-    },
-    {
-      "name": "Preview Card",
+      "name": "Glass Panel",
       "kind": "card",
-      "refersTo": "card-preview",
-      "description": "Large clipped camera/skeleton stage.",
-      "html": "<section class=\"ds-preview-card\"><div class=\"ds-preview-grid\"></div></section>",
-      "css": ".ds-preview-card{border-radius:32px;overflow:hidden;background:var(--flick-surface);border:1px solid var(--flick-border);box-shadow:var(--flick-shadow-panel-rest);padding:16px}.ds-preview-grid{min-height:240px;border-radius:24px;background:linear-gradient(var(--flick-grid-line) 1px,transparent 1px),linear-gradient(90deg,var(--flick-grid-line) 1px,transparent 1px),var(--flick-surface-raised);background-size:32px 32px}"
+      "refersTo": "glass-panel",
+      "description": "Liquid material with opaque fallback.",
+      "html": "<section class=\"ds-glass flick-glass\">Ventilador dormitorio selected</section>",
+      "css": ".ds-glass{border:1px solid var(--flick-border);border-radius:32px;padding:20px;color:var(--flick-text);box-shadow:var(--flick-shadow-glass);background:var(--flick-material-opaque)}@supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.ds-glass{background:var(--flick-material-glass);backdrop-filter:blur(28px) saturate(1.55);-webkit-backdrop-filter:blur(28px) saturate(1.55)}}"
     },
     {
-      "name": "HUD Pill",
+      "name": "Command Row",
       "kind": "custom",
-      "refersTo": "hud-pill",
-      "description": "Always-on-top result overlay.",
-      "html": "<aside class=\"ds-hud\"><strong>Ventilador dormitorio</strong><span>selected \u00b7 4 s</span></aside>",
-      "css": ".ds-hud{width:360px;min-height:96px;border-radius:32px;background:rgba(14,24,22,.92);color:#EAF3EE;box-shadow:var(--flick-shadow-hud);backdrop-filter:blur(18px);display:grid;align-content:center;padding:18px 22px;font-family:var(--font-sans)}.ds-hud strong{font-size:22px;line-height:1.1}.ds-hud span{font-size:20px;line-height:1.25}.high-contrast .ds-hud{background:#000;color:#fff;border:2px solid #fff;backdrop-filter:none}"
+      "refersTo": "command-row",
+      "description": "Keyboard-first action row.",
+      "html": "<div class=\"ds-command\"><span>Teach a device</span><kbd>\u2318T</kbd></div>",
+      "css": ".ds-command{display:flex;align-items:center;justify-content:space-between;gap:16px;border-radius:18px;padding:12px 14px;background:color-mix(in srgb,var(--flick-accent-blue) 14%,transparent);color:var(--flick-text);font-family:var(--font-sans);font-weight:650}.ds-command kbd{font-family:var(--font-mono);font-size:12px;color:var(--flick-muted)}"
+    },
+    {
+      "name": "HUD Capsule",
+      "kind": "custom",
+      "refersTo": "hud-glass",
+      "description": "Desktop-only floating glass result capsule.",
+      "html": "<aside class=\"ds-hud flick-glass\"><strong>Ventilador dormitorio</strong><span>selected \u00b7 4 s</span></aside>",
+      "css": ".ds-hud{width:380px;min-height:104px;border-radius:40px;border:1px solid var(--flick-border);padding:20px 24px;color:var(--flick-text);box-shadow:var(--flick-shadow-glass);background:var(--flick-material-opaque)}.ds-hud strong{display:block;font-size:22px;line-height:1.08}.ds-hud span{display:block;margin-top:4px;font-size:20px;line-height:1.25}.high-contrast .ds-hud{background:#000;color:#fff;border-color:#fff;backdrop-filter:none}"
     }
   ],
   "narrative": {
-    "northStar": "Sightline Cue Desk",
-    "overview": "Flick treats the room as a small stage: the camera is the booth, the user's pointing hand casts a sightline, and every gesture is a cue that must visibly lock, fire and resolve.",
+    "northStar": "Liquid Command Remote",
+    "overview": "A Raycast-like pro utility for local gesture control, rendered in dark-first macOS-style Liquid Glass with first-class light and high-contrast variants.",
     "keyCharacteristics": [
-      "Sightlines and target rings are the signature visual primitives.",
-      "Cyan means aiming/selection, amber waiting/attention, green done, red failed; text and icons always repeat state.",
-      "Atkinson Hyperlegible is bundled for distance legibility.",
-      "Surfaces are layered by tone, soft shadow and hairline grids, not decorative glass.",
-      "Motion is a cue, not ornament."
+      "Dark-first glass workspace with polished light mode.",
+      "Command palette and visible shortcuts.",
+      "Live preview is the hero.",
+      "Hairline alpha borders and inner highlights.",
+      "Desktop-only glass HUD with opaque fallbacks."
     ],
     "rules": [
       {
-        "name": "The Cue Rarity Rule",
-        "body": "At rest, no more than one cue color family should dominate a view; color marks live state, not decoration.",
+        "name": "The Glass Has a Job Rule",
+        "body": "Glass appears for persistent navigation, preview overlays, command surfaces and HUD only.",
         "section": "colors"
       },
       {
-        "name": "The Red Needs Words Rule",
-        "body": "Any failed/unsafe state must include an icon plus a plain-language reason.",
-        "section": "colors"
-      },
-      {
-        "name": "The Three-Meter Rule",
-        "body": "HUD primary text is never below 20 px; high-contrast HUD text uses black/white pairs that exceed 7:1.",
+        "name": "The Native First Rule",
+        "body": "Never bundle SF; rely on the platform stack, with Inter and Geist Mono as local fallbacks.",
         "section": "typography"
       },
       {
-        "name": "The Useful Blur Rule",
-        "body": "Backdrop blur appears only behind the HUD or overlays on video/wallpaper, and must preserve contrast in high-contrast mode by switching to an opaque background.",
+        "name": "The Opaque Fallback Rule",
+        "body": "Any use of blur/saturation must have an opaque background in @supports not (backdrop-filter) and prefers-reduced-transparency.",
         "section": "elevation"
       }
     ],
     "dos": [
-      "Do make the live preview or HUD state immediately answer: what Flick sees, what it selected, what happened.",
-      "Do keep HUD text at 20 px or larger and repeat state with icons/text.",
-      "Do use local bundled fonts and SVG assets; the app must work offline."
+      "Do make dark mode primary and light mode equally crafted.",
+      "Do show \u2318K, shortcuts and command-palette affordances on desktop.",
+      "Do provide opaque fallbacks for glass materials."
     ],
     "donts": [
-      "Don't ship the stock shadcn theme, default gray palette or generic rounded card grid.",
-      "Don't convey selected/done/failed by color alone.",
-      "Don't load fonts, icons or images from a runtime CDN."
+      "Don't revive Sightline Cue Desk or gridded cue boards.",
+      "Don't ship flat boxy cards, stock shadcn or neon gamer HUDs.",
+      "Don't bundle SF or load fonts/icons from a runtime CDN."
     ]
   }
 }

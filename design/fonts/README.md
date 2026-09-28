@@ -1,15 +1,25 @@
-# Flick bundled font
+# Flick bundled fonts
 
-Flick bundles **Atkinson Hyperlegible** for all prototype and design-system typography.
+Flick uses native platform typography first. On macOS the app should render **SF Pro** through `system-ui` / `-apple-system`; SF is not bundled. Offline fallbacks are bundled for Windows/Linux and for accessibility settings.
 
+## Default fallback: Inter
+- Files: `Inter-Variable.ttf`, `Inter-Italic-Variable.ttf`
+- Source: Google Fonts repository, `ofl/inter`
+  - https://github.com/google/fonts/tree/main/ofl/inter
+- License: SIL Open Font License 1.1 (`Inter-OFL.txt`)
+- Runtime: local file only; no CDN.
+
+## Monospace: Geist Mono
+- Files: `GeistMono-Variable.ttf`, `GeistMono-Italic-Variable.ttf`
+- Source: Google Fonts repository, `ofl/geistmono`
+  - https://github.com/google/fonts/tree/main/ofl/geistmono
+- License: SIL Open Font License 1.1 (`GeistMono-OFL.txt`)
+- Use: Home Assistant entity IDs, shortcuts, keycaps and technical diagnostics only.
+
+## Accessibility setting: Atkinson Hyperlegible
+- Files: `AtkinsonHyperlegible-*.ttf` retained as an optional **Hyperlegible font** setting.
 - Source: Google Fonts repository, `ofl/atkinsonhyperlegible`
   - https://github.com/google/fonts/tree/main/ofl/atkinsonhyperlegible
-- Files included:
-  - `AtkinsonHyperlegible-Regular.ttf`
-  - `AtkinsonHyperlegible-Bold.ttf`
-  - `AtkinsonHyperlegible-Italic.ttf`
-  - `AtkinsonHyperlegible-BoldItalic.ttf`
 - License: SIL Open Font License 1.1 (`OFL.txt`)
-- Runtime loading: local files only; no CDN or network font requests.
 
-Reason for selection: Flick is read from 0.5-3 m, including the always-on-top HUD. Atkinson Hyperlegible was designed for character distinction and low-vision legibility, so it supports accessibility without adding a decorative typeface.
+No bundled font is fetched at runtime from a network or CDN.

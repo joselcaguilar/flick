@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" aria-hidden="true">
-  <g stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M48 32H16"/>
-    <path d="M25 21l-11 11 11 11"/>
-    <path d="M48 20h4"/>
-    <path d="M48 44h4"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+  <g stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M19 12H5"/>
+    <path d="M9.2 7.8 5 12l4.2 4.2"/>
+    <path d="M19 7.2h1.3"/>
+    <path d="M19 16.8h1.3"/>
   </g>
 </svg>

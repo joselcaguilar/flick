@@ -1,32 +1,44 @@
 # P1-700 design decisions
 
-## 2026-09-28 — Visual world chosen without a live interview
+## 2026-09-28 — Initial world rejected by owner
 
-The Impeccable workflow would normally ask the owner a structured visual-world question. This session was explicitly non-interactive and the task asked not to wait for answers, so the choice was made from `PRODUCT.md`, `docs/spec/04-gesture-studio-and-ux.md`, `docs/spec/09-device-targeting.md` and ADR-018.
+The first P1-700 prototype committed **Sightline Cue Desk**: a stage-manager/cue-sheet metaphor with sightlines, gridded preview structure and Atkinson Hyperlegible as the default face. The owner rejected it: "I want something more modern and cool, it's like 1992 website."
 
-### Product truth used
-- Flick is an operate-mode desktop tool and HUD, not a marketing surface.
-- The decisive mechanism is **point → selected device → verb gesture → visible outcome**.
-- It is used from a couch/bed at 0.5-3 m, often in dim rooms, with accessibility users as the design driver.
-- The app must feel local, safe, calm and fast while still avoiding stock shadcn defaults.
+That feedback is binding. The previous look is now an anti-reference, not a baseline to refine.
 
-### Grounded direction candidates
-Impeccable `concept-seed.mjs --scope direction --mode operate` returned seed `dfb11cf8` and assigned grounded candidate **6**. The grounded list was:
+## 2026-09-28 — Replacement visual world: Liquid Command Remote
 
-1. Home Assistant wall dashboard expanded into a spatial control desk. Rejected as too close to generic smart-home panels.
-2. Camera calibration slate with lens grids and fiducial targets. Strong for setup, too technical for household members.
-3. macOS menu-bar utility with frosted glass and system panels. Familiar, but risks disappearing into platform chrome.
-4. Physical remote-control legends and appliance embossing. Clear, but too literal and not enough live feedback for targeting.
-5. Safety lockout panel / industrial interlock. Safe, but too alarmist for daily living-room use.
-6. **Stage manager cue desk + sightline plot. Chosen.** A room is treated like a stage, the user casts a ray, Flick locks onto a target, then a cue fires. It carries HUD states, countdowns, high contrast, sound cues and action feedback naturally.
-7. Topographic room sketch / wayfinding map. Useful for devices list, but weak for gestures and HUD immediacy.
+### Pinned owner direction
 
-### Challenger weighing
-The seed offered teletext, cyclorama, origami, CD-ROM chrome, parametric identity and datamatics challengers. Teletext and datamatics have excellent high-contrast discipline, but they over-index on bitmap/dense data and make the main window harder to scan. Cyclorama lighting supports dark-to-light state, but it is more atmospheric than operational. CD-ROM chrome would conflict with modern accessibility and shadcn re-skinning. The assigned cue-desk direction wins on both audience identification and product clarity.
+- Raycast-like pro tool, adapted to macOS 27 design styles.
+- Crisp, dark-first, equally polished light theme.
+- Subtle gradients, sharp modern native type, compact but airy density, keyboard-first behavior with `⌘K` and visible shortcuts.
+- macOS Liquid Glass language: translucent layered materials, blur/saturation, specular edge highlights, floating sidebar/toolbar, concentric rounded corners, vibrancy and a floating glass HUD capsule.
+- Opaque fallback for reduced transparency and unsupported `backdrop-filter`.
+- Responsive from 360 px phone to large desktop; phone uses bottom tabs and sheets; HUD remains desktop-only.
 
-### Commitments
-- Creative north star: **Sightline Cue Desk**.
-- Palette strategy: restrained neutral surfaces with cyan ray/focus, amber waiting/attention, green done, red failed, plus a black/white high-contrast HUD mode.
-- Typography: Atkinson Hyperlegible, bundled locally under OFL, selected for 3 m HUD legibility and accessible character distinction.
-- Signature interaction: the live preview owns the screen as a stage sightline; HUD states are cue cards with icons/text, not color-only badges.
-- Rejected: old coral placeholder, stock shadcn theme, pure Home Assistant mimicry, neon gamer HUD, skeuomorphic remote buttons, and marketing-style glass cards.
+### Product truth preserved
+
+- Flick remains a local-first gesture remote for Home Assistant.
+- The primary mechanism remains point → selected device → verb gesture → outcome.
+- Copy stays short, human and spec-grounded.
+- The owner's device remains `fan.ventilador_dormitorio` / "Ventilador dormitorio".
+- HUD text remains ≥ 20 px and state is never conveyed by color alone.
+- Fonts/icons remain bundled or platform-native; no runtime CDN.
+
+### New commitments
+
+- Creative north star: **Liquid Command Remote**.
+- Default font stack: `system-ui, -apple-system` first so macOS renders SF Pro natively. SF is not bundled. Inter is bundled as the OFL fallback for Windows/Linux.
+- Monospace: Geist Mono, bundled under OFL, for entity IDs and shortcuts only.
+- Atkinson Hyperlegible remains bundled only as a future accessibility preference, not the default.
+- Visual system: dark-first glass workspace, floating sidebar/toolbar, command palette, live-preview hero, bottom mobile tabs, glass HUD capsule, high-contrast opaque HUD.
+
+### Rejected alternatives
+
+- **Sightline Cue Desk / stage cue sheets:** explicitly rejected by the owner as dated.
+- **Gridded raycast boards:** too close to the rejected look and detector-prone generated UI.
+- **Home Assistant mimicry:** would hide Flick's point-then-gesture mechanism inside generic smart-home dashboard chrome.
+- **Stock shadcn:** acceptable only for behavior/accessibility primitives; default theme is banned.
+- **Neon gamer HUD:** visually loud and less trustworthy for accessibility and household use.
+- **Bundled SF Pro:** prohibited by license; use native platform stack instead.

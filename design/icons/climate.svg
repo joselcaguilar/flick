@@ -1,11 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" aria-hidden="true">
-  <g stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M32 10v18"/>
-    <path d="M32 54V36"/>
-    <path d="M13 21l16 9"/>
-    <path d="M35 34l16 9"/>
-    <path d="M51 21l-16 9"/>
-    <path d="M29 34l-16 9"/>
-    <circle cx="32" cy="32" r="5"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+  <g stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3.5v17"/>
+    <path d="M4.7 7.3 19.3 16.7"/>
+    <path d="M19.3 7.3 4.7 16.7"/>
+    <circle cx="12" cy="12" r="2"/>
   </g>
 </svg>

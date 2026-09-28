@@ -1,4 +1,32 @@
 @font-face {
+  font-family: "Inter";
+  src: url("./fonts/Inter-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("./fonts/Inter-Italic-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("./fonts/GeistMono-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("./fonts/GeistMono-Italic-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
   font-family: "Atkinson Hyperlegible";
   src: url("./fonts/AtkinsonHyperlegible-Regular.ttf") format("truetype");
   font-weight: 400;
@@ -12,35 +40,30 @@
   font-style: normal;
   font-display: swap;
 }
-@font-face {
-  font-family: "Atkinson Hyperlegible";
-  src: url("./fonts/AtkinsonHyperlegible-Italic.ttf") format("truetype");
-  font-weight: 400;
-  font-style: italic;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Atkinson Hyperlegible";
-  src: url("./fonts/AtkinsonHyperlegible-BoldItalic.ttf") format("truetype");
-  font-weight: 700;
-  font-style: italic;
-  font-display: swap;
-}
 
 @theme {
-  --font-sans: "Atkinson Hyperlegible", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Geist Mono", "Cascadia Mono", monospace;
   --color-background: var(--flick-bg);
   --color-foreground: var(--flick-text);
   --color-surface: var(--flick-surface);
-  --color-surface-raised: var(--flick-surface-raised);
+  --color-surface-elevated: var(--flick-surface-elevated);
   --color-muted: var(--flick-muted);
   --color-border: var(--flick-border);
-  --color-primary: var(--flick-cue-cyan);
-  --color-primary-foreground: var(--flick-primary-foreground);
-  --color-warning: var(--flick-cue-amber);
-  --color-success: var(--flick-cue-green);
-  --color-danger: var(--flick-cue-red);
+  --color-primary: var(--flick-accent-blue);
+  --color-primary-foreground: #ffffff;
+  --color-violet: var(--flick-accent-violet);
+  --color-success: var(--flick-accent-mint);
+  --color-warning: var(--flick-accent-amber);
+  --color-danger: var(--flick-accent-red);
   --color-focus: var(--flick-focus);
+  --radius-xs: 0.5rem;
+  --radius-sm: 0.75rem;
+  --radius-md: 1.125rem;
+  --radius-lg: 1.5rem;
+  --radius-xl: 2rem;
+  --radius-2xl: 2.5rem;
+  --radius-pill: 999px;
   --spacing-1: 0.25rem;
   --spacing-2: 0.5rem;
   --spacing-3: 0.75rem;
@@ -51,98 +74,175 @@
   --spacing-10: 2.5rem;
   --spacing-12: 3rem;
   --spacing-16: 4rem;
-  --radius-xs: 0.375rem;
-  --radius-sm: 0.625rem;
-  --radius-md: 1rem;
+  --text-display: clamp(2.5rem, 5vw, 4.75rem);
+  --text-headline: clamp(1.75rem, 3vw, 3rem);
+  --text-title: 1.125rem;
+  --text-body: 1rem;
+  --text-small: 0.875rem;
+  --text-label: 0.8125rem;
+  --text-hud-title: 1.375rem;
+  --text-hud-body: 1.25rem;
+  --shadow-glass-float: var(--flick-shadow-glass);
+  --shadow-preview-depth: var(--flick-shadow-preview);
+  --ease-fluid: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --animate-fast: 160ms;
+  --animate-panel: 220ms;
+  --animate-dwell: 500ms;
+}
+
+:root {
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Geist Mono", "Cascadia Mono", monospace;
+  --radius-xs: 0.5rem;
+  --radius-sm: 0.75rem;
+  --radius-md: 1.125rem;
   --radius-lg: 1.5rem;
   --radius-xl: 2rem;
+  --radius-2xl: 2.5rem;
   --radius-pill: 999px;
-  --shadow-panel-rest: var(--flick-shadow-panel-rest);
-  --shadow-panel-lift: var(--flick-shadow-panel-lift);
-  --shadow-hud: var(--flick-shadow-hud);
-  --ease-cue: cubic-bezier(0.16, 1, 0.3, 1);
-  --animate-cue-fast: 180ms;
-  --animate-cue-dwell: 500ms;
+  --text-display: clamp(2.5rem, 5vw, 4.75rem);
+  --text-headline: clamp(1.75rem, 3vw, 3rem);
+  --text-title: 1.125rem;
+  --text-body: 1rem;
+  --text-small: 0.875rem;
+  --text-label: 0.8125rem;
+  --text-hud-title: 1.375rem;
+  --text-hud-body: 1.25rem;
+  --ease-fluid: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --animate-fast: 160ms;
+  --animate-panel: 220ms;
+  --animate-dwell: 500ms;
+  color-scheme: light dark;
+  --flick-accent-blue: #006DFF;
+  --flick-accent-violet: #6D5DF7;
+  --flick-accent-mint: #4EE6B8;
+  --flick-accent-amber: #FFB84D;
+  --flick-accent-red: #FF5D6C;
+  --flick-focus: #64B5FF;
 }
 
-:root,
-[data-theme="light"] {
+:root, [data-theme="light"] {
   color-scheme: light;
-  --flick-bg: #F4F7F2;
+  --flick-bg: #F5F7FB;
+  --flick-bg-rgb: 245 247 251;
   --flick-surface: #FFFFFF;
-  --flick-surface-raised: #E7EFE8;
-  --flick-text: #13201B;
-  --flick-muted: #4E625B;
-  --flick-border: #C6D4CC;
-  --flick-cue-cyan: #007A8C;
-  --flick-cue-amber: #B76B00;
-  --flick-cue-green: #176B46;
-  --flick-cue-red: #A9282F;
-  --flick-primary-foreground: #FFFFFF;
-  --flick-focus: #B76B00;
-  --flick-grid-line: rgba(0, 122, 140, 0.18);
-  --flick-wallpaper-a: #EDF2E9;
-  --flick-wallpaper-b: #D8E8E6;
-  --flick-shadow-panel-rest: 0 1px 2px rgba(19, 32, 27, 0.08), 0 10px 30px rgba(19, 32, 27, 0.08);
-  --flick-shadow-panel-lift: 0 10px 20px rgba(19, 32, 27, 0.10), 0 24px 60px rgba(19, 32, 27, 0.12);
-  --flick-shadow-hud: 0 18px 60px rgba(0, 0, 0, 0.34);
+  --flick-surface-elevated: #EEF2F8;
+  --flick-text: #10131A;
+  --flick-muted: #5B6475;
+  --flick-border: rgba(17, 24, 39, 0.12);
+  --flick-border-strong: rgba(17, 24, 39, 0.2);
+  --flick-material-glass: rgba(255, 255, 255, 0.68);
+  --flick-material-glass-strong: rgba(255, 255, 255, 0.86);
+  --flick-material-opaque: rgba(255, 255, 255, 0.98);
+  --flick-specular: rgba(255, 255, 255, 0.92);
+  --flick-vibrant-text: #0B1020;
+  --flick-wallpaper-a: #DCE8FF;
+  --flick-wallpaper-b: #F7ECFF;
+  --flick-shadow-glass: 0 24px 70px rgba(31, 41, 55, 0.16), inset 0 1px rgba(255, 255, 255, 0.82);
+  --flick-shadow-preview: 0 32px 100px rgba(31, 41, 55, 0.18);
 }
 
-[data-theme="dark"],
-.dark {
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --flick-bg: #090B10;
+    --flick-bg-rgb: 9 11 16;
+    --flick-surface: #11141C;
+    --flick-surface-elevated: #171B25;
+    --flick-text: #F6F8FF;
+    --flick-muted: #AEB7CA;
+    --flick-border: rgba(255, 255, 255, 0.14);
+    --flick-border-strong: rgba(255, 255, 255, 0.24);
+    --flick-material-glass: rgba(22, 25, 34, 0.62);
+    --flick-material-glass-strong: rgba(26, 30, 42, 0.78);
+    --flick-material-opaque: rgba(17, 20, 28, 0.98);
+    --flick-specular: rgba(255, 255, 255, 0.18);
+    --flick-vibrant-text: #FFFFFF;
+    --flick-wallpaper-a: #0D1220;
+    --flick-wallpaper-b: #20143A;
+    --flick-shadow-glass: 0 24px 80px rgba(0, 0, 0, 0.34), inset 0 1px rgba(255, 255, 255, 0.18);
+    --flick-shadow-preview: 0 32px 120px rgba(0, 0, 0, 0.38);
+  }
+}
+
+[data-theme="dark"], .dark {
   color-scheme: dark;
-  --flick-bg: #07100E;
-  --flick-surface: #0E1816;
-  --flick-surface-raised: #172620;
-  --flick-text: #EAF3EE;
-  --flick-muted: #A8BBB2;
-  --flick-border: #2E433B;
-  --flick-cue-cyan: #66E2F2;
-  --flick-cue-amber: #FFC857;
-  --flick-cue-green: #72E59A;
-  --flick-cue-red: #FF7A84;
-  --flick-primary-foreground: #07100E;
-  --flick-focus: #FFC857;
-  --flick-grid-line: rgba(102, 226, 242, 0.2);
-  --flick-wallpaper-a: #0A1114;
-  --flick-wallpaper-b: #162823;
-  --flick-shadow-panel-rest: 0 1px 2px rgba(0, 0, 0, 0.3), 0 14px 40px rgba(0, 0, 0, 0.32);
-  --flick-shadow-panel-lift: 0 12px 28px rgba(0, 0, 0, 0.36), 0 28px 70px rgba(0, 0, 0, 0.45);
-  --flick-shadow-hud: 0 18px 60px rgba(0, 0, 0, 0.55);
+  --flick-bg: #090B10;
+  --flick-bg-rgb: 9 11 16;
+  --flick-surface: #11141C;
+  --flick-surface-elevated: #171B25;
+  --flick-text: #F6F8FF;
+  --flick-muted: #AEB7CA;
+  --flick-border: rgba(255, 255, 255, 0.14);
+  --flick-border-strong: rgba(255, 255, 255, 0.24);
+  --flick-material-glass: rgba(22, 25, 34, 0.62);
+  --flick-material-glass-strong: rgba(26, 30, 42, 0.78);
+  --flick-material-opaque: rgba(17, 20, 28, 0.98);
+  --flick-specular: rgba(255, 255, 255, 0.18);
+  --flick-vibrant-text: #FFFFFF;
+  --flick-wallpaper-a: #0D1220;
+  --flick-wallpaper-b: #20143A;
+  --flick-shadow-glass: 0 24px 80px rgba(0, 0, 0, 0.34), inset 0 1px rgba(255, 255, 255, 0.18);
+  --flick-shadow-preview: 0 32px 120px rgba(0, 0, 0, 0.38);
 }
 
-[data-theme="high-contrast"],
-.high-contrast {
+[data-theme="high-contrast"], .high-contrast {
   color-scheme: dark;
   --flick-bg: #000000;
+  --flick-bg-rgb: 0 0 0;
   --flick-surface: #000000;
-  --flick-surface-raised: #000000;
+  --flick-surface-elevated: #000000;
   --flick-text: #FFFFFF;
   --flick-muted: #FFFFFF;
   --flick-border: #FFFFFF;
-  --flick-cue-cyan: #00E5FF;
-  --flick-cue-amber: #FFFF00;
-  --flick-cue-green: #00FF66;
-  --flick-cue-red: #FF5A5F;
-  --flick-primary-foreground: #000000;
+  --flick-border-strong: #FFFFFF;
+  --flick-material-glass: #000000;
+  --flick-material-glass-strong: #000000;
+  --flick-material-opaque: #000000;
+  --flick-specular: #FFFFFF;
+  --flick-vibrant-text: #FFFFFF;
+  --flick-accent-blue: #00C8FF;
+  --flick-accent-violet: #D7B8FF;
+  --flick-accent-mint: #00FF9D;
+  --flick-accent-amber: #FFFF00;
+  --flick-accent-red: #FF6B6B;
   --flick-focus: #FFFF00;
-  --flick-grid-line: rgba(255, 255, 255, 0.45);
-  --flick-wallpaper-a: #000000;
-  --flick-wallpaper-b: #000000;
-  --flick-shadow-panel-rest: none;
-  --flick-shadow-panel-lift: none;
-  --flick-shadow-hud: none;
+  --flick-shadow-glass: none;
+  --flick-shadow-preview: none;
 }
 
-@media (prefers-contrast: more) {
-  :root {
-    --flick-focus: #FFFF00;
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .flick-glass {
+    background: var(--flick-material-glass);
+    -webkit-backdrop-filter: blur(28px) saturate(1.55);
+    backdrop-filter: blur(28px) saturate(1.55);
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .flick-glass {
+    background: var(--flick-material-opaque);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .flick-glass {
+    background: var(--flick-material-opaque) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root, [data-theme] {
-    --animate-cue-fast: 1ms;
-    --animate-cue-dwell: 1ms;
+    --animate-fast: 1ms;
+    --animate-panel: 1ms;
+    --animate-dwell: 1ms;
   }
+}
+
+.hyperlegible-font {
+  --font-sans: "Atkinson Hyperlegible", system-ui, -apple-system, sans-serif;
 }
