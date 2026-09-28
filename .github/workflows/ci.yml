@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  rust-lint:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.1
+          components: rustfmt, clippy
+      - name: Rust format
+        run: cargo fmt --all --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  rust-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.1
+      # TODO(P1-801): install desktop system dependencies such as libwebkit2gtk-4.1-dev
+      # only after apps/desktop is added to the workspace.
+      - name: Test
+        run: cargo test --workspace
+
+  deny:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.1
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check licenses
+
+  # TODO(P1-701): ui lint/typecheck/test after the React workspace exists.
+  # ui:
+  #   runs-on: ubuntu-22.04
+
+  # TODO(P1-700/P1-710): ui-design detector and Impeccable artifacts.
+  # ui-design:
+  #   runs-on: ubuntu-22.04
+
+  # TODO(P1-602): api-drift once cargo xtask gen-api writes generated TS types.
+  # api-drift:
+  #   runs-on: ubuntu-22.04
