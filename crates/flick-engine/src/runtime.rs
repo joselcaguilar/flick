@@ -1150,6 +1150,20 @@ impl HaGateway for EngineApp {
     }
 
     async fn connect(&self, request: HaConnectRequest) -> Result<HaInstance, ApiProblem> {
+        if self.runtime.mock_ha && request.base_url == "mock://home" {
+            let instance = self.ha_instance.lock().await.clone().unwrap_or(HaInstance {
+                id: "mock-ha".to_owned(),
+                name: "Mock Home".to_owned(),
+                base_url: request.base_url,
+                ha_uuid: Some("mock-ha".to_owned()),
+                auth_kind: "llat".to_owned(),
+                ha_version: Some("2026.9.0".to_owned()),
+                is_default: true,
+                created_at: now_rfc3339(),
+                updated_at: now_rfc3339(),
+            });
+            return Ok(instance);
+        }
         let config = HaConnectionConfig::new(request.base_url.clone(), request.token)
             .map_err(|err| ApiProblem::validation("ha_invalid_url", err.to_string()))?;
         let client = HaClient::connect(config)
