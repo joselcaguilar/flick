@@ -23,3 +23,22 @@ files. DINOv2/scene embedding remains OTA-only and is intentionally excluded.
 
 TODO: CI should source these artifacts from the signed OTA baseline pack once
 that pack is published.
+
+## Local macOS bundle signing
+
+Use the local bundle script for camera-test builds:
+
+```sh
+pnpm run bundle:local
+```
+
+It builds `ui/`, runs `tauri build --debug --bundles app`, then ad-hoc signs
+both `Contents/MacOS/flick-desktop` and `Contents/MacOS/flick-engine` with
+`--options runtime`, `src-tauri/entitlements.plist`, and identifier
+`app.flick.desktop` before running `codesign --verify --deep --strict`.
+
+The sidecar needs the same `com.apple.security.device.camera` entitlement as
+the app because it opens the camera under hardened runtime. Ad-hoc signatures
+change their cdhash on every rebuild, so macOS may prompt for camera access
+again after each local bundle rebuild. Developer ID signing and notarization
+provide the stable signing identity needed to avoid those repeated prompts.

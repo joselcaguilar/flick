@@ -658,6 +658,29 @@ fn open_external(app: AppHandle, url: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn camera_permission_status() -> String {
+    current_camera_permission_status().to_owned()
+}
+
+#[tauri::command]
+async fn camera_request_access(app: AppHandle) -> Result<String, String> {
+    if current_camera_permission_status() == "not_determined" {
+        show_main_window_impl(&app, None)?;
+    }
+    request_camera_access_impl().await
+}
+
+#[tauri::command]
+fn open_camera_privacy_settings(app: AppHandle) -> Result<(), String> {
+    app.opener()
+        .open_url(
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera",
+            None::<String>,
+        )
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn app_info(app: AppHandle) -> AppInfo {
     AppInfo {
         version: app.package_info().version.to_string(),
@@ -812,6 +835,9 @@ fn main() {
             show_main_window,
             set_hud_config,
             open_external,
+            camera_permission_status,
+            camera_request_access,
+            open_camera_privacy_settings,
             app_info,
             app_update_status,
             app_update_check,
@@ -1108,6 +1134,61 @@ fn position_hud(
     window
         .set_position(PhysicalPosition::new(x, y))
         .map_err(|error| error.to_string())
+}
+
+#[cfg(target_os = "macos")]
+fn current_camera_permission_status() -> &'static str {
+    macos_camera_status(nokhwa_bindings_macos::current_authorization_status())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn current_camera_permission_status() -> &'static str {
+    "authorized"
+}
+
+#[cfg(target_os = "macos")]
+async fn request_camera_access_impl() -> Result<String, String> {
+    use nokhwa_bindings_macos::AVAuthorizationStatus;
+
+    if nokhwa_bindings_macos::current_authorization_status() != AVAuthorizationStatus::NotDetermined
+    {
+        return Ok(current_camera_permission_status().to_owned());
+    }
+
+    let (sender, receiver) = tokio::sync::oneshot::channel::<()>();
+    let sender = Arc::new(StdMutex::new(Some(sender)));
+    nokhwa_bindings_macos::request_permission_with_callback({
+        let sender = sender.clone();
+        move |_| {
+            if let Ok(mut sender) = sender.lock()
+                && let Some(sender) = sender.take()
+            {
+                let _ = sender.send(());
+            }
+        }
+    });
+
+    receiver
+        .await
+        .map_err(|_| "camera permission request was canceled".to_owned())?;
+    Ok(current_camera_permission_status().to_owned())
+}
+
+#[cfg(not(target_os = "macos"))]
+async fn request_camera_access_impl() -> Result<String, String> {
+    Ok(current_camera_permission_status().to_owned())
+}
+
+#[cfg(target_os = "macos")]
+fn macos_camera_status(status: nokhwa_bindings_macos::AVAuthorizationStatus) -> &'static str {
+    use nokhwa_bindings_macos::AVAuthorizationStatus;
+
+    match status {
+        AVAuthorizationStatus::NotDetermined => "not_determined",
+        AVAuthorizationStatus::Restricted => "restricted",
+        AVAuthorizationStatus::Denied => "denied",
+        AVAuthorizationStatus::Authorized => "authorized",
+    }
 }
 
 fn set_pause(app: &AppHandle, paused: bool) {
