@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="finger" x1="286" y1="762" x2="675" y2="246" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FBFF"/>
+      <stop offset=".58" stop-color="#DBEAFF"/>
+      <stop offset="1" stop-color="#FFFFFF"/>
+    </linearGradient>
+    <linearGradient id="arc" x1="662" y1="208" x2="844" y2="656" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00A2FF"/>
+      <stop offset=".45" stop-color="#006DFF"/>
+      <stop offset="1" stop-color="#6D5DF7"/>
+    </linearGradient>
+    <filter id="foreground-glow" x="150" y="152" width="650" height="724" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="26" stdDeviation="28" flood-color="#000000" flood-opacity=".34"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="34" flood-color="#006DFF" flood-opacity=".34"/>
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#FFFFFF" flood-opacity=".7"/>
+    </filter>
+    <filter id="arc-glow" x="574" y="132" width="364" height="604" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="0" stdDeviation="22" flood-color="#006DFF" flood-opacity=".55"/>
+    </filter>
+  </defs>
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <g filter="url(#foreground-glow)">
+      <path d="M232 784c153-173 306-348 460-512" stroke="url(#finger)" stroke-width="96"/>
+      <path d="M690 273c-40 12-72 39-95 76" stroke="#FFFFFF" stroke-width="14" opacity=".52"/>
+    </g>
+    <g filter="url(#arc-glow)">
+      <path d="M674 224c121 54 193 177 180 309-8 78-43 149-96 202" stroke="url(#arc)" stroke-width="68"/>
+      <path d="M732 302c50 53 75 124 67 198" stroke="#DCEBFF" stroke-width="21" opacity=".9"/>
+      <path d="M804 701l-45 36 57 10" stroke="url(#arc)" stroke-width="34"/>
+    </g>
+  </g>
+</svg>

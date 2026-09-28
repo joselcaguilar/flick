@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none" aria-label="Flick app icon">
+  <defs>
+    <linearGradient id="icon-body" x1="183" y1="162" x2="842" y2="880" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1B2440"/>
+      <stop offset=".42" stop-color="#0B1020"/>
+      <stop offset="1" stop-color="#17112D"/>
+    </linearGradient>
+    <radialGradient id="icon-blue" cx="0" cy="0" r="1" gradientTransform="translate(720 246) rotate(128) scale(628 520)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#006DFF" stop-opacity=".76"/>
+      <stop offset=".46" stop-color="#006DFF" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#006DFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="icon-violet" cx="0" cy="0" r="1" gradientTransform="translate(307 776) rotate(-39) scale(548 440)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6D5DF7" stop-opacity=".58"/>
+      <stop offset=".5" stop-color="#6D5DF7" stop-opacity=".14"/>
+      <stop offset="1" stop-color="#6D5DF7" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="icon-edge" x1="244" y1="119" x2="817" y2="911" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".58"/>
+      <stop offset=".22" stop-color="#FFFFFF" stop-opacity=".18"/>
+      <stop offset=".68" stop-color="#FFFFFF" stop-opacity=".08"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity=".28"/>
+    </linearGradient>
+    <linearGradient id="finger" x1="286" y1="762" x2="675" y2="246" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FBFF"/>
+      <stop offset=".58" stop-color="#DBEAFF"/>
+      <stop offset="1" stop-color="#FFFFFF"/>
+    </linearGradient>
+    <linearGradient id="arc" x1="662" y1="208" x2="844" y2="656" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00A2FF"/>
+      <stop offset=".45" stop-color="#006DFF"/>
+      <stop offset="1" stop-color="#6D5DF7"/>
+    </linearGradient>
+    <filter id="icon-shadow" x="54" y="62" width="916" height="938" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="34" stdDeviation="46" flood-color="#000000" flood-opacity=".42"/>
+      <feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#001D5B" flood-opacity=".2"/>
+    </filter>
+    <filter id="foreground-glow" x="150" y="152" width="650" height="724" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="26" stdDeviation="28" flood-color="#000000" flood-opacity=".34"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="34" flood-color="#006DFF" flood-opacity=".34"/>
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#FFFFFF" flood-opacity=".7"/>
+    </filter>
+    <filter id="arc-glow" x="574" y="132" width="364" height="604" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="0" stdDeviation="22" flood-color="#006DFF" flood-opacity=".55"/>
+    </filter>
+  </defs>
+  <g filter="url(#icon-shadow)">
+    <rect x="100" y="100" width="824" height="824" rx="196" fill="url(#icon-body)"/>
+    <rect x="100" y="100" width="824" height="824" rx="196" fill="url(#icon-blue)"/>
+    <rect x="100" y="100" width="824" height="824" rx="196" fill="url(#icon-violet)"/>
+    <rect x="118" y="118" width="788" height="788" rx="178" stroke="url(#icon-edge)" stroke-width="4"/>
+    <path d="M196 251c89-71 214-106 330-92 115 14 223 77 287 174" stroke="#FFFFFF" stroke-opacity=".14" stroke-width="2"/>
+    <path d="M182 744c104 84 256 123 407 90 96-20 181-68 250-139" stroke="#FFFFFF" stroke-opacity=".12" stroke-width="2"/>
+  </g>
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <g filter="url(#foreground-glow)">
+      <path d="M232 784c153-173 306-348 460-512" stroke="url(#finger)" stroke-width="96"/>
+      <path d="M690 273c-40 12-72 39-95 76" stroke="#FFFFFF" stroke-width="14" opacity=".52"/>
+    </g>
+    <g filter="url(#arc-glow)">
+      <path d="M674 224c121 54 193 177 180 309-8 78-43 149-96 202" stroke="url(#arc)" stroke-width="68"/>
+      <path d="M732 302c50 53 75 124 67 198" stroke="#DCEBFF" stroke-width="21" opacity=".9"/>
+      <path d="M804 701l-45 36 57 10" stroke="url(#arc)" stroke-width="34"/>
+    </g>
+  </g>
+</svg>

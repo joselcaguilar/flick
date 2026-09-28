@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="flick-mark-finger" x1="68" y1="207" x2="169" y2="54" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7FAFF"/>
+      <stop offset=".62" stop-color="#DCEBFF"/>
+      <stop offset="1" stop-color="#FFFFFF"/>
+    </linearGradient>
+    <linearGradient id="flick-mark-arc" x1="157" y1="47" x2="220" y2="160" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#006DFF"/>
+      <stop offset="1" stop-color="#6D5DF7"/>
+    </linearGradient>
+    <filter id="flick-mark-glow" x="19" y="14" width="218" height="228" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="14" stdDeviation="14" flood-color="#006DFF" flood-opacity=".28"/>
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#FFFFFF" flood-opacity=".55"/>
+    </filter>
+  </defs>
+  <g filter="url(#flick-mark-glow)" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M58 202c44-49 89-101 135-148" stroke="url(#flick-mark-finger)" stroke-width="30"/>
+    <path d="M192 54c-13 4-23 12-31 24" stroke="#FFFFFF" stroke-width="7" opacity=".55"/>
+    <path d="M188 55c36 16 58 53 54 92-2 20-11 38-24 52" stroke="url(#flick-mark-arc)" stroke-width="19"/>
+    <path d="M203 79c15 14 23 34 22 56" stroke="#BFD8FF" stroke-width="7" opacity=".82"/>
+  </g>
+</svg>

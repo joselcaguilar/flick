@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="icon-body" x1="183" y1="162" x2="842" y2="880" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1B2440"/>
+      <stop offset=".42" stop-color="#0B1020"/>
+      <stop offset="1" stop-color="#17112D"/>
+    </linearGradient>
+    <radialGradient id="icon-blue" cx="0" cy="0" r="1" gradientTransform="translate(720 246) rotate(128) scale(628 520)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#006DFF" stop-opacity=".76"/>
+      <stop offset=".46" stop-color="#006DFF" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#006DFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="icon-violet" cx="0" cy="0" r="1" gradientTransform="translate(307 776) rotate(-39) scale(548 440)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6D5DF7" stop-opacity=".58"/>
+      <stop offset=".5" stop-color="#6D5DF7" stop-opacity=".14"/>
+      <stop offset="1" stop-color="#6D5DF7" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="icon-edge" x1="244" y1="119" x2="817" y2="911" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".58"/>
+      <stop offset=".22" stop-color="#FFFFFF" stop-opacity=".18"/>
+      <stop offset=".68" stop-color="#FFFFFF" stop-opacity=".08"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity=".28"/>
+    </linearGradient>
+    <filter id="icon-shadow" x="54" y="62" width="916" height="938" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="34" stdDeviation="46" flood-color="#000000" flood-opacity=".42"/>
+      <feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#001D5B" flood-opacity=".2"/>
+    </filter>
+  </defs>
+  <g filter="url(#icon-shadow)">
+    <rect x="100" y="100" width="824" height="824" rx="196" fill="url(#icon-body)"/>
+    <rect x="100" y="100" width="824" height="824" rx="196" fill="url(#icon-blue)"/>
+    <rect x="100" y="100" width="824" height="824" rx="196" fill="url(#icon-violet)"/>
+    <rect x="118" y="118" width="788" height="788" rx="178" stroke="url(#icon-edge)" stroke-width="4"/>
+    <path d="M196 251c89-71 214-106 330-92 115 14 223 77 287 174" stroke="#FFFFFF" stroke-opacity=".14" stroke-width="2"/>
+    <path d="M182 744c104 84 256 123 407 90 96-20 181-68 250-139" stroke="#FFFFFF" stroke-opacity=".12" stroke-width="2"/>
+  </g>
+</svg>
