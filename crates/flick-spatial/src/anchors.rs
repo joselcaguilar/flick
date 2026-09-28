@@ -4,12 +4,15 @@ use serde::{Deserialize, Serialize, de, ser::SerializeMap};
 use thiserror::Error;
 
 use crate::{
-    PointingRay, VerbParams,
+    PointingRay,
     math::{Mat3, Vec3, a3, angle_deg as vec_angle_deg, unit_or_z, v3},
 };
 
 const PARALLEL_FALLBACK_DEG: f32 = 5.0;
 const DISTINCTIVENESS_WARN_DEG: f32 = 15.0;
+
+/// Opaque `anchors.verb_params` JSON interpreted by `flick-ha` verb resolution.
+pub type VerbParams = serde_json::Value;
 
 /// Target bound to a taught anchor.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -324,7 +327,7 @@ fn build_anchor(
             .residual_deg
             .max(mean_jitter(observations))
             .clamp(1.0, 20.0),
-        verb_params: VerbParams::default(),
+        verb_params: serde_json::json!({}),
         status: AnchorStatus::Ok,
         estimator_version,
     };

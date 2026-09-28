@@ -27,12 +27,11 @@ mod persistence;
 mod places;
 mod ray;
 mod selector;
-mod verbs;
 
 pub use anchors::{
     Anchor, AnchorGeometry, AnchorQuality, AnchorScore, DistinctivenessWarning, RayObservation,
-    TeachObservation, TeachSession, TeachTarget, TeachingError, TeachingOutcome, angular_error_deg,
-    recompute_anchor,
+    TeachObservation, TeachSession, TeachTarget, TeachingError, TeachingOutcome, VerbParams,
+    angular_error_deg, recompute_anchor,
 };
 pub use intrinsics::{
     CameraFov, CameraIntrinsics, DEFAULT_INTRINSICS_VERSION, FOV_TABLE, IntrinsicsSource,
@@ -50,7 +49,3 @@ pub use ray::{
     RayEstimatorSettings, RayModel, RaySource,
 };
 pub use selector::{Spatial, TargetEvent, TargetSelectorImpl, TargetSelectorSettings};
-pub use verbs::{
-    TargetEntityState, VerbParams, VerbResolutionError, default_dial_property,
-    resolve_targeted_action, resolve_verb,
-};

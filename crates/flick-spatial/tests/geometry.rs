@@ -1,14 +1,13 @@
 use std::time::{Duration, Instant};
 
 use flick_core::{
-    Action, ActionTarget, AnchorId, AnchorStatus, CameraId, FaceKeypoints, HandFrame,
-    HandObservation, Handedness, RectF, SelectionState, StageTimings, Verb,
+    AnchorId, AnchorStatus, CameraId, FaceKeypoints, HandFrame, HandObservation, Handedness, RectF,
+    SelectionState, StageTimings,
 };
 use flick_spatial::{
     Anchor, AnchorGeometry, CameraIntrinsics, PointingRay, RayEstimator, RayEstimatorSettings,
-    RayModel, RaySource, RealignPair, TargetEntityState, TargetSelectorImpl,
-    TargetSelectorSettings, TeachObservation, TeachSession, TeachTarget, VerbParams, realign,
-    resolve_verb,
+    RayModel, RaySource, RealignPair, TargetSelectorImpl, TargetSelectorSettings, TeachObservation,
+    TeachSession, TeachTarget, realign,
 };
 use nalgebra::{Matrix3, Unit, UnitQuaternion, Vector3};
 use proptest::prelude::*;
@@ -292,64 +291,6 @@ fn ambiguity_suppresses_selection_when_two_anchors_share_margin() -> Result<(), 
     Ok(())
 }
 
-#[test]
-fn owner_fan_verbs_resolve_to_speed_one_and_off() -> Result<(), String> {
-    let fan_id = AnchorId::new();
-    let mut anchor = test_anchor(
-        fan_id,
-        "Ventilador Dormitorio",
-        Vector3::new(0.0, 0.0, 2.0),
-        "fan.ventilador_dormitorio",
-        "fan",
-    );
-    anchor.verb_params = VerbParams { levels: vec![1] };
-    let state = TargetEntityState {
-        entity_id: "fan.ventilador_dormitorio".to_owned(),
-        state: Some("on".to_owned()),
-        supported_features: Some(53),
-        percentage: Some(1.0),
-        percentage_step: Some(1.0),
-        brightness_pct: None,
-        temperature: None,
-        target_temp_step: None,
-    };
-
-    let speed_one = resolve_verb(&anchor, Verb::LevelSet, Some(1), Some(&state))
-        .map_err(|err| err.to_string())?;
-    assert_eq!(
-        speed_one,
-        Action::CallService {
-            domain: "fan".to_owned(),
-            service: "turn_on".to_owned(),
-            target: ActionTarget {
-                entity_id: Some(vec!["fan.ventilador_dormitorio".to_owned()]),
-                device_id: None,
-                area_id: None,
-            },
-            data: serde_json::json!({ "percentage": 1 }),
-            preset: None,
-        }
-    );
-
-    let stop =
-        resolve_verb(&anchor, Verb::Stop, None, Some(&state)).map_err(|err| err.to_string())?;
-    assert_eq!(
-        stop,
-        Action::CallService {
-            domain: "fan".to_owned(),
-            service: "turn_off".to_owned(),
-            target: ActionTarget {
-                entity_id: Some(vec!["fan.ventilador_dormitorio".to_owned()]),
-                device_id: None,
-                area_id: None,
-            },
-            data: serde_json::json!({}),
-            preset: None,
-        }
-    );
-    Ok(())
-}
-
 fn test_anchor(
     id: AnchorId,
     name: &str,
@@ -367,7 +308,7 @@ fn test_anchor(
             covariance: [[0.0; 3]; 3],
         },
         uncertainty_deg: 0.5,
-        verb_params: VerbParams::default(),
+        verb_params: serde_json::json!({}),
         status: AnchorStatus::Ok,
         estimator_version: "test.estimator".to_owned(),
     }
