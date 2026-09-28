@@ -7,13 +7,14 @@ use std::{
 };
 
 use flick_core::{
-    AnchorId, CameraId, FaceKeypoints, GestureEvent, GestureEventId, GestureId, GesturePhase,
-    HandFrame, HandObservation, Handedness, SelectionState, StageTimings, SuppressionReason,
+    Action, ActionTarget, AnchorId, BuiltinGesture, CameraId, FaceKeypoints, GestureEvent,
+    GestureEventId, GestureId, GesturePhase, HandFrame, HandObservation, Handedness, MappingId,
+    SelectionState, StageTimings, SuppressionReason,
 };
 use flick_engine::{
     dispatcher::{
-        Dispatcher, DispatcherAnchor, HaActionSink, owner_fan_anchor, owner_scenario_mappings,
-        owner_scenario_mappings_for,
+        Dispatcher, DispatcherAnchor, DispatcherMapping, HaActionSink, owner_fan_anchor,
+        owner_scenario_mappings, owner_scenario_mappings_for,
     },
     fake_landmarks::replay_once,
     targeting_store::{SqliteTargetingStore, anchor_record_to_anchor, anchor_to_record},
@@ -40,12 +41,13 @@ async fn replay_owner_scenario_dispatches_mock_ha() -> anyhow::Result<()> {
     let anchor_id = fixture.fan_anchor_id()?;
     let dispatcher_anchors = fixture.dispatcher_anchors()?;
     let (client, mock) = mock_client(&fixture.entity_state("fan.ventilador_dormitorio")?).await?;
-    client.refresh_registry().await?;
+    let registry = client.refresh_registry().await?;
 
     let store = Arc::new(Store::open_memory()?);
     seed_targeting_store(Arc::clone(&store), &fixture)?;
     let dispatcher = Dispatcher::builder(Arc::new(HaActionSink::new(client)))
         .store(Arc::clone(&store))
+        .registry(registry)
         .mappings(owner_scenario_mappings_for(anchor_id))
         .anchors(dispatcher_anchors)
         .build();
@@ -118,11 +120,121 @@ async fn replay_targeting_fixtures_select_and_dispatch() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn paused_dispatcher_suppresses_without_ha_call() -> anyhow::Result<()> {
+    let (client, mock) = mock_client(&owner_fan_anchor().entity).await?;
+    let registry = client.refresh_registry().await?;
+    let dispatcher = Dispatcher::builder(Arc::new(HaActionSink::new(client)))
+        .registry(registry)
+        .mappings(owner_scenario_mappings())
+        .anchors(vec![owner_fan_anchor()])
+        .build();
+    dispatcher.set_paused(true).await;
+    let reasons = dispatch_fixture(
+        &dispatcher,
+        "landmarks/thumb_up.jsonl",
+        &SelectionState::Idle,
+    )
+    .await?;
+    assert!(reasons.contains(&SuppressionReason::Paused));
+    assert!(mock.calls().await.is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+async fn sensitive_cover_targets_blocked_without_allow_sensitive() -> anyhow::Result<()> {
+    let garage = EntityState {
+        entity_id: "cover.garage".to_owned(),
+        state: "closed".to_owned(),
+        attributes: Map::from_iter([
+            ("friendly_name".to_owned(), json!("Garage")),
+            ("device_class".to_owned(), json!("garage")),
+            ("supported_features".to_owned(), json!(15)),
+        ]),
+        last_changed: None,
+        last_updated: None,
+    };
+    let window = EntityState {
+        entity_id: "cover.window".to_owned(),
+        state: "closed".to_owned(),
+        attributes: Map::from_iter([
+            ("friendly_name".to_owned(), json!("Window")),
+            ("supported_features".to_owned(), json!(15)),
+        ]),
+        last_changed: None,
+        last_updated: None,
+    };
+    let scenario = MockScenario {
+        token: "mock-token".to_owned(),
+        ha_version: "2026.9.0".to_owned(),
+        config: json!({"location_name":"Mock Home","version":"2026.9.0","uuid":"mock-ha"}),
+        entities: vec![garage, window],
+        services: json!({"cover": {"open_cover": {}}}),
+        registries: MockRegistries::default(),
+        call_delay_ms: 0,
+        call_errors: Vec::new(),
+    };
+    let (url, token, mock) = MockHa::start(scenario).await?;
+    let client = HaClient::connect(HaConnectionConfig::new(url, token)?).await?;
+    let registry = client.refresh_registry().await?;
+    let mappings = vec![
+        DispatcherMapping::global(
+            MappingId::from_str("01J00000000000000000000020")?,
+            "Garage open",
+            GestureId::Builtin(BuiltinGesture::ThumbUp),
+            Action::CallService {
+                domain: "cover".to_owned(),
+                service: "open_cover".to_owned(),
+                target: ActionTarget {
+                    entity_id: Some(vec!["cover.garage".to_owned()]),
+                    device_id: None,
+                    area_id: None,
+                },
+                data: json!({}),
+                preset: None,
+            },
+        ),
+        DispatcherMapping::global(
+            MappingId::from_str("01J00000000000000000000021")?,
+            "Multi cover open",
+            GestureId::Builtin(BuiltinGesture::ThumbUp),
+            Action::CallService {
+                domain: "cover".to_owned(),
+                service: "open_cover".to_owned(),
+                target: ActionTarget {
+                    entity_id: Some(vec!["cover.window".to_owned(), "cover.garage".to_owned()]),
+                    device_id: None,
+                    area_id: None,
+                },
+                data: json!({}),
+                preset: None,
+            },
+        ),
+    ];
+    let dispatcher = Dispatcher::builder(Arc::new(HaActionSink::new(client)))
+        .registry(registry)
+        .mappings(mappings)
+        .build();
+    let report = dispatcher.dispatch(&thumb_up_event()).await;
+    assert_eq!(report.outcomes.len(), 0);
+    assert_eq!(
+        report
+            .suppressions
+            .iter()
+            .filter(|item| item.reason == SuppressionReason::BlockedDomain)
+            .count(),
+        2
+    );
+    assert!(mock.calls().await.is_empty());
+    Ok(())
+}
+
+#[tokio::test]
 async fn fake_landmark_replay_owner_fan_circle_dispatches_mock_ha() -> anyhow::Result<()> {
     let fan = owner_fan_anchor().entity;
     let (client, mock) = mock_client(&fan).await?;
-    client.refresh_registry().await?;
+    let registry = client.refresh_registry().await?;
     let dispatcher = Dispatcher::builder(Arc::new(HaActionSink::new(client)))
+        .registry(registry)
         .mappings(owner_scenario_mappings())
         .anchors(vec![owner_fan_anchor()])
         .build();
@@ -149,9 +261,10 @@ async fn replay_targeting_fixture(stem: &str) -> anyhow::Result<()> {
     let anchors = load_anchor_fixture("targeting/bedroom_fan.anchors.json")?;
     let fan = anchors.entity_state("fan.ventilador_dormitorio")?;
     let (client, mock) = mock_client(&fan).await?;
-    client.refresh_registry().await?;
+    let registry = client.refresh_registry().await?;
 
     let dispatcher = Dispatcher::builder(Arc::new(HaActionSink::new(client)))
+        .registry(registry)
         .mappings(owner_scenario_mappings_for(anchors.fan_anchor_id()?))
         .anchors(anchors.dispatcher_anchors()?)
         .build();
@@ -238,6 +351,22 @@ fn replay_events(fixture: &str, selection: &SelectionState) -> anyhow::Result<Ve
         events.extend(update.events);
     }
     Ok(events)
+}
+
+fn thumb_up_event() -> GestureEvent {
+    let now = Instant::now();
+    GestureEvent {
+        id: GestureEventId::new(),
+        camera_id: CameraId::new(),
+        gesture_id: GestureId::Builtin(BuiltinGesture::ThumbUp),
+        hand: Handedness::Right,
+        confidence: 0.99,
+        phase: GesturePhase::Fired,
+        value: None,
+        target: None,
+        onset_at: now,
+        fired_at: now,
+    }
 }
 
 fn load_anchor_fixture(fixture: &str) -> anyhow::Result<AnchorFixture> {

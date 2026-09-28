@@ -196,6 +196,21 @@ impl SqliteTargetingStore {
             .collect()
     }
 
+    /// Fallible lookup for all anchors.
+    pub fn try_all_anchors(&self) -> flick_store::Result<Vec<AnchorRecord>> {
+        let conn = self.store.connection();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, place_id, name, target, domain, kind, position, direction, teach_origin, covariance, \
+                 uncertainty_deg, verb_params, sensitive, sensitive_ack, estimator_version, status, last_used_at, created_at, updated_at \
+                 FROM anchors ORDER BY created_at",
+            )
+            .map_err(database_error)?;
+        let rows = stmt.query_map([], raw_anchor).map_err(database_error)?;
+        rows.map(|row| row.map_err(database_error).and_then(AnchorRecord::try_from))
+            .collect()
+    }
+
     /// Fallible observation upsert.
     pub fn try_upsert_observation(
         &self,

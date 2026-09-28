@@ -26,13 +26,14 @@ use axum::{
 };
 use flick_api::{
     ActionDto, ActionOutcomeDto, ActionTargetDto, Anchor as ApiAnchor, ApiConfig, ApiGateways,
-    ApiProblem, ApiState, AvailableCamera, CameraFormat, CameraStatus, EngineControl, EngineStatus,
-    FakeUpdates, HaArea, HaConnectRequest, HaDiscovery, HaEntity, HaGateway, HaInstance,
-    HaServiceSchema, HaStatus as ApiHaStatus, LatencyBreakdown, PauseRequest, PreviewFrame,
-    PreviewSource, RealignCommitResponse, RealignPointRequest, RealignPointResponse,
-    RealignSession, SetupSuggestRequest, SetupSuggestion, StageLatency, TeachCommitRequest,
-    TeachCommitResponse, TeachGateway, TeachLevelRequest, TeachLevelResponse, TeachRequest,
-    TeachSession as ApiTeachSession, TeachSpotResponse, VerbBinding, router,
+    ApiProblem, ApiState, AvailableCamera, CameraFormat, CameraStatus, ConfigGateway,
+    EngineControl, EngineStatus, FakeUpdates, HaArea, HaConnectRequest, HaDiscovery, HaEntity,
+    HaGateway, HaInstance, HaServiceSchema, HaStatus as ApiHaStatus, LatencyBreakdown, Mapping,
+    PauseRequest, PreviewFrame, PreviewSource, RealignCommitResponse, RealignPointRequest,
+    RealignPointResponse, RealignSession, SettingsMap, SetupSuggestRequest, SetupSuggestion,
+    StageLatency, TargetModeDto, TeachCommitRequest, TeachCommitResponse, TeachGateway,
+    TeachLevelRequest, TeachLevelResponse, TeachRequest, TeachSession as ApiTeachSession,
+    TeachSpotResponse, VerbBinding, router,
 };
 use flick_capture::{
     CameraPermissionStatus, CaptureHandle, CaptureStatus, FileSource, FileSourceOptions,
@@ -41,12 +42,13 @@ use flick_capture::{
 };
 use flick_core::{
     Action, ActionOutcome, ActionStatus, ActionTarget, AnchorId, CameraId, DialProperty, Frame,
-    FrameSource, HandFrame, HandPipeline, PlaceId, SourceInfo, SourceKind, Verb,
+    FrameSource, GestureId, HandFrame, HandPipeline, MappingId, PlaceId, SourceInfo, SourceKind,
+    Verb,
 };
 use flick_gestures::{GestureEngine, GestureEngineConfig};
 use flick_ha::{
-    EntityState, HaClient, HaConnectionConfig, HaStatus, RegistrySnapshot, SafetyInput,
-    SafetyValidator, ServiceCallRecord,
+    EntityState, HaClient, HaConnectionConfig, HaStatus, KeyringSecretStore, RegistrySnapshot,
+    SafetyClass, SafetyValidator, SecretStore, ServiceCallRecord, record_current_fan_level,
 };
 use flick_spatial::{
     AnchorGeometry, CameraIntrinsics, DEFAULT_ESTIMATOR_VERSION, PlaceRecord, PlaceStatus,
@@ -56,6 +58,7 @@ use flick_spatial::{
 };
 use flick_store::Store;
 use flick_vision::{EpChoice, HandPipelineImpl, ModelSet};
+use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
@@ -64,7 +67,9 @@ use tokio::{net::TcpListener, sync::Mutex};
 use crate::{
     config::RuntimeConfig,
     dispatcher::{
-        Dispatcher, HaActionSink, NoopActionSink, owner_fan_anchor, owner_scenario_mappings,
+        Dispatcher, DispatcherAnchor, DispatcherMapping, DispatcherSettings, HaActionSink,
+        MappingHand, MappingTarget, NoopActionSink, classify_action_safety, owner_fan_anchor,
+        owner_scenario_mappings,
     },
     fake_landmarks::{ReplayCatalog, ReplayFixture, replay_once},
     targeting_store::{SqliteTargetingStore, anchor_record_to_anchor, anchor_to_record},
@@ -83,12 +88,11 @@ pub async fn serve(runtime: RuntimeConfig, token: String) -> anyhow::Result<()> 
 
     let store = Arc::new(Store::open(&runtime.data_dir)?);
     let app = Arc::new(EngineApp::new(runtime.clone(), Arc::clone(&store)));
-    let sink = if runtime.mock_ha {
-        let client = start_mock_ha(&app).await?;
-        Arc::new(HaActionSink::new(client)) as Arc<dyn flick_core::ActionSink>
+    if runtime.mock_ha {
+        start_mock_ha(&app).await?;
     } else {
-        Arc::new(NoopActionSink) as Arc<dyn flick_core::ActionSink>
-    };
+        app.restore_ha_connection().await;
+    }
 
     let gateways = ApiGateways {
         engine: app.clone(),
@@ -96,14 +100,40 @@ pub async fn serve(runtime: RuntimeConfig, token: String) -> anyhow::Result<()> 
         teach: app.clone(),
         updates: Arc::new(FakeUpdates),
         preview: app.clone(),
+        config: app.clone(),
     };
     let state = ApiState::new(api_config.clone(), gateways);
+    let settings_map = load_settings(&state, &app.store)?;
+    let dispatcher_settings = dispatcher_settings_from_map(&settings_map);
+    let mut api_mappings = load_api_mappings(&app.store)?;
+    let mut dispatcher_mappings = dispatcher_mappings_from_api(&api_mappings)?;
+    let mut api_anchors = load_api_anchors(&app.targeting)?;
+    let mut dispatcher_anchors =
+        dispatcher_anchors_from_api(&api_anchors, &app.registry.lock().await.clone());
+    if runtime.mock_ha || runtime.fake_landmarks.is_some() {
+        let owner_anchor = owner_fan_anchor();
+        dispatcher_anchors.push(owner_anchor.clone());
+        api_anchors.push(api_anchor_from_dispatcher(&owner_anchor));
+        let owner_mappings = owner_scenario_mappings();
+        api_mappings.extend(owner_mappings.iter().map(api_mapping_from_dispatcher));
+        dispatcher_mappings.extend(owner_mappings);
+    }
+    state.replace_settings(settings_map);
+    state.replace_mappings(api_mappings);
+    state.replace_anchors(api_anchors);
     let events = state.events();
+    let sink = if let Some(client) = app.ha_client.lock().await.clone() {
+        Arc::new(HaActionSink::new(client)) as Arc<dyn flick_core::ActionSink>
+    } else {
+        Arc::new(NoopActionSink) as Arc<dyn flick_core::ActionSink>
+    };
     let dispatcher = Dispatcher::builder(sink)
         .store(store)
         .events(events)
-        .mappings(owner_scenario_mappings())
-        .anchors(vec![owner_fan_anchor()])
+        .settings(dispatcher_settings)
+        .registry(app.registry.lock().await.clone())
+        .mappings(dispatcher_mappings)
+        .anchors(dispatcher_anchors)
         .build();
     app.set_dispatcher(dispatcher).await;
     app.configure_fake_landmarks().await;
@@ -261,6 +291,519 @@ async fn start_mock_ha(app: &Arc<EngineApp>) -> anyhow::Result<HaClient> {
     Ok(client)
 }
 
+fn load_settings(state: &ApiState, store: &Store) -> anyhow::Result<SettingsMap> {
+    let mut settings = state.settings_snapshot();
+    for (key, value) in store
+        .settings()
+        .all()
+        .map_err(|err| anyhow::anyhow!("{err}"))?
+    {
+        settings.insert(key, value);
+    }
+    Ok(settings)
+}
+
+fn dispatcher_settings_from_map(settings: &SettingsMap) -> DispatcherSettings {
+    let mut dispatcher = DispatcherSettings::default();
+    if let Some(value) = settings
+        .get("safety.allow_sensitive")
+        .and_then(serde_json::Value::as_bool)
+    {
+        dispatcher.allow_sensitive_actions = value;
+    }
+    dispatcher
+}
+
+fn load_api_mappings(store: &Store) -> anyhow::Result<Vec<Mapping>> {
+    let conn = store.connection();
+    let mut stmt = conn.prepare(
+        "SELECT id, name, enabled, gesture_id, hand, camera_ids, target_mode, anchor_id, \
+         target_domain, mode, action, sensitive, sensitive_ack, confirm_gesture_id, feedback, \
+         sort_order, created_at, updated_at FROM mappings ORDER BY sort_order, created_at",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        let camera_ids_raw: String = row.get(5)?;
+        let action_raw: String = row.get(10)?;
+        let feedback_raw: String = row.get(14)?;
+        let created_at: i64 = row.get(16)?;
+        let updated_at: i64 = row.get(17)?;
+        Ok(Mapping {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            enabled: row.get::<_, i64>(2)? != 0,
+            gesture_id: row.get(3)?,
+            hand: row.get(4)?,
+            camera_ids: serde_json::from_str(&camera_ids_raw).unwrap_or_default(),
+            target_mode: target_mode_from_str(&row.get::<_, String>(6)?),
+            anchor_id: row.get(7)?,
+            target_domain: row.get(8)?,
+            mode: row.get(9)?,
+            action: serde_json::from_str(&action_raw).unwrap_or_else(|_| ActionDto::CallService {
+                domain: "homeassistant".to_owned(),
+                service: "toggle".to_owned(),
+                target: ActionTargetDto::default(),
+                data: json!({}),
+                preset: None,
+            }),
+            sensitive: row.get::<_, i64>(11)? != 0,
+            sensitive_ack: row.get::<_, i64>(12)? != 0,
+            confirm_gesture_id: row.get(13)?,
+            feedback: serde_json::from_str(&feedback_raw).unwrap_or_else(|_| json!({})),
+            sort_order: row.get(15)?,
+            created_at: rfc3339_from_ms(created_at),
+            updated_at: rfc3339_from_ms(updated_at),
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
+
+fn load_api_anchors(targeting: &SqliteTargetingStore) -> anyhow::Result<Vec<ApiAnchor>> {
+    Ok(targeting
+        .try_all_anchors()
+        .map_err(|err| anyhow::anyhow!("{err}"))?
+        .iter()
+        .map(api_anchor_from_record)
+        .collect())
+}
+
+fn dispatcher_mappings_from_api(mappings: &[Mapping]) -> anyhow::Result<Vec<DispatcherMapping>> {
+    mappings.iter().map(dispatcher_mapping_from_api).collect()
+}
+
+fn dispatcher_mapping_from_api(mapping: &Mapping) -> anyhow::Result<DispatcherMapping> {
+    let action = action_from_dto(mapping.action.clone())
+        .map_err(|_| anyhow::anyhow!("bad action for mapping {}", mapping.id))?;
+    let target = match mapping.target_mode {
+        TargetModeDto::Global => MappingTarget::Global,
+        TargetModeDto::Anchor => MappingTarget::Anchor(
+            mapping
+                .anchor_id
+                .as_deref()
+                .context("anchor mapping missing anchor_id")?
+                .parse()?,
+        ),
+        TargetModeDto::Domain => MappingTarget::Domain(
+            mapping
+                .target_domain
+                .clone()
+                .context("domain mapping missing target_domain")?,
+        ),
+    };
+    Ok(DispatcherMapping {
+        id: MappingId::from_str(&mapping.id)?,
+        name: mapping.name.clone(),
+        enabled: mapping.enabled,
+        gesture_id: GestureId::from_str(&mapping.gesture_id)?,
+        hand: mapping_hand_from_str(&mapping.hand),
+        camera_ids: mapping.camera_ids.clone(),
+        target,
+        action,
+        cooldown_ms: 1_000,
+        sensitive_ack: mapping.sensitive_ack,
+        confirm_gesture_id: mapping
+            .confirm_gesture_id
+            .as_deref()
+            .map(GestureId::from_str)
+            .transpose()?,
+        sort_order: mapping.sort_order,
+    })
+}
+
+fn dispatcher_anchors_from_api(
+    anchors: &[ApiAnchor],
+    registry: &RegistrySnapshot,
+) -> Vec<DispatcherAnchor> {
+    anchors
+        .iter()
+        .filter_map(|anchor| {
+            let id = AnchorId::from_str(&anchor.id).ok()?;
+            let entity_id = target_entity_id(&anchor.target)?;
+            let entity = registry
+                .entities
+                .iter()
+                .find(|entity| entity.entity_id == entity_id)
+                .map(entity_state_from_registry)
+                .unwrap_or_else(|| EntityState {
+                    entity_id: entity_id.to_owned(),
+                    state: "unknown".to_owned(),
+                    attributes: serde_json::Map::new(),
+                    last_changed: None,
+                    last_updated: None,
+                });
+            let levels = anchor
+                .verb_params
+                .get("levels")
+                .and_then(serde_json::Value::as_array)
+                .map(|items| {
+                    items
+                        .iter()
+                        .filter_map(serde_json::Value::as_f64)
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            Some(DispatcherAnchor {
+                id,
+                name: anchor.name.clone(),
+                domain: anchor.domain.clone(),
+                entity,
+                levels,
+            })
+        })
+        .collect()
+}
+
+fn entity_state_from_registry(entity: &flick_ha::RegistryEntity) -> EntityState {
+    let mut attributes = serde_json::Map::from_iter([
+        ("friendly_name".to_owned(), json!(entity.name)),
+        (
+            "supported_features".to_owned(),
+            json!(entity.supported_features),
+        ),
+    ]);
+    if let Some(device_class) = &entity.device_class {
+        attributes.insert("device_class".to_owned(), json!(device_class));
+    }
+    EntityState {
+        entity_id: entity.entity_id.clone(),
+        state: entity.state.clone(),
+        attributes,
+        last_changed: None,
+        last_updated: None,
+    }
+}
+
+fn api_mapping_from_dispatcher(mapping: &DispatcherMapping) -> Mapping {
+    let (target_mode, anchor_id, target_domain) = match &mapping.target {
+        MappingTarget::Global => (TargetModeDto::Global, None, None),
+        MappingTarget::Anchor(id) => (TargetModeDto::Anchor, Some(id.to_string()), None),
+        MappingTarget::Domain(domain) => (TargetModeDto::Domain, None, Some(domain.clone())),
+    };
+    let now = now_rfc3339();
+    Mapping {
+        id: mapping.id.to_string(),
+        name: mapping.name.clone(),
+        enabled: mapping.enabled,
+        gesture_id: mapping.gesture_id.to_string(),
+        hand: mapping_hand_str(mapping.hand).to_owned(),
+        camera_ids: mapping.camera_ids.clone(),
+        target_mode,
+        anchor_id,
+        target_domain,
+        mode: "tap".to_owned(),
+        action: action_to_dto(&mapping.action),
+        sensitive: false,
+        sensitive_ack: mapping.sensitive_ack,
+        confirm_gesture_id: mapping.confirm_gesture_id.map(|id| id.to_string()),
+        feedback: json!({"hud": true, "sound": true}),
+        sort_order: mapping.sort_order,
+        created_at: now.clone(),
+        updated_at: now,
+    }
+}
+
+fn api_anchor_from_dispatcher(anchor: &DispatcherAnchor) -> ApiAnchor {
+    let now = now_rfc3339();
+    ApiAnchor {
+        id: anchor.id.to_string(),
+        place_id: "dev-owner-fixture".to_owned(),
+        name: anchor.name.clone(),
+        target: json!({"entity_id": anchor.entity.entity_id}),
+        domain: anchor.domain.clone(),
+        kind: "direction".to_owned(),
+        verb_params: json!({ "levels": anchor.levels }),
+        sensitive: false,
+        sensitive_ack: false,
+        status: "ok".to_owned(),
+        verbs: Vec::new(),
+        last_used_at: None,
+        created_at: now.clone(),
+        updated_at: now,
+    }
+}
+
+fn target_mode_from_str(value: &str) -> TargetModeDto {
+    match value {
+        "anchor" => TargetModeDto::Anchor,
+        "domain" => TargetModeDto::Domain,
+        _ => TargetModeDto::Global,
+    }
+}
+
+fn target_mode_str(value: TargetModeDto) -> &'static str {
+    match value {
+        TargetModeDto::Global => "global",
+        TargetModeDto::Anchor => "anchor",
+        TargetModeDto::Domain => "domain",
+    }
+}
+
+fn mapping_hand_from_str(value: &str) -> MappingHand {
+    match value {
+        "left" => MappingHand::Left,
+        "right" => MappingHand::Right,
+        _ => MappingHand::Any,
+    }
+}
+
+fn mapping_hand_str(value: MappingHand) -> &'static str {
+    match value {
+        MappingHand::Any => "any",
+        MappingHand::Left => "left",
+        MappingHand::Right => "right",
+    }
+}
+
+fn action_to_dto(action: &Action) -> ActionDto {
+    match action {
+        Action::CallService {
+            domain,
+            service,
+            target,
+            data,
+            preset,
+        } => ActionDto::CallService {
+            domain: domain.clone(),
+            service: service.clone(),
+            target: ActionTargetDto {
+                entity_id: target.entity_id.clone(),
+                device_id: target.device_id.clone(),
+                area_id: target.area_id.clone(),
+            },
+            data: data.clone(),
+            preset: preset.clone(),
+        },
+        Action::Dial {
+            entity_id,
+            property,
+            gain,
+            min,
+            max,
+        } => ActionDto::Dial {
+            entity_id: entity_id.clone(),
+            property: dial_property_str(*property).to_owned(),
+            gain: *gain,
+            min: min.clone(),
+            max: max.clone(),
+        },
+        Action::Verb { verb, level } => ActionDto::Verb {
+            verb: verb_str(*verb).to_owned(),
+            level: *level,
+        },
+    }
+}
+
+fn dial_property_str(property: DialProperty) -> &'static str {
+    match property {
+        DialProperty::BrightnessPct => "brightness_pct",
+        DialProperty::VolumeLevel => "volume_level",
+        DialProperty::Position => "position",
+        DialProperty::Percentage => "percentage",
+        DialProperty::Temperature => "temperature",
+    }
+}
+
+fn verb_str(verb: Verb) -> &'static str {
+    match verb {
+        Verb::Up => "up",
+        Verb::Down => "down",
+        Verb::On => "on",
+        Verb::Off => "off",
+        Verb::Stop => "stop",
+        Verb::Toggle => "toggle",
+        Verb::LevelSet => "level_set",
+    }
+}
+
+fn rfc3339_from_ms(ms: i64) -> String {
+    OffsetDateTime::from_unix_timestamp(ms.div_euclid(1_000))
+        .and_then(|time| time.replace_nanosecond((ms.rem_euclid(1_000) as u32) * 1_000_000))
+        .ok()
+        .and_then(|time| time.format(&Rfc3339).ok())
+        .unwrap_or_else(now_rfc3339)
+}
+
+async fn wait_ha_ready(client: &HaClient) -> anyhow::Result<String> {
+    let mut status = client.status();
+    let ready = async {
+        loop {
+            let current = { status.borrow().clone() };
+            match current {
+                HaStatus::Ready { ha_version } => return Ok(ha_version.unwrap_or_default()),
+                HaStatus::AuthFailed { message } => {
+                    anyhow::bail!("Home Assistant authentication failed: {message}");
+                }
+                HaStatus::Disconnected | HaStatus::Connecting | HaStatus::Reconnecting { .. } => {
+                    status.changed().await?;
+                }
+            }
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(8), ready)
+        .await
+        .context("timed out waiting for Home Assistant authentication")?
+}
+
+fn load_default_ha_instance(store: &Store) -> anyhow::Result<Option<(HaInstance, String)>> {
+    let conn = store.connection();
+    conn.query_row(
+        "SELECT id, name, base_url, ha_uuid, auth_kind, keychain_ref, ha_version, is_default, \
+         created_at, updated_at FROM ha_instances ORDER BY is_default DESC, updated_at DESC LIMIT 1",
+        [],
+        |row| {
+            let created_at: i64 = row.get(8)?;
+            let updated_at: i64 = row.get(9)?;
+            Ok((
+                HaInstance {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    base_url: row.get(2)?,
+                    ha_uuid: row.get(3)?,
+                    auth_kind: row.get(4)?,
+                    ha_version: row.get(6)?,
+                    is_default: row.get::<_, i64>(7)? != 0,
+                    created_at: rfc3339_from_ms(created_at),
+                    updated_at: rfc3339_from_ms(updated_at),
+                },
+                row.get(5)?,
+            ))
+        },
+    )
+    .optional()
+    .map_err(Into::into)
+}
+
+fn persist_ha_instance(
+    store: &Store,
+    instance: &HaInstance,
+    keychain_ref: &str,
+    cert_sha256: Option<&str>,
+) -> anyhow::Result<()> {
+    let now = now_ms();
+    let conn = store.connection();
+    conn.execute("UPDATE ha_instances SET is_default = 0", [])?;
+    conn.execute(
+        "INSERT INTO ha_instances \
+         (id, name, base_url, ha_uuid, auth_kind, keychain_ref, cert_sha256, ha_version, is_default, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1, ?9, ?10) \
+         ON CONFLICT(id) DO UPDATE SET name = excluded.name, base_url = excluded.base_url, \
+         ha_uuid = excluded.ha_uuid, auth_kind = excluded.auth_kind, keychain_ref = excluded.keychain_ref, \
+         cert_sha256 = excluded.cert_sha256, ha_version = excluded.ha_version, is_default = 1, updated_at = excluded.updated_at",
+        params![
+            instance.id,
+            instance.name,
+            instance.base_url,
+            instance.ha_uuid,
+            instance.auth_kind,
+            keychain_ref,
+            cert_sha256,
+            instance.ha_version,
+            now,
+            now,
+        ],
+    )?;
+    Ok(())
+}
+
+fn persist_settings(store: &Store, settings: &SettingsMap) -> anyhow::Result<()> {
+    let now = now_ms();
+    for (key, value) in settings {
+        store.settings().set(key, value, now)?;
+    }
+    Ok(())
+}
+
+fn persist_mappings(store: &Store, mappings: &[Mapping]) -> anyhow::Result<()> {
+    let mut conn = store.connection();
+    let tx = conn.transaction()?;
+    tx.execute("DELETE FROM mappings", [])?;
+    let now = now_ms();
+    for mapping in mappings {
+        if let (TargetModeDto::Anchor, Some(anchor_id)) =
+            (mapping.target_mode, mapping.anchor_id.as_ref())
+        {
+            let exists = tx
+                .query_row(
+                    "SELECT 1 FROM anchors WHERE id = ?1",
+                    params![anchor_id],
+                    |_| Ok(()),
+                )
+                .optional()?
+                .is_some();
+            if !exists {
+                continue;
+            }
+        }
+        tx.execute(
+            "INSERT OR IGNORE INTO gestures \
+             (id, source, kind, hands_required, name, hand_constraint, enabled, pro, created_at, updated_at) \
+             VALUES (?1, 'builtin', 'static', 1, ?2, 'any', 1, 0, ?3, ?4)",
+            params![mapping.gesture_id, mapping.gesture_id, now, now],
+        )?;
+        tx.execute(
+            "INSERT INTO mappings \
+             (id, name, enabled, gesture_id, hand, allow_two_hands, camera_ids, target_mode, anchor_id, target_domain, \
+              mode, hold_ms, repeat_ms, cooldown_ms, require_armed, active_hours, action, sensitive, sensitive_ack, \
+              confirm_gesture_id, feedback, sort_order, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?7, ?8, ?9, ?10, 800, 400, 1000, 0, NULL, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+            params![
+                mapping.id,
+                mapping.name,
+                if mapping.enabled { 1 } else { 0 },
+                mapping.gesture_id,
+                mapping.hand,
+                serde_json::to_string(&mapping.camera_ids)?,
+                target_mode_str(mapping.target_mode),
+                mapping.anchor_id,
+                mapping.target_domain,
+                mapping.mode,
+                serde_json::to_string(&mapping.action)?,
+                if mapping.sensitive { 1 } else { 0 },
+                if mapping.sensitive_ack { 1 } else { 0 },
+                mapping.confirm_gesture_id,
+                serde_json::to_string(&mapping.feedback)?,
+                mapping.sort_order,
+                now,
+                now,
+            ],
+        )?;
+    }
+    tx.commit()?;
+    Ok(())
+}
+
+fn persist_anchor_edits(store: &Store, anchors: &[ApiAnchor]) -> anyhow::Result<()> {
+    let current_ids = anchors
+        .iter()
+        .map(|anchor| anchor.id.clone())
+        .collect::<std::collections::HashSet<_>>();
+    let now = now_ms();
+    let conn = store.connection();
+    let mut stmt = conn.prepare("SELECT id FROM anchors")?;
+    let existing = stmt
+        .query_map([], |row| row.get::<_, String>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    for id in existing {
+        if !current_ids.contains(&id) {
+            conn.execute("DELETE FROM anchors WHERE id = ?1", params![id])?;
+        }
+    }
+    for anchor in anchors {
+        conn.execute(
+            "UPDATE anchors SET name = ?1, verb_params = ?2, sensitive = ?3, sensitive_ack = ?4, status = ?5, updated_at = ?6 WHERE id = ?7",
+            params![
+                anchor.name,
+                serde_json::to_string(&anchor.verb_params)?,
+                if anchor.sensitive { 1 } else { 0 },
+                if anchor.sensitive_ack { 1 } else { 0 },
+                anchor.status,
+                now,
+                anchor.id,
+            ],
+        )?;
+    }
+    Ok(())
+}
+
 fn bedroom_fan_scenario() -> flick_ha::mock::MockScenario {
     flick_ha::mock::MockScenario {
         token: "mock-token".to_owned(),
@@ -329,6 +872,15 @@ impl EngineApp {
     }
 
     async fn set_dispatcher(&self, dispatcher: Dispatcher) {
+        if let Some(client) = self.ha_client.lock().await.clone() {
+            dispatcher
+                .set_sink(Arc::new(HaActionSink::new(client)) as Arc<dyn flick_core::ActionSink>)
+                .await;
+        }
+        dispatcher
+            .set_registry(self.registry.lock().await.clone())
+            .await;
+        dispatcher.set_paused(*self.paused.lock().await).await;
         *self.dispatcher.lock().await = Some(dispatcher);
     }
 
@@ -338,6 +890,14 @@ impl EngineApp {
         instance: Option<HaInstance>,
         snapshot: RegistrySnapshot,
     ) {
+        if let Some(dispatcher) = self.dispatcher.lock().await.clone() {
+            dispatcher
+                .set_sink(
+                    Arc::new(HaActionSink::new(client.clone())) as Arc<dyn flick_core::ActionSink>
+                )
+                .await;
+            dispatcher.set_registry(snapshot.clone()).await;
+        }
         *self.ha_client.lock().await = Some(client);
         *self.ha_instance.lock().await = instance;
         *self.registry.lock().await = snapshot;
@@ -404,6 +964,63 @@ impl EngineApp {
         } else {
             Vec::new()
         }
+    }
+
+    async fn restore_ha_connection(&self) {
+        match load_default_ha_instance(&self.store) {
+            Ok(Some((instance, keychain_ref))) => {
+                let secrets = KeyringSecretStore::new();
+                match secrets.get(&keychain_ref) {
+                    Ok(Some(token)) => {
+                        if let Err(err) = self.connect_saved_ha(instance, token).await {
+                            tracing::warn!(error = %err, "failed to restore Home Assistant connection");
+                        }
+                    }
+                    Ok(None) => {
+                        tracing::warn!("stored Home Assistant token is missing from keychain")
+                    }
+                    Err(err) => tracing::warn!(error = %err, "failed to read Home Assistant token"),
+                }
+            }
+            Ok(None) => {}
+            Err(err) => tracing::warn!(error = %err, "failed to load Home Assistant instance"),
+        }
+    }
+
+    async fn connect_saved_ha(&self, instance: HaInstance, token: String) -> anyhow::Result<()> {
+        let config = HaConnectionConfig::new(instance.base_url.clone(), token)?;
+        let client = HaClient::connect(config).await?;
+        wait_ha_ready(&client).await?;
+        let snapshot = client.refresh_registry().await?;
+        self.set_ha_client(client, Some(instance), snapshot).await;
+        Ok(())
+    }
+
+    async fn current_entity_state(&self, entity_id: &str) -> Result<EntityState, ApiProblem> {
+        let client = self.ha_client.lock().await.clone().ok_or_else(|| {
+            ApiProblem::validation("ha_not_configured", "Home Assistant is not configured")
+        })?;
+        let states = client
+            .request(json!({"type":"get_states"}))
+            .await
+            .map_err(|err| ApiProblem::validation("ha_state_failed", err.to_string()))?;
+        let states: Vec<EntityState> = serde_json::from_value(states)
+            .map_err(|err| ApiProblem::validation("ha_state_failed", err.to_string()))?;
+        states
+            .into_iter()
+            .find(|state| state.entity_id == entity_id)
+            .ok_or_else(|| ApiProblem::validation("entity_not_found", "entity not found"))
+    }
+
+    async fn reload_dispatcher_anchors_from_store(&self) -> Result<(), ApiProblem> {
+        let anchors = load_api_anchors(&self.targeting)
+            .map_err(|err| ApiProblem::validation("anchor_reload_failed", err.to_string()))?;
+        let dispatcher_anchors =
+            dispatcher_anchors_from_api(&anchors, &self.registry.lock().await.clone());
+        if let Some(dispatcher) = self.dispatcher.lock().await.clone() {
+            dispatcher.set_anchors(dispatcher_anchors).await;
+        }
+        Ok(())
     }
 
     async fn start_file_camera(&self, path: &Path) -> anyhow::Result<CameraStatus> {
@@ -513,6 +1130,7 @@ struct EngineCapture {
     handle: Option<CaptureHandle>,
     worker_stop: Arc<AtomicBool>,
     worker: Option<thread::JoinHandle<()>>,
+    dispatch_task: Option<tokio::task::JoinHandle<()>>,
     latest_frame: Arc<std::sync::Mutex<Option<Frame>>>,
     latest_hands: Arc<std::sync::Mutex<Option<HandFrame>>>,
     last_error: Arc<std::sync::Mutex<Option<String>>>,
@@ -534,13 +1152,20 @@ impl EngineCapture {
         let latest_frame = Arc::new(std::sync::Mutex::new(None));
         let latest_hands = Arc::new(std::sync::Mutex::new(None));
         let last_error = Arc::new(std::sync::Mutex::new(None));
+        let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel();
+        let dispatch_task = dispatcher.map(|dispatcher| {
+            tokio::spawn(async move {
+                while let Some(event) = event_rx.recv().await {
+                    let _ = dispatcher.dispatch(&event).await;
+                }
+            })
+        });
         let worker = {
             let worker_stop = Arc::clone(&worker_stop);
             let latest_frame = Arc::clone(&latest_frame);
             let latest_hands = Arc::clone(&latest_hands);
             let last_error = Arc::clone(&last_error);
             let source_info = source_info.clone();
-            let handle = tokio::runtime::Handle::current();
             let mut pipeline = build_hand_pipeline(model_root, source_info.mirror);
             let mut gestures = GestureEngine::new(GestureEngineConfig::default());
             let mut selector = TargetSelectorImpl::new(
@@ -561,13 +1186,8 @@ impl EngineCapture {
                         match pipeline.process(&frame) {
                             Ok(hands) => {
                                 let selection = selector.update(&hands, None);
-                                if let Some(dispatcher) = dispatcher.as_ref() {
-                                    for event in gestures.update(&hands, &selection).events {
-                                        let dispatcher = dispatcher.clone();
-                                        handle.block_on(async move {
-                                            let _ = dispatcher.dispatch(&event).await;
-                                        });
-                                    }
+                                for event in gestures.update(&hands, &selection).events {
+                                    let _ = event_tx.send(event);
                                 }
                                 if let Ok(mut latest) = latest_hands.lock() {
                                     *latest = Some(hands);
@@ -591,6 +1211,7 @@ impl EngineCapture {
             handle: Some(handle),
             worker_stop,
             worker: Some(worker),
+            dispatch_task,
             latest_frame,
             latest_hands,
             last_error,
@@ -633,6 +1254,9 @@ impl EngineCapture {
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
         }
+        if let Some(dispatch_task) = self.dispatch_task.take() {
+            dispatch_task.abort();
+        }
         CameraStatus {
             camera_id: self.source_info.id.to_string(),
             state: "stopped".to_owned(),
@@ -650,6 +1274,9 @@ impl Drop for EngineCapture {
         }
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
+        }
+        if let Some(dispatch_task) = self.dispatch_task.take() {
+            dispatch_task.abort();
         }
     }
 }
@@ -714,11 +1341,17 @@ impl EngineControl for EngineApp {
 
     async fn pause(&self, _request: PauseRequest) -> EngineStatus {
         *self.paused.lock().await = true;
+        if let Some(dispatcher) = self.dispatcher.lock().await.clone() {
+            dispatcher.set_paused(true).await;
+        }
         EngineControl::status(self).await
     }
 
     async fn resume(&self) -> EngineStatus {
         *self.paused.lock().await = false;
+        if let Some(dispatcher) = self.dispatcher.lock().await.clone() {
+            dispatcher.set_paused(false).await;
+        }
         EngineControl::status(self).await
     }
 
@@ -854,18 +1487,32 @@ impl TeachGateway for EngineApp {
         session_id: &str,
         request: TeachLevelRequest,
     ) -> Result<TeachLevelResponse, ApiProblem> {
+        let entity_id = {
+            let sessions = self.teach_sessions.lock().await;
+            let session = sessions.get(session_id).ok_or_else(|| {
+                ApiProblem::validation("teach_session_not_found", "teach session not found")
+            })?;
+            target_entity_id(&session.target)
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| {
+                    ApiProblem::validation(
+                        "unsupported_target",
+                        "level capture requires an entity target",
+                    )
+                })?
+        };
+        let entity = self.current_entity_state(&entity_id).await?;
         let mut sessions = self.teach_sessions.lock().await;
         let session = sessions.get_mut(session_id).ok_or_else(|| {
             ApiProblem::validation("teach_session_not_found", "teach session not found")
         })?;
-        let level = f64::from(request.level);
-        if !session.levels.contains(&level) {
-            session.levels.push(level);
-            session.levels.sort_by(f64::total_cmp);
-        }
+        session.levels =
+            record_current_fan_level(session.levels.clone(), request.level, &entity)
+                .map_err(|err| ApiProblem::validation("level_not_available", err.to_string()))?;
+        let current_percentage = entity.attr_f64("percentage").unwrap_or(0.0);
         Ok(TeachLevelResponse {
             levels: session.levels.clone(),
-            current_percentage: level,
+            current_percentage,
         })
     }
 
@@ -888,6 +1535,11 @@ impl TeachGateway for EngineApp {
             .split_once('.')
             .map(|(domain, _)| domain)
             .unwrap_or("homeassistant");
+        let index = usize::try_from(request.level.saturating_sub(1))
+            .map_err(|err| ApiProblem::validation("bad_level", err.to_string()))?;
+        let percentage = session.levels.get(index).copied().ok_or_else(|| {
+            ApiProblem::validation("level_not_taught", "level has not been taught")
+        })?;
         let action = Action::CallService {
             domain: domain.to_owned(),
             service: "turn_on".to_owned(),
@@ -896,7 +1548,7 @@ impl TeachGateway for EngineApp {
                 device_id: None,
                 area_id: None,
             },
-            data: json!({"percentage": request.level}),
+            data: json!({"percentage": percentage}),
             preset: Some("teach.level_test".to_owned()),
         };
         let client = self.ha_client.lock().await.clone();
@@ -952,6 +1604,7 @@ impl TeachGateway for EngineApp {
         self.targeting
             .try_upsert_anchor(&record)
             .map_err(store_problem)?;
+        self.reload_dispatcher_anchors_from_store().await?;
         Ok(TeachCommitResponse {
             anchor: api_anchor_from_record(&record),
             mapping_ids: request
@@ -1124,23 +1777,65 @@ impl HaGateway for EngineApp {
     }
 
     async fn connect(&self, request: HaConnectRequest) -> Result<HaInstance, ApiProblem> {
-        let config = HaConnectionConfig::new(request.base_url.clone(), request.token)
+        let token = request.token.clone();
+        let cert_sha256 = request.trust_cert_sha256.clone();
+        let config = HaConnectionConfig::new(request.base_url.clone(), token.clone())
             .map_err(|err| ApiProblem::validation("ha_invalid_url", err.to_string()))?;
         let client = HaClient::connect(config)
             .await
             .map_err(|err| ApiProblem::validation("ha_connect_failed", err.to_string()))?;
-        let snapshot = client.refresh_registry().await.unwrap_or_default();
+        let ha_version = wait_ha_ready(&client)
+            .await
+            .map_err(|err| ApiProblem::validation("ha_connect_failed", err.to_string()))?;
+        let config = client
+            .request(json!({"type":"get_config"}))
+            .await
+            .map_err(|err| ApiProblem::validation("ha_config_failed", err.to_string()))?;
+        let snapshot = client
+            .refresh_registry()
+            .await
+            .map_err(|err| ApiProblem::validation("ha_registry_failed", err.to_string()))?;
+        let ha_uuid = config
+            .get("uuid")
+            .and_then(serde_json::Value::as_str)
+            .map(ToOwned::to_owned);
+        let instance_id = ha_uuid
+            .clone()
+            .unwrap_or_else(|| flick_core::HaInstanceId::new().to_string());
+        let keychain_ref = format!("ha:{instance_id}");
+        if !self.runtime.mock_ha {
+            KeyringSecretStore::new()
+                .set(&keychain_ref, &token)
+                .map_err(|err| ApiProblem::validation("ha_keychain_failed", err.to_string()))?;
+        }
         let instance = HaInstance {
-            id: flick_core::HaInstanceId::new().to_string(),
-            name: "Home Assistant".to_owned(),
+            id: instance_id,
+            name: config
+                .get("location_name")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("Home Assistant")
+                .to_owned(),
             base_url: request.base_url,
-            ha_uuid: None,
+            ha_uuid,
             auth_kind: "llat".to_owned(),
-            ha_version: None,
+            ha_version: config
+                .get("version")
+                .and_then(serde_json::Value::as_str)
+                .map(ToOwned::to_owned)
+                .or_else(|| (!ha_version.is_empty()).then_some(ha_version)),
             is_default: true,
             created_at: now_rfc3339(),
             updated_at: now_rfc3339(),
         };
+        if !self.runtime.mock_ha {
+            persist_ha_instance(
+                &self.store,
+                &instance,
+                &keychain_ref,
+                cert_sha256.as_deref(),
+            )
+            .map_err(|err| ApiProblem::validation("ha_store_failed", err.to_string()))?;
+        }
         self.set_ha_client(client, Some(instance.clone()), snapshot)
             .await;
         Ok(instance)
@@ -1153,6 +1848,13 @@ impl HaGateway for EngineApp {
     async fn delete(&self) -> Result<(), ApiProblem> {
         *self.ha_client.lock().await = None;
         *self.ha_instance.lock().await = None;
+        *self.registry.lock().await = RegistrySnapshot::default();
+        if let Some(dispatcher) = self.dispatcher.lock().await.clone() {
+            dispatcher
+                .set_sink(Arc::new(NoopActionSink) as Arc<dyn flick_core::ActionSink>)
+                .await;
+            dispatcher.set_registry(RegistrySnapshot::default()).await;
+        }
         Ok(())
     }
 
@@ -1221,7 +1923,8 @@ impl HaGateway for EngineApp {
 
     async fn call(&self, action: ActionDto) -> Result<ActionOutcomeDto, ApiProblem> {
         let action = action_from_dto(action)?;
-        validate_safety(&action)?;
+        let registry = self.registry.lock().await.clone();
+        validate_safety(&action, &registry)?;
         let client = self.ha_client.lock().await.clone();
         let outcome = if let Some(client) = client {
             client.call(action).await
@@ -1236,6 +1939,42 @@ impl HaGateway for EngineApp {
             }
         };
         Ok(outcome_to_dto(outcome))
+    }
+}
+
+#[async_trait]
+impl ConfigGateway for EngineApp {
+    async fn settings_changed(&self, settings: SettingsMap) -> Result<(), ApiProblem> {
+        persist_settings(&self.store, &settings)
+            .map_err(|err| ApiProblem::validation("settings_store_failed", err.to_string()))?;
+        if let Some(dispatcher) = self.dispatcher.lock().await.clone() {
+            dispatcher
+                .set_settings(dispatcher_settings_from_map(&settings))
+                .await;
+        }
+        Ok(())
+    }
+
+    async fn mappings_changed(&self, mappings: Vec<Mapping>) -> Result<(), ApiProblem> {
+        persist_mappings(&self.store, &mappings)
+            .map_err(|err| ApiProblem::validation("mapping_store_failed", err.to_string()))?;
+        let dispatcher_mappings = dispatcher_mappings_from_api(&mappings)
+            .map_err(|err| ApiProblem::validation("mapping_reload_failed", err.to_string()))?;
+        if let Some(dispatcher) = self.dispatcher.lock().await.clone() {
+            dispatcher.set_mappings(dispatcher_mappings).await;
+        }
+        Ok(())
+    }
+
+    async fn anchors_changed(&self, anchors: Vec<ApiAnchor>) -> Result<(), ApiProblem> {
+        persist_anchor_edits(&self.store, &anchors)
+            .map_err(|err| ApiProblem::validation("anchor_store_failed", err.to_string()))?;
+        let dispatcher_anchors =
+            dispatcher_anchors_from_api(&anchors, &self.registry.lock().await.clone());
+        if let Some(dispatcher) = self.dispatcher.lock().await.clone() {
+            dispatcher.set_anchors(dispatcher_anchors).await;
+        }
+        Ok(())
     }
 }
 
@@ -1422,34 +2161,15 @@ fn verb_from_str(value: &str) -> Result<Verb, ApiProblem> {
     }
 }
 
-fn validate_safety(action: &Action) -> Result<(), ApiProblem> {
-    let Action::CallService {
-        domain,
-        service,
-        target,
-        ..
-    } = action
-    else {
+fn validate_safety(action: &Action, registry: &RegistrySnapshot) -> Result<(), ApiProblem> {
+    if !matches!(action, Action::CallService { .. }) {
         return Err(ApiProblem::validation(
             "unsupported_action",
             "Only call_service can be sent directly",
         ));
-    };
-    let entity_domain = target
-        .entity_id
-        .as_ref()
-        .and_then(|ids| ids.first())
-        .and_then(|id| id.split_once('.').map(|(domain, _)| domain));
-    let class = SafetyValidator::new().classify(&SafetyInput {
-        domain,
-        service,
-        entity_domain,
-        device_class: None,
-    });
-    if matches!(
-        class,
-        flick_ha::SafetyClass::Denied | flick_ha::SafetyClass::Sensitive
-    ) {
+    }
+    let class = classify_action_safety(&SafetyValidator::new(), action, registry);
+    if matches!(class, SafetyClass::Denied | SafetyClass::Sensitive) {
         return Err(ApiProblem::validation(
             "safety_blocked",
             "action is blocked by the safety policy",
