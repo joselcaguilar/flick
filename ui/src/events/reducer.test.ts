@@ -24,8 +24,8 @@ describe("eventReducer", () => {
         domain: "fan",
         expires_at: "2026-09-28T15:30:04.000Z",
         verbs: [
-          { gesture_id: "builtin.circle_cw", label: "↻ speed 1" },
-          { gesture_id: "builtin.two_hand_separate", label: "✋✋ off" },
+          { gesture_id: "builtin.circle_cw", label: "Circle clockwise → Speed 1" },
+          { gesture_id: "builtin.two_hand_separate", label: "Two hands apart → Off" },
         ],
       },
       {
@@ -55,7 +55,7 @@ describe("eventReducer", () => {
     expect(state.selectedTarget?.name).toBe("Ventilador dormitorio");
     expect(state.hud.state).toBe("done");
     expect(state.hud.title).toBe("Ventilador dormitorio → speed 1");
-    expect(state.hud.icon).toBe("✓");
+    expect(state.hud.icon).toBe("ok");
   });
 
   it("shows targeting recovery copy for suppressed targeted verbs", () => {

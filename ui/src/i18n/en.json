@@ -44,7 +44,7 @@
   },
   "home": {
     "breadcrumb": "Home / Dashboard",
-    "title": "Point, lock, flick.",
+    "title": "Dashboard",
     "subtitle": "Flick is watching locally. Video stays on this Mac.",
     "previewTitle": "Live preview",
     "previewMeta": "Skeleton overlay placeholder · MacBook Camera",
@@ -105,7 +105,7 @@
   },
   "hud": {
     "placeholder": "HUD preview",
-    "selected": "selected · ↻ speed 1 · ✋✋ off",
+    "selected": "selected · Circle clockwise · Two hands apart",
     "done": "Done · Home Assistant confirmed",
     "failed": "Failed · Home Assistant unavailable",
     "aiming": "Point more precisely",

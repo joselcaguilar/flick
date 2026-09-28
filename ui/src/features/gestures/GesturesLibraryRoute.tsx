@@ -236,6 +236,7 @@ export function GesturesLibraryRoute() {
             ref={fileRef}
             className="visually-hidden-file"
             type="file"
+            aria-label="Import gesture pack file"
             accept=".flickpack.json,application/json"
             onChange={importPack}
           />

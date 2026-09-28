@@ -18,6 +18,10 @@ interface CommandItem {
   run: () => void;
 }
 
+function optionId(id: string) {
+  return `command-option-${id.replace(/[^a-z0-9_-]/gi, "-")}`;
+}
+
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
@@ -71,9 +75,25 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     [navigate, onOpenChange],
   );
 
-  const filtered = commands.filter((command) =>
-    `${command.label} ${command.description}`.toLowerCase().includes(query.toLowerCase()),
-  );
+  const normalizedQuery = query.trim().toLowerCase();
+  const filtered = normalizedQuery
+    ? commands
+        .map((command, index) => {
+          const label = command.label.toLowerCase();
+          const description = command.description.toLowerCase();
+          const rank = label.startsWith(normalizedQuery)
+            ? 0
+            : label.includes(normalizedQuery)
+              ? 1
+              : description.includes(normalizedQuery)
+                ? 2
+                : 3;
+          return { command, index, rank };
+        })
+        .filter((item) => item.rank < 3)
+        .sort((a, b) => a.rank - b.rank || a.index - b.index)
+        .map((item) => item.command)
+    : commands;
 
   useEffect(() => {
     if (open) {
@@ -87,6 +107,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     acc[command.group] = [...(acc[command.group] ?? []), command];
     return acc;
   }, {});
+  const activeOptionId = filtered[active] ? optionId(filtered[active].id) : undefined;
 
   function onKeyDown(event: KeyboardEvent) {
     if (event.key === "ArrowDown") {
@@ -128,6 +149,11 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             <span>Search Flick commands</span>
             <input
               ref={inputRef}
+              role="combobox"
+              aria-expanded={open}
+              aria-controls="command-results"
+              aria-activedescendant={activeOptionId}
+              aria-autocomplete="list"
               value={query}
               onChange={(event) => {
                 setQuery(event.currentTarget.value);
@@ -137,7 +163,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             />
             <Kbd>⌘K</Kbd>
           </label>
-          <div className="command-results" role="listbox" aria-label="Commands">
+          <div className="command-results" id="command-results" role="listbox" aria-label="Commands">
             {Object.entries(grouped).map(([group, items]) => (
               <div className="command-group" key={group}>
                 <span>{group}</span>
@@ -146,6 +172,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                   return (
                     <button
                       key={item.id}
+                      id={optionId(item.id)}
                       type="button"
                       className="command-row"
                       role="option"

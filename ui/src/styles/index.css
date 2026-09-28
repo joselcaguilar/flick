@@ -200,8 +200,11 @@ code,
   border-radius: var(--radius-pill);
   color: var(--flick-text);
   background: transparent;
-  inline-size: 2.5rem;
+  inline-size: auto;
   block-size: 2.5rem;
+  padding-inline: 0.8rem;
+  font-size: 0.82rem;
+  font-weight: 800;
 }
 
 .status-indicator {
@@ -519,6 +522,14 @@ code,
   font-size: 1.05rem;
 }
 
+.gesture-glyph-shape {
+  inline-size: 1.1rem;
+  block-size: 1.1rem;
+  background: currentColor;
+  -webkit-mask: var(--gesture-glyph-url) center / contain no-repeat;
+  mask: var(--gesture-glyph-url) center / contain no-repeat;
+}
+
 .gesture-glyph-animated[data-gesture*="circle"] {
   animation: glyph-spin 1.8s linear infinite;
 }
@@ -595,7 +606,7 @@ code,
 }
 
 .ui-button-danger {
-  color: white;
+  color: #2a0007;
   background: var(--flick-accent-red);
 }
 
@@ -1240,6 +1251,42 @@ body.hud-window {
   min-inline-size: 0;
 }
 
+.hud-state-mark {
+  font-size: 1.1rem;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+}
+
+.hud-verb-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-block-start: 0.45rem;
+  margin-inline: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hud-verb-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-block-size: 1.45rem;
+  border: 1px solid color-mix(in srgb, var(--flick-text) 14%, transparent);
+  border-radius: var(--radius-pill);
+  padding-inline: 0.45rem;
+  color: var(--flick-text);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.hud-verb-list .gesture-glyph {
+  inline-size: 1.05rem;
+  block-size: 1.05rem;
+  border: 0;
+  background: transparent;
+}
+
 .high-contrast .hud-capsule,
 .opaque-fallback .hud-capsule {
   background: #000;
@@ -1389,13 +1436,21 @@ body.hud-window {
   gap: 0.45rem;
 }
 
-.verb-list span,
+.verb-chip,
 .sentence-stack p {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   margin: 0;
   border: 1px solid var(--flick-border);
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--flick-accent-blue) 12%, transparent);
   padding: 0.45rem 0.65rem;
+}
+
+.verb-chip .gesture-glyph {
+  inline-size: 1.35rem;
+  block-size: 1.35rem;
 }
 
 .teach-layout {

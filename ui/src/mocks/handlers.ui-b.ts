@@ -122,7 +122,7 @@ const mutableActivity: ActivityItem[] = [
     action_summary: "Rock on with left hand",
     status: "suppressed",
     reason: "no_mapping",
-    message: "No mapping for 🤘 with left hand",
+    message: "No mapping for Rock on with left hand",
     latency: { detect_ms: 57, dispatch_ms: 0, ha_ms: 0 },
   },
   {
@@ -182,7 +182,7 @@ const mutableActivity: ActivityItem[] = [
     action_summary: "Circle clockwise",
     status: "suppressed",
     reason: "target_selected",
-    message: "A device was selected, so the global 👍 mapping was skipped",
+    message: "A device was selected, so the global Thumbs up mapping was skipped",
     latency: { detect_ms: 82, dispatch_ms: 0, ha_ms: 0 },
   },
   {

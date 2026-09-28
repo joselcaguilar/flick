@@ -81,11 +81,11 @@ export function AppShell() {
         Skip to content
       </a>
       <aside className="flick-glass shell-sidebar" aria-label="Primary navigation">
-        <Link className="brand-mark" to="/" aria-label="Flick home">
+        <Link className="brand-mark" to="/">
           <span aria-hidden="true">F</span>
           <strong>Flick</strong>
         </Link>
-        <nav>
+        <nav aria-label="Main navigation">
           {navRoutes.map((route) => (
             <NavLink key={route.path} to={route.path} end={route.path === "/"}>
               <span>{route.title}</span>
@@ -107,7 +107,7 @@ export function AppShell() {
             onClick={() => setMobileOpen(true)}
             aria-label="Open navigation"
           >
-            ☰
+            Menu
           </button>
           <StatusIndicator label="Engine" value={engineValue} />
           <StatusIndicator label="HA" value={haValue} />
