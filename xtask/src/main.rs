@@ -22,13 +22,13 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Command {
     /// Fetch and verify model files.
-    FetchModels,
+    FetchModels(fetch_models::Args),
     /// Generate OpenAPI and TypeScript API bindings.
     GenApi,
     /// Run the benchmark harness.
     Bench,
     /// Record landmark fixtures.
-    RecordLandmarks,
+    RecordLandmarks(record_landmarks::Args),
     /// Bundle application artifacts.
     Bundle,
     /// Build a signed model or catalog pack.
@@ -42,10 +42,10 @@ enum Command {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Command::FetchModels => fetch_models::run(),
+        Command::FetchModels(args) => fetch_models::run(args),
         Command::GenApi => gen_api::run(),
         Command::Bench => bench::run(),
-        Command::RecordLandmarks => record_landmarks::run(),
+        Command::RecordLandmarks(args) => record_landmarks::run(args),
         Command::Bundle => bundle::run(),
         Command::BuildPack => build_pack::run(),
         Command::SignIndex => sign_index::run(),

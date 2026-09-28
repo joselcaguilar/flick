@@ -1345,6 +1345,7 @@ version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
  "flick-core",
+ "image",
  "nokhwa",
  "parking_lot",
  "thiserror",
@@ -1470,11 +1471,15 @@ version = "0.1.0"
 dependencies = [
  "fast_image_resize",
  "flick-core",
+ "hex",
  "image",
  "nalgebra",
  "ndarray",
  "ort",
+ "serde",
+ "sha2",
  "smallvec",
+ "toml",
  "tracing",
 ]
 
@@ -5364,6 +5369,11 @@ dependencies = [
  "anyhow",
  "clap",
  "flick-api",
+ "flick-capture",
+ "flick-core",
+ "flick-vision",
+ "serde",
+ "serde_json",
  "tracing",
 ]
 
