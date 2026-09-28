@@ -56,6 +56,8 @@ pub struct CliOverrides {
     pub port: Option<u16>,
     /// Override fake camera source.
     pub fake_camera: Option<PathBuf>,
+    /// Force mock Home Assistant.
+    pub mock_ha: Option<bool>,
 }
 
 /// Fully resolved runtime configuration.
@@ -75,6 +77,8 @@ pub struct RuntimeConfig {
     pub sidecar: bool,
     /// Whether development mode is enabled.
     pub dev: bool,
+    /// Whether the engine should start and use mock Home Assistant.
+    pub mock_ha: bool,
 }
 
 /// Loads runtime configuration from the platform data directory and environment.
@@ -123,6 +127,9 @@ pub fn load_with_overrides(overrides: &CliOverrides) -> Result<RuntimeConfig, Co
     if overrides.dev && bootstrap.engine.port == 0 {
         bootstrap.engine.port = 7871;
     }
+    if !overrides.sidecar && !overrides.dev && bootstrap.engine.port == 0 {
+        bootstrap.engine.port = 7870;
+    }
 
     let fake_camera = overrides
         .fake_camera
@@ -132,6 +139,10 @@ pub fn load_with_overrides(overrides: &CliOverrides) -> Result<RuntimeConfig, Co
     let update_url = env::var("FLICK_UPDATE_URL")
         .ok()
         .filter(|value| !value.is_empty());
+    let mock_ha = overrides
+        .mock_ha
+        .or_else(|| env_bool("FLICK_MOCK_HA"))
+        .unwrap_or(overrides.dev);
 
     Ok(RuntimeConfig {
         bootstrap,
@@ -141,6 +152,7 @@ pub fn load_with_overrides(overrides: &CliOverrides) -> Result<RuntimeConfig, Co
         update_url,
         sidecar: overrides.sidecar,
         dev: overrides.dev,
+        mock_ha,
     })
 }
 
@@ -163,6 +175,15 @@ fn env_u16(name: &'static str) -> Result<Option<u16>, ConfigLoadError> {
             .map(Some)
             .map_err(|_| ConfigLoadError::InvalidOverride { name, value }),
         Ok(_) | Err(_) => Ok(None),
+    }
+}
+
+fn env_bool(name: &'static str) -> Option<bool> {
+    let value = env::var(name).ok()?;
+    match value.to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
     }
 }
 

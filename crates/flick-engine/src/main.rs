@@ -1,7 +1,7 @@
-use std::path::PathBuf;
+use std::{env, io, path::PathBuf};
 
 use clap::{Parser, Subcommand};
-use flick_engine::{config, logging};
+use flick_engine::{bench, config, logging, runtime};
 
 #[derive(Debug, Parser)]
 #[command(name = "flick-engine", about = "Flick gesture engine")]
@@ -21,6 +21,9 @@ struct Cli {
     /// Override the local API port.
     #[arg(long, env = "FLICK_PORT")]
     port: Option<u16>,
+    /// Use the built-in mock Home Assistant stack.
+    #[arg(long)]
+    mock_ha: bool,
     /// Subcommand to run.
     #[command(subcommand)]
     command: Option<Commands>,
@@ -36,7 +39,8 @@ enum Commands {
     },
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main(flavor = "multi_thread", worker_threads = 2)]
+async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let overrides = config::CliOverrides {
         sidecar: cli.sidecar,
@@ -44,16 +48,14 @@ fn main() -> anyhow::Result<()> {
         data_dir: cli.data_dir,
         port: cli.port,
         fake_camera: cli.fake_camera,
+        mock_ha: cli.mock_ha.then_some(true),
     };
     let runtime = config::load_with_overrides(&overrides)?;
     let _guard = logging::init(&runtime)?;
 
     match cli.command {
         Some(Commands::Bench { fixture }) => {
-            tracing::info!(
-                ?fixture,
-                "bench command parsed; benchmark wiring is a later task"
-            );
+            bench::run(fixture)?;
         }
         None => {
             tracing::info!(
@@ -64,11 +66,28 @@ fn main() -> anyhow::Result<()> {
                 port = runtime.bootstrap.engine.port,
                 fake_camera = ?runtime.fake_camera,
                 fake_landmarks = ?runtime.fake_landmarks,
+                mock_ha = runtime.mock_ha,
                 update_url = ?runtime.update_url,
-                "engine CLI parsed; runtime wiring is a later task"
+                "starting engine runtime"
             );
+            let token = api_token(runtime.sidecar, runtime.dev)?;
+            runtime::serve(runtime, token).await?;
         }
     }
 
     Ok(())
+}
+
+fn api_token(sidecar: bool, dev: bool) -> anyhow::Result<String> {
+    if sidecar {
+        let mut token = String::new();
+        io::stdin().read_line(&mut token)?;
+        let token = token.trim().to_owned();
+        anyhow::ensure!(!token.is_empty(), "sidecar token missing on stdin");
+        return Ok(token);
+    }
+    if dev {
+        return Ok("dev-token".to_owned());
+    }
+    Ok(env::var("FLICK_API_TOKEN").unwrap_or_else(|_| "headless-token".to_owned()))
 }

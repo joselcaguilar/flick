@@ -24,7 +24,11 @@ panic = "unwind"
 strip = "symbols"
 
 [workspace.dependencies]
+flick-api = { path = "crates/flick-api" }
 flick-core = { path = "crates/flick-core" }
+flick-gestures = { path = "crates/flick-gestures" }
+flick-ha = { path = "crates/flick-ha" }
+flick-store = { path = "crates/flick-store" }
 
 # core/runtime
 tokio = { version = "1.53.1", features = ["full"] }

@@ -17,13 +17,23 @@ name = "flick-engine"
 path = "src/main.rs"
 
 [dependencies]
+flick-api.workspace = true
 flick-core.workspace = true
+flick-gestures.workspace = true
+flick-ha.workspace = true
+flick-store.workspace = true
 anyhow.workspace = true
+async-trait.workspace = true
+axum.workspace = true
 clap.workspace = true
 directories.workspace = true
 serde.workspace = true
+serde_json.workspace = true
+rusqlite.workspace = true
 thiserror.workspace = true
+time.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 toml.workspace = true
 tracing.workspace = true
 tracing-appender.workspace = true
