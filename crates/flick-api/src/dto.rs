@@ -1059,127 +1059,157 @@ pub enum WsClientMessage {
 
 /// WebSocket server message. All variants include `ts`.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(tag = "type", content = "payload", rename_all = "snake_case")]
+#[serde(tag = "type", content = "payload")]
 pub enum WsServerMessage {
     /// Initial hello.
+    #[serde(rename = "hello")]
     Hello { ts: String, payload: HelloEvent },
     /// Engine status.
+    #[serde(rename = "engine.status", alias = "engine_status")]
     EngineStatus { ts: String, payload: EngineStatus },
     /// Camera status.
+    #[serde(rename = "camera.status", alias = "camera_status")]
     CameraStatus { ts: String, payload: CameraStatus },
     /// Hand landmark stream.
+    #[serde(rename = "hands")]
     Hands { ts: String, payload: HandsEvent },
     /// Gesture candidate.
+    #[serde(rename = "gesture.candidate", alias = "gesture_candidate")]
     GestureCandidate {
         ts: String,
         payload: GestureCandidateEvent,
     },
     /// Gesture suppressed.
+    #[serde(rename = "gesture.suppressed", alias = "gesture_suppressed")]
     GestureSuppressed {
         ts: String,
         payload: GestureSuppressedEvent,
     },
     /// Gesture fired.
+    #[serde(rename = "gesture.fired", alias = "gesture_fired")]
     GestureFired {
         ts: String,
         payload: GestureFiredEvent,
     },
     /// Gesture update.
+    #[serde(rename = "gesture.update", alias = "gesture_update")]
     GestureUpdate {
         ts: String,
         payload: GestureValueEvent,
     },
     /// Gesture end.
+    #[serde(rename = "gesture.end", alias = "gesture_end")]
     GestureEnd {
         ts: String,
         payload: GestureValueEvent,
     },
     /// Armed.
+    #[serde(rename = "armed")]
     Armed { ts: String, payload: ArmedEvent },
     /// Disarmed.
+    #[serde(rename = "disarmed")]
     Disarmed { ts: String, payload: EmptyEvent },
     /// Confirmation required.
+    #[serde(rename = "confirm.required", alias = "confirm_required")]
     ConfirmRequired {
         ts: String,
         payload: ConfirmRequiredEvent,
     },
     /// Action result.
+    #[serde(rename = "action.result", alias = "action_result")]
     ActionResult {
         ts: String,
         payload: ActionResultEvent,
     },
     /// Home Assistant status.
+    #[serde(rename = "ha.status", alias = "ha_status")]
     HaStatus { ts: String, payload: HaStatusEvent },
     /// Entity state update.
+    #[serde(rename = "ha.entity", alias = "ha_entity")]
     HaEntity { ts: String, payload: HaEntityEvent },
     /// Capture progress.
+    #[serde(rename = "capture.progress", alias = "capture_progress")]
     CaptureProgress {
         ts: String,
         payload: CaptureProgressEvent,
     },
     /// Engine paused.
+    #[serde(rename = "engine.paused", alias = "engine_paused")]
     EnginePaused {
         ts: String,
         payload: EnginePausedEvent,
     },
     /// Engine resumed.
+    #[serde(rename = "engine.resumed", alias = "engine_resumed")]
     EngineResumed { ts: String, payload: EmptyEvent },
     /// Target hover.
+    #[serde(rename = "target.hover", alias = "target_hover")]
     TargetHover {
         ts: String,
         payload: TargetHoverEvent,
     },
     /// Target selected.
+    #[serde(rename = "target.selected", alias = "target_selected")]
     TargetSelected {
         ts: String,
         payload: TargetSelectedEvent,
     },
     /// Target cleared.
+    #[serde(rename = "target.cleared", alias = "target_cleared")]
     TargetCleared {
         ts: String,
         payload: TargetClearedEvent,
     },
     /// Target ambiguity.
+    #[serde(rename = "target.ambiguous", alias = "target_ambiguous")]
     TargetAmbiguous {
         ts: String,
         payload: TargetAmbiguousEvent,
     },
     /// Place status.
+    #[serde(rename = "place.status", alias = "place_status")]
     PlaceStatus {
         ts: String,
         payload: PlaceStatusEvent,
     },
     /// Teach progress.
+    #[serde(rename = "teach.progress", alias = "teach_progress")]
     TeachProgress {
         ts: String,
         payload: TeachProgressEvent,
     },
     /// Update available.
+    #[serde(rename = "update.available", alias = "update_available")]
     UpdateAvailable {
         ts: String,
         payload: UpdateAvailableEvent,
     },
     /// Update progress.
+    #[serde(rename = "update.progress", alias = "update_progress")]
     UpdateProgress {
         ts: String,
         payload: UpdateProgressEvent,
     },
     /// App update ready.
+    #[serde(rename = "update.ready", alias = "update_ready")]
     UpdateReady {
         ts: String,
         payload: UpdateReadyEvent,
     },
     /// Model activated.
+    #[serde(rename = "model.activated", alias = "model_activated")]
     ModelActivated {
         ts: String,
         payload: ModelActivatedEvent,
     },
     /// Model rolled back.
+    #[serde(rename = "model.rolled_back", alias = "model_rolled_back")]
     ModelRolledBack {
         ts: String,
         payload: ModelRolledBackEvent,
     },
     /// Client fell behind and must resync through REST.
+    #[serde(rename = "resync")]
     Resync { ts: String, payload: ResyncEvent },
 }
 

@@ -21,6 +21,7 @@ mod dto;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     convert::Infallible,
+    net::SocketAddr,
     sync::{Arc, Mutex},
     time::{Duration, Instant, SystemTime},
 };
@@ -42,7 +43,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::sync::broadcast;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use ulid::Ulid;
 use utoipa::OpenApi;
 
@@ -97,6 +98,41 @@ impl ApiConfig {
             .insert("http://localhost:5173".to_owned());
         config
     }
+
+    /// Loopback socket address the engine should bind for this API config.
+    #[must_use]
+    pub fn bind_addr(&self) -> SocketAddr {
+        SocketAddr::from(([127, 0, 0, 1], self.port))
+    }
+}
+
+/// Runtime dependencies supplied by the engine integration layer.
+#[derive(Clone)]
+pub struct ApiGateways {
+    /// Engine control boundary.
+    pub engine: Arc<dyn EngineControl>,
+    /// Home Assistant gateway boundary.
+    pub ha: Arc<dyn HaGateway>,
+    /// Teach/realign gateway boundary.
+    pub teach: Arc<dyn TeachGateway>,
+    /// Updates gateway boundary.
+    pub updates: Arc<dyn UpdatesGateway>,
+    /// Preview frame source.
+    pub preview: Arc<dyn PreviewSource>,
+}
+
+impl ApiGateways {
+    /// In-memory fake gateways used by tests and `--dev`.
+    #[must_use]
+    pub fn fake() -> Self {
+        Self {
+            engine: Arc::new(FakeEngine::default()),
+            ha: Arc::new(FakeHa::default()),
+            teach: Arc::new(FakeTeach::default()),
+            updates: Arc::new(FakeUpdates::default()),
+            preview: Arc::new(FakePreview::default()),
+        }
+    }
 }
 
 /// API state shared by handlers.
@@ -118,17 +154,17 @@ pub struct ApiState {
 }
 
 impl ApiState {
-    /// Builds API state with in-memory fakes.
+    /// Builds API state from engine-supplied gateway implementations.
     #[must_use]
-    pub fn fake(config: ApiConfig) -> Self {
+    pub fn new(config: ApiConfig, gateways: ApiGateways) -> Self {
         Self {
             config,
             started_at: Instant::now(),
-            engine: Arc::new(FakeEngine::default()),
-            ha: Arc::new(FakeHa::default()),
-            teach: Arc::new(FakeTeach::default()),
-            updates: Arc::new(FakeUpdates::default()),
-            preview: Arc::new(FakePreview::default()),
+            engine: gateways.engine,
+            ha: gateways.ha,
+            teach: gateways.teach,
+            updates: gateways.updates,
+            preview: gateways.preview,
             tickets: Arc::new(PreviewTickets::default()),
             events: EventHub::new(16),
             mappings: Arc::new(Mutex::new(BTreeMap::new())),
@@ -136,6 +172,12 @@ impl ApiState {
             anchors: Arc::new(Mutex::new(BTreeMap::new())),
             settings: Arc::new(Mutex::new(default_settings())),
         }
+    }
+
+    /// Builds API state with in-memory fakes.
+    #[must_use]
+    pub fn fake(config: ApiConfig) -> Self {
+        Self::new(config, ApiGateways::fake())
     }
 
     /// Returns the event hub used to publish server-side events.
@@ -149,6 +191,7 @@ impl ApiState {
 #[must_use]
 pub fn router(state: ApiState) -> Router {
     let state = Arc::new(state);
+    let allowed_origins = state.config.allowed_origins.clone();
     let cors = CorsLayer::new()
         .allow_methods([
             Method::GET,
@@ -158,11 +201,15 @@ pub fn router(state: ApiState) -> Router {
             Method::DELETE,
         ])
         .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
-        .allow_origin(Any);
+        .allow_origin(AllowOrigin::predicate(move |origin, _request_head| {
+            origin
+                .to_str()
+                .is_ok_and(|origin| allowed_origins.contains(origin))
+        }));
 
     Router::new()
         .route("/health", get(health))
-        .route("/stream/{camera_id}.mjpg", get(stream_mjpeg))
+        .route("/stream/{*camera_path}", get(stream_mjpeg))
         .route("/api/v1/openapi.json", get(openapi_json))
         .route("/api/v1/events", get(ws_events))
         .route("/api/v1/status", get(status))
@@ -1845,9 +1892,19 @@ fn event_allowed(
 #[utoipa::path(get, path = "/stream/{camera_id}.mjpg", params(("ticket" = String, Query)), responses((status = 200, description = "multipart/x-mixed-replace MJPEG stream"), (status = 401, body = ProblemJson)))]
 async fn stream_mjpeg(
     State(state): State<Arc<ApiState>>,
-    Path(camera_id): Path<String>,
+    Path(camera_path): Path<String>,
     Query(query): Query<BTreeMap<String, String>>,
 ) -> Result<Response, ApiProblem> {
+    let camera_id = camera_path
+        .strip_suffix(".mjpg")
+        .ok_or_else(|| {
+            ApiProblem::new(
+                StatusCode::NOT_FOUND,
+                "stream_not_found",
+                "stream not found",
+            )
+        })?
+        .to_owned();
     let ticket_value = query
         .get("ticket")
         .ok_or_else(|| ApiProblem::unauthorized("missing_ticket", "preview ticket is required"))?;

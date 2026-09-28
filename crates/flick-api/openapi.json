@@ -5172,7 +5172,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "engine_status"
+                  "engine.status"
                 ]
               }
             }
@@ -5204,7 +5204,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "camera_status"
+                  "camera.status"
                 ]
               }
             }
@@ -5268,7 +5268,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "gesture_candidate"
+                  "gesture.candidate"
                 ]
               }
             }
@@ -5300,7 +5300,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "gesture_suppressed"
+                  "gesture.suppressed"
                 ]
               }
             }
@@ -5332,7 +5332,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "gesture_fired"
+                  "gesture.fired"
                 ]
               }
             }
@@ -5364,7 +5364,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "gesture_update"
+                  "gesture.update"
                 ]
               }
             }
@@ -5396,7 +5396,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "gesture_end"
+                  "gesture.end"
                 ]
               }
             }
@@ -5492,7 +5492,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "confirm_required"
+                  "confirm.required"
                 ]
               }
             }
@@ -5524,7 +5524,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "action_result"
+                  "action.result"
                 ]
               }
             }
@@ -5556,7 +5556,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "ha_status"
+                  "ha.status"
                 ]
               }
             }
@@ -5588,7 +5588,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "ha_entity"
+                  "ha.entity"
                 ]
               }
             }
@@ -5620,7 +5620,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "capture_progress"
+                  "capture.progress"
                 ]
               }
             }
@@ -5652,7 +5652,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "engine_paused"
+                  "engine.paused"
                 ]
               }
             }
@@ -5684,7 +5684,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "engine_resumed"
+                  "engine.resumed"
                 ]
               }
             }
@@ -5716,7 +5716,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "target_hover"
+                  "target.hover"
                 ]
               }
             }
@@ -5748,7 +5748,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "target_selected"
+                  "target.selected"
                 ]
               }
             }
@@ -5780,7 +5780,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "target_cleared"
+                  "target.cleared"
                 ]
               }
             }
@@ -5812,7 +5812,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "target_ambiguous"
+                  "target.ambiguous"
                 ]
               }
             }
@@ -5844,7 +5844,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "place_status"
+                  "place.status"
                 ]
               }
             }
@@ -5876,7 +5876,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "teach_progress"
+                  "teach.progress"
                 ]
               }
             }
@@ -5908,7 +5908,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "update_available"
+                  "update.available"
                 ]
               }
             }
@@ -5940,7 +5940,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "update_progress"
+                  "update.progress"
                 ]
               }
             }
@@ -5972,7 +5972,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "update_ready"
+                  "update.ready"
                 ]
               }
             }
@@ -6004,7 +6004,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "model_activated"
+                  "model.activated"
                 ]
               }
             }
@@ -6036,7 +6036,7 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "model_rolled_back"
+                  "model.rolled_back"
                 ]
               }
             }
