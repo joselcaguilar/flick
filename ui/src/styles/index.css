@@ -101,14 +101,22 @@ code,
   padding: 1rem;
 }
 
+/* macOS: full-height sidebar anchored to the window edge; its top strip hosts the
+   system traffic lights wherever AppKit places them. */
 .app-shell[data-shell="macos"] .shell-sidebar {
-  padding-block-start: 0.85rem;
+  inset-block-start: 0;
+  min-block-size: 100dvh;
+  margin: -1.25rem 0 -1.25rem -1.25rem;
+  border: 0;
+  border-inline-end: 1px solid var(--flick-border);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0 1rem 1rem;
 }
 
 .mac-sidebar-drag-inset {
   min-block-size: 3.25rem;
-  margin: -0.35rem -0.25rem 0.75rem;
-  border-radius: 1.25rem;
+  margin: 0 -1rem 0.5rem;
 }
 
 .brand-mark {
@@ -1085,6 +1093,10 @@ body.hud-window {
   .toolbar-drag-region,
   .content-drag-region {
     display: none;
+  }
+
+  .app-shell[data-shell="macos"] {
+    padding-block-start: 2.5rem;
   }
 
   .mobile-menu-button {

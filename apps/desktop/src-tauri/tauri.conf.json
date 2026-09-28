@@ -23,8 +23,7 @@
         "minHeight": 600,
         "visible": true,
         "titleBarStyle": "Overlay",
-        "hiddenTitle": true,
-        "trafficLightPosition": { "x": 20, "y": 22 }
+        "hiddenTitle": true
       },
       {
         "label": "hud",
