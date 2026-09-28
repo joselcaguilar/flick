@@ -10,6 +10,7 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+flick-api = { path = "../crates/flick-api" }
 anyhow.workspace = true
 clap.workspace = true
 tracing.workspace = true
