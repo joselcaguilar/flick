@@ -234,12 +234,19 @@ impl TriggerFsmSet {
     ) -> FsmUpdate {
         let mut result = FsmUpdate::default();
         let visible_hands = frame.hands.len();
+        let visible_track_ids: Vec<u32> = frame.hands.iter().map(|hand| hand.track_id).collect();
         let mut by_track: HashMap<u32, SmallVec<[GestureCandidate; 4]>> = HashMap::new();
         for candidate in candidates {
             by_track
                 .entry(candidate.track_id)
                 .or_default()
                 .push(candidate.clone());
+        }
+        for track_id in &visible_track_ids {
+            self.tracks
+                .entry(*track_id)
+                .or_default()
+                .begin_frame(self.config.vote_m);
         }
 
         for (track_id, candidates) in &by_track {
@@ -344,6 +351,9 @@ impl TriggerFsmSet {
                 continue;
             }
             if let Some(track) = self.tracks.get_mut(&track_id) {
+                if !visible_track_ids.contains(&track_id) {
+                    track.begin_frame(self.config.vote_m);
+                }
                 result.events.extend(track.update_absent(
                     frame.camera_id,
                     frame.captured_at,
@@ -472,7 +482,7 @@ impl TrackState {
         config: &TriggerConfig,
     ) -> TrackProduced {
         self.release_since = None;
-        self.push_vote(candidate, config.vote_m);
+        self.record_candidate_vote(candidate.gesture_id, config.vote_m);
         if self.vote_count(candidate.gesture_id) < config.vote_n {
             return TrackProduced::Suppressed(SuppressionReason::VoteFailed);
         }
@@ -615,6 +625,7 @@ impl TrackState {
         let active = self.active.take();
         self.release_since = None;
         self.hold_since.clear();
+        self.votes.clear();
         let Some(active) = active else {
             return Vec::new();
         };
@@ -640,10 +651,22 @@ impl TrackState {
         }
     }
 
-    fn push_vote(&mut self, candidate: &GestureCandidate, vote_m: usize) {
-        self.votes.push_back(Vote {
-            gesture_id: candidate.gesture_id,
-        });
+    fn begin_frame(&mut self, vote_m: usize) {
+        self.push_vote(None, vote_m);
+    }
+
+    fn record_candidate_vote(&mut self, gesture_id: GestureId, vote_m: usize) {
+        if let Some(vote) = self.votes.back_mut()
+            && vote.gesture_id.is_none()
+        {
+            vote.gesture_id = Some(gesture_id);
+            return;
+        }
+        self.push_vote(Some(gesture_id), vote_m);
+    }
+
+    fn push_vote(&mut self, gesture_id: Option<GestureId>, vote_m: usize) {
+        self.votes.push_back(Vote { gesture_id });
         while self.votes.len() > vote_m {
             self.votes.pop_front();
         }
@@ -652,14 +675,14 @@ impl TrackState {
     fn vote_count(&self, gesture_id: GestureId) -> usize {
         self.votes
             .iter()
-            .filter(|vote| vote.gesture_id == gesture_id)
+            .filter(|vote| vote.gesture_id == Some(gesture_id))
             .count()
     }
 }
 
 #[derive(Debug, Clone, Copy)]
 struct Vote {
-    gesture_id: GestureId,
+    gesture_id: Option<GestureId>,
 }
 
 #[derive(Debug, Clone)]
