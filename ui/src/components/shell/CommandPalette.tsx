@@ -75,9 +75,25 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     [navigate, onOpenChange],
   );
 
-  const filtered = commands.filter((command) =>
-    `${command.label} ${command.description}`.toLowerCase().includes(query.toLowerCase()),
-  );
+  const normalizedQuery = query.trim().toLowerCase();
+  const filtered = normalizedQuery
+    ? commands
+        .map((command, index) => {
+          const label = command.label.toLowerCase();
+          const description = command.description.toLowerCase();
+          const rank = label.startsWith(normalizedQuery)
+            ? 0
+            : label.includes(normalizedQuery)
+              ? 1
+              : description.includes(normalizedQuery)
+                ? 2
+                : 3;
+          return { command, index, rank };
+        })
+        .filter((item) => item.rank < 3)
+        .sort((a, b) => a.rank - b.rank || a.index - b.index)
+        .map((item) => item.command)
+    : commands;
 
   useEffect(() => {
     if (open) {
