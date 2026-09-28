@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "hud",
+  "description": "HUD event-only permissions.",
+  "windows": ["hud"],
+  "permissions": ["core:event:default"]
+}
