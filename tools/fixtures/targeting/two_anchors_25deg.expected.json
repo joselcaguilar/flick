@@ -1,0 +1,8 @@
+{
+  "schema": "flick.targeting_expected.v1",
+  "expected_selected_anchor_id": "01K6D7Y0000000000000000002",
+  "forbidden_selected_anchor_ids_after_initial_selection": [
+    "01K6D7Y0000000000000000003"
+  ],
+  "expected_actions": []
+}

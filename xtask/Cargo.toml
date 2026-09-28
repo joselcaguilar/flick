@@ -12,5 +12,10 @@ workspace = true
 [dependencies]
 flick-api = { path = "../crates/flick-api" }
 anyhow.workspace = true
+flick-capture = { path = "../crates/flick-capture" }
+flick-core.workspace = true
+flick-vision = { path = "../crates/flick-vision" }
+serde.workspace = true
+serde_json.workspace = true
 clap.workspace = true
 tracing.workspace = true

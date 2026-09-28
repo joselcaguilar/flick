@@ -1,0 +1,16 @@
+{
+  "schema": "flick.targeting_expected.v1",
+  "expected_actions": [
+    {
+      "domain": "fan",
+      "service": "turn_off",
+      "target": {
+        "entity_id": [
+          "fan.ventilador_dormitorio"
+        ]
+      },
+      "data": {}
+    }
+  ],
+  "expected_suppressions": []
+}
