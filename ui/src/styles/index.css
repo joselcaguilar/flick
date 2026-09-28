@@ -1031,3 +1031,151 @@ body.hud-window {
     background: color-mix(in srgb, var(--flick-accent-blue) 18%, transparent);
   }
 }
+
+.dashboard-shell {
+  display: grid;
+  gap: 1rem;
+}
+
+.operate-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.25rem 0.35rem 0.1rem;
+}
+
+.operate-header h1 {
+  margin: 0;
+  font-size: clamp(1.85rem, 3vw, 2.65rem);
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.operate-header p:not(.route-path) {
+  max-inline-size: 58ch;
+  margin: 0.45rem 0 0;
+  color: var(--flick-muted);
+}
+
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: end;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(20rem, 0.65fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.dashboard-main-column,
+.dashboard-side-column {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.dashboard-preview-panel .preview-canvas {
+  aspect-ratio: 16 / 9;
+}
+
+.dashboard-activity-panel,
+.dashboard-quick-actions,
+.dashboard-hud-card {
+  grid-column: auto;
+}
+
+.dashboard-activity-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dashboard-activity-list .ui-list-row {
+  grid-template-columns: 1fr;
+  align-content: start;
+}
+
+.dashboard-activity-list .ui-list-row-leading,
+.dashboard-activity-list .ui-list-row-trailing {
+  justify-self: start;
+}
+
+.dashboard-status-strip {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-update-banner {
+  align-items: center;
+}
+
+.dashboard-quick-actions .quick-action-row {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.dashboard-hud-card {
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--flick-shadow-glass);
+  padding: 1rem;
+}
+
+.dashboard-hud-card span {
+  display: block;
+  color: var(--flick-muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.dashboard-hud-card strong {
+  display: block;
+  margin-block-start: 0.35rem;
+  font-size: 1.2rem;
+  letter-spacing: -0.03em;
+}
+
+.dashboard-hud-card p {
+  margin: 0.35rem 0 0;
+  color: var(--flick-muted);
+}
+
+.preview-placeholder {
+  text-align: center;
+  padding: 1rem;
+}
+
+@media (max-width: 1120px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-side-column {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-status-strip,
+  .dashboard-update-banner,
+  .dashboard-quick-actions,
+  .dashboard-hud-card {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .operate-header {
+    display: grid;
+    align-items: start;
+  }
+
+  .header-actions {
+    justify-content: start;
+  }
+
+  .dashboard-side-column,
+  .dashboard-activity-list {
+    grid-template-columns: 1fr;
+  }
+}

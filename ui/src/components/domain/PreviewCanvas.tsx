@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { HandObservationEvent } from "../../events/types";
 
 export interface LetterboxInput {
@@ -78,11 +78,25 @@ export function PreviewCanvas({
   sourceWidth?: number;
   sourceHeight?: number;
 }) {
+  const frameRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      setSize({ width: entry.contentRect.width, height: entry.contentRect.height });
+    });
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    if (size.width === 0 || size.height === 0) return;
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     canvas.width = rect.width * dpr;
@@ -110,10 +124,10 @@ export function PreviewCanvas({
       ctx.stroke();
     }
     for (const hand of hands) drawHand(ctx, mapper, hand);
-  }, [hands, ray, sourceHeight, sourceWidth]);
+  }, [hands, ray, size.height, size.width, sourceHeight, sourceWidth]);
 
   return (
-    <div className="preview-canvas" data-has-video={src ? "true" : "false"}>
+    <div ref={frameRef} className="preview-canvas" data-has-video={src ? "true" : "false"}>
       {src ? <img src={src} alt={alt} /> : <div className="preview-placeholder">{alt}</div>}
       <canvas ref={canvasRef} aria-label="Hand skeleton overlay" />
     </div>
