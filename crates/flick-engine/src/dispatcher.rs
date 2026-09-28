@@ -6,7 +6,10 @@
 use std::{
     collections::HashMap,
     str::FromStr,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -21,7 +24,8 @@ use flick_core::{
     SuppressionReason, Verb,
 };
 use flick_ha::{
-    EntityState, HaClient, SafetyClass, SafetyInput, SafetyValidator, VerbTarget,
+    EntityState, HaClient, RegistryEntity, RegistrySnapshot, SafetyClass, SafetyInput,
+    SafetyValidator, VerbTarget,
     verb::{resolve_selected_dial, resolve_verb},
 };
 use flick_store::Store;
@@ -205,7 +209,29 @@ impl HaActionSink {
 #[async_trait]
 impl flick_core::ActionSink for HaActionSink {
     async fn execute(&self, action: &ResolvedAction) -> ActionOutcome {
-        self.client.call(action.action.clone()).await
+        match &action.action {
+            Action::Dial {
+                entity_id,
+                property,
+                gain,
+                min,
+                max,
+            } => {
+                let concrete = flick_ha::dial::dial_action(
+                    &flick_ha::DialTarget {
+                        entity_id: entity_id.clone(),
+                        property: *property,
+                        base_value: None,
+                        gain: *gain,
+                        min: min.as_ref().and_then(serde_json::Value::as_f64),
+                        max: max.as_ref().and_then(serde_json::Value::as_f64),
+                    },
+                    1.0,
+                );
+                self.client.call(concrete).await
+            }
+            _ => self.client.call(action.action.clone()).await,
+        }
     }
 }
 
@@ -235,10 +261,12 @@ pub struct Dispatcher {
 
 struct DispatcherInner {
     store: Option<Arc<Store>>,
-    sink: Arc<dyn flick_core::ActionSink>,
+    sink: Mutex<Arc<dyn flick_core::ActionSink>>,
     safety: SafetyValidator,
     events: Option<EventHub>,
-    settings: DispatcherSettings,
+    settings: Mutex<DispatcherSettings>,
+    registry: Mutex<RegistrySnapshot>,
+    paused: AtomicBool,
     state: Mutex<DispatcherState>,
 }
 
@@ -273,6 +301,7 @@ impl Dispatcher {
             safety: SafetyValidator::new(),
             events: None,
             settings: DispatcherSettings::default(),
+            registry: RegistrySnapshot::default(),
             mappings: Vec::new(),
             anchors: Vec::new(),
         }
@@ -291,10 +320,49 @@ impl Dispatcher {
             .collect();
     }
 
+    /// Replaces the action sink without rebuilding mappings or cooldown state.
+    pub async fn set_sink(&self, sink: Arc<dyn flick_core::ActionSink>) {
+        *self.inner.sink.lock().await = sink;
+    }
+
+    /// Replaces dispatcher runtime settings without clearing mapping state.
+    pub async fn set_settings(&self, settings: DispatcherSettings) {
+        *self.inner.settings.lock().await = settings;
+    }
+
+    /// Replaces the HA registry snapshot used for target expansion and safety checks.
+    pub async fn set_registry(&self, registry: RegistrySnapshot) {
+        *self.inner.registry.lock().await = registry;
+    }
+
+    /// Pauses or resumes dispatch and clears pending confirmations when pausing.
+    pub async fn set_paused(&self, paused: bool) {
+        self.inner.paused.store(paused, Ordering::Relaxed);
+        if paused {
+            self.inner.state.lock().await.pending_confirmations.clear();
+        }
+    }
+
     /// Dispatches one debounced gesture event.
     pub async fn dispatch(&self, event: &GestureEvent) -> DispatchReport {
         if event.phase != GesturePhase::Fired {
             return DispatchReport::default();
+        }
+        if self.inner.paused.load(Ordering::Relaxed) {
+            self.insert_suppressed_activity(
+                event,
+                None,
+                SuppressionReason::Paused,
+                Some("Engine is paused"),
+            )
+            .await;
+            return DispatchReport {
+                outcomes: Vec::new(),
+                suppressions: vec![DispatchSuppression {
+                    mapping_id: None,
+                    reason: SuppressionReason::Paused,
+                }],
+            };
         }
 
         if let Some(resolved) = self.take_pending_confirmation(event).await {
@@ -437,6 +505,10 @@ impl Dispatcher {
     }
 
     async fn take_pending_confirmation(&self, event: &GestureEvent) -> Option<ResolvedAction> {
+        if self.inner.paused.load(Ordering::Relaxed) {
+            self.inner.state.lock().await.pending_confirmations.clear();
+            return None;
+        }
         let mut state = self.inner.state.lock().await;
         let now = Instant::now();
         state
@@ -523,20 +595,25 @@ impl Dispatcher {
         mapping: &DispatcherMapping,
         resolved: ResolvedAction,
     ) -> SafetyDecision {
-        let Some(input) = safety_input(&resolved.action) else {
+        if matches!(resolved.action, Action::Dial { .. }) {
+            return SafetyDecision::Execute(Box::new(resolved));
+        }
+        if !matches!(resolved.action, Action::CallService { .. }) {
             return SafetyDecision::Suppressed(
                 SuppressionReason::BlockedDomain,
                 Some("Only concrete Home Assistant service calls can be dispatched".to_owned()),
             );
-        };
-        match self.inner.safety.classify(&input) {
+        }
+        let registry = self.inner.registry.lock().await.clone();
+        match classify_action_safety(&self.inner.safety, &resolved.action, &registry) {
             SafetyClass::Denied => SafetyDecision::Suppressed(
                 SuppressionReason::BlockedDomain,
                 Some("Action is denied by the safety policy".to_owned()),
             ),
             SafetyClass::Normal => SafetyDecision::Execute(Box::new(resolved)),
             SafetyClass::Sensitive => {
-                if !self.inner.settings.allow_sensitive_actions || !mapping.sensitive_ack {
+                let settings = self.inner.settings.lock().await.clone();
+                if !settings.allow_sensitive_actions || !mapping.sensitive_ack {
                     return SafetyDecision::Suppressed(
                         SuppressionReason::BlockedDomain,
                         Some("Sensitive action is not enabled for this mapping".to_owned()),
@@ -544,8 +621,8 @@ impl Dispatcher {
                 }
                 let confirm_gesture_id = mapping
                     .confirm_gesture_id
-                    .unwrap_or(self.inner.settings.default_confirm_gesture);
-                let expires_at = Instant::now() + self.inner.settings.confirmation_window;
+                    .unwrap_or(settings.default_confirm_gesture);
+                let expires_at = Instant::now() + settings.confirmation_window;
                 {
                     let mut state = self.inner.state.lock().await;
                     state.pending_confirmations.push(PendingConfirmation {
@@ -567,7 +644,8 @@ impl Dispatcher {
     ) -> ActionOutcome {
         self.publish_gesture_fired(event, &resolved);
         let dispatch_started = Instant::now();
-        let mut outcome = self.inner.sink.execute(&resolved).await;
+        let sink = self.inner.sink.lock().await.clone();
+        let mut outcome = sink.execute(&resolved).await;
         let activity_id = outcome.activity_id.unwrap_or_else(ActivityId::new);
         outcome.activity_id = Some(activity_id);
         let ha_ms = outcome
@@ -726,6 +804,7 @@ pub struct DispatcherBuilder {
     safety: SafetyValidator,
     events: Option<EventHub>,
     settings: DispatcherSettings,
+    registry: RegistrySnapshot,
     mappings: Vec<DispatcherMapping>,
     anchors: Vec<DispatcherAnchor>,
 }
@@ -752,6 +831,13 @@ impl DispatcherBuilder {
         self
     }
 
+    /// Seeds the HA registry snapshot used for safety expansion.
+    #[must_use]
+    pub fn registry(mut self, registry: RegistrySnapshot) -> Self {
+        self.registry = registry;
+        self
+    }
+
     /// Seeds mappings.
     #[must_use]
     pub fn mappings(mut self, mappings: Vec<DispatcherMapping>) -> Self {
@@ -772,10 +858,12 @@ impl DispatcherBuilder {
         Dispatcher {
             inner: Arc::new(DispatcherInner {
                 store: self.store,
-                sink: self.sink,
+                sink: Mutex::new(self.sink),
                 safety: self.safety,
                 events: self.events,
-                settings: self.settings,
+                settings: Mutex::new(self.settings),
+                registry: Mutex::new(self.registry),
+                paused: AtomicBool::new(false),
                 state: Mutex::new(DispatcherState {
                     mappings: self.mappings,
                     anchors: self
@@ -917,7 +1005,13 @@ enum SafetyDecision {
     ConfirmationQueued,
 }
 
-fn safety_input(action: &Action) -> Option<SafetyInput<'_>> {
+/// Classifies an action after expanding entity/device/area targets through the HA registry.
+#[must_use]
+pub fn classify_action_safety(
+    validator: &SafetyValidator,
+    action: &Action,
+    registry: &RegistrySnapshot,
+) -> SafetyClass {
     let Action::CallService {
         domain,
         service,
@@ -925,19 +1019,120 @@ fn safety_input(action: &Action) -> Option<SafetyInput<'_>> {
         ..
     } = action
     else {
-        return None;
+        return SafetyClass::Denied;
     };
-    let entity_domain = target
-        .entity_id
-        .as_ref()
-        .and_then(|ids| ids.first())
-        .and_then(|id| id.split_once('.').map(|(domain, _)| domain));
-    Some(SafetyInput {
+
+    let mut strictest = classify_concrete_target(validator, domain, service, None);
+    let mut saw_explicit_target = false;
+    let mut saw_resolved_entity = false;
+    let mut unresolved = false;
+    let mut resolved_ids = std::collections::HashSet::new();
+
+    if let Some(entity_ids) = target.entity_id.as_ref() {
+        saw_explicit_target = true;
+        for entity_id in entity_ids {
+            if let Some(entity) = registry
+                .entities
+                .iter()
+                .find(|entity| entity.entity_id == *entity_id)
+            {
+                if resolved_ids.insert(entity.entity_id.clone()) {
+                    saw_resolved_entity = true;
+                    strictest = strictest_safety(
+                        strictest,
+                        classify_concrete_target(validator, domain, service, Some(entity)),
+                    );
+                }
+            } else {
+                unresolved = true;
+            }
+        }
+    }
+
+    if let Some(device_ids) = target.device_id.as_ref() {
+        saw_explicit_target = true;
+        for device_id in device_ids {
+            let mut matched = false;
+            for entity in registry
+                .entities
+                .iter()
+                .filter(|entity| entity.device_id.as_deref() == Some(device_id.as_str()))
+            {
+                matched = true;
+                if resolved_ids.insert(entity.entity_id.clone()) {
+                    saw_resolved_entity = true;
+                    strictest = strictest_safety(
+                        strictest,
+                        classify_concrete_target(validator, domain, service, Some(entity)),
+                    );
+                }
+            }
+            if !matched {
+                unresolved = true;
+            }
+        }
+    }
+
+    if let Some(area_ids) = target.area_id.as_ref() {
+        saw_explicit_target = true;
+        for area_id in area_ids {
+            let mut matched = false;
+            for entity in registry
+                .entities
+                .iter()
+                .filter(|entity| entity.area_id.as_deref() == Some(area_id.as_str()))
+            {
+                matched = true;
+                if resolved_ids.insert(entity.entity_id.clone()) {
+                    saw_resolved_entity = true;
+                    strictest = strictest_safety(
+                        strictest,
+                        classify_concrete_target(validator, domain, service, Some(entity)),
+                    );
+                }
+            }
+            if !matched {
+                unresolved = true;
+            }
+        }
+    }
+
+    if unresolved || (saw_explicit_target && !saw_resolved_entity) {
+        strictest = strictest_safety(strictest, SafetyClass::Sensitive);
+    }
+    strictest
+}
+
+fn classify_concrete_target(
+    validator: &SafetyValidator,
+    domain: &str,
+    service: &str,
+    entity: Option<&RegistryEntity>,
+) -> SafetyClass {
+    let entity_domain = entity.map(|entity| entity.domain.as_str());
+    let device_class = entity.and_then(|entity| entity.device_class.as_deref());
+    let class = validator.classify(&SafetyInput {
         domain,
         service,
         entity_domain,
-        device_class: None,
-    })
+        device_class,
+    });
+    if matches!(class, SafetyClass::Normal)
+        && (domain == "cover" || entity_domain == Some("cover"))
+        && device_class.is_none()
+    {
+        SafetyClass::Sensitive
+    } else {
+        class
+    }
+}
+
+fn strictest_safety(left: SafetyClass, right: SafetyClass) -> SafetyClass {
+    match (left, right) {
+        (SafetyClass::Denied, _) | (_, SafetyClass::Denied) => SafetyClass::Denied,
+        (SafetyClass::Sensitive, _) | (_, SafetyClass::Sensitive) => SafetyClass::Sensitive,
+        (SafetyClass::Normal, SafetyClass::Normal) => SafetyClass::Normal,
+    }
 }
 
 fn suppressed_outcome(code: &str, message: &str) -> ActionOutcome {

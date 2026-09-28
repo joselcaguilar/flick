@@ -41,6 +41,7 @@ use futures::{SinkExt, Stream, StreamExt, stream};
 use image::{ColorType, codecs::jpeg::JpegEncoder, imageops::FilterType};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
+use subtle::ConstantTimeEq;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::sync::broadcast;
 use tower_http::cors::{AllowOrigin, CorsLayer};
@@ -122,6 +123,8 @@ pub struct ApiGateways {
     pub updates: Arc<dyn UpdatesGateway>,
     /// Preview frame source.
     pub preview: Arc<dyn PreviewSource>,
+    /// Mapping/settings persistence and dispatcher reload boundary.
+    pub config: Arc<dyn ConfigGateway>,
 }
 
 impl ApiGateways {
@@ -134,6 +137,7 @@ impl ApiGateways {
             teach: Arc::new(FakeTeach),
             updates: Arc::new(FakeUpdates),
             preview: Arc::new(FakePreview),
+            config: Arc::new(FakeConfig),
         }
     }
 }
@@ -148,6 +152,7 @@ pub struct ApiState {
     teach: Arc<dyn TeachGateway>,
     updates: Arc<dyn UpdatesGateway>,
     preview: Arc<dyn PreviewSource>,
+    config_sync: Arc<dyn ConfigGateway>,
     tickets: Arc<PreviewTickets>,
     events: EventHub,
     mappings: Arc<Mutex<BTreeMap<String, Mapping>>>,
@@ -168,6 +173,7 @@ impl ApiState {
             teach: gateways.teach,
             updates: gateways.updates,
             preview: gateways.preview,
+            config_sync: gateways.config,
             tickets: Arc::new(PreviewTickets::default()),
             events: EventHub::new(16),
             mappings: Arc::new(Mutex::new(BTreeMap::new())),
@@ -187,6 +193,36 @@ impl ApiState {
     #[must_use]
     pub fn events(&self) -> EventHub {
         self.events.clone()
+    }
+
+    /// Seeds the in-memory mapping cache from engine persistence.
+    pub fn replace_mappings(&self, mappings: Vec<Mapping>) {
+        *self.mappings.lock().unwrap_or_else(|err| err.into_inner()) = mappings
+            .into_iter()
+            .map(|mapping| (mapping.id.clone(), mapping))
+            .collect();
+    }
+
+    /// Seeds the in-memory anchor cache from engine persistence.
+    pub fn replace_anchors(&self, anchors: Vec<Anchor>) {
+        *self.anchors.lock().unwrap_or_else(|err| err.into_inner()) = anchors
+            .into_iter()
+            .map(|anchor| (anchor.id.clone(), anchor))
+            .collect();
+    }
+
+    /// Seeds the in-memory settings cache from engine persistence.
+    pub fn replace_settings(&self, settings: SettingsMap) {
+        *self.settings.lock().unwrap_or_else(|err| err.into_inner()) = settings;
+    }
+
+    /// Returns a cloned settings snapshot.
+    #[must_use]
+    pub fn settings_snapshot(&self) -> SettingsMap {
+        self.settings
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .clone()
     }
 }
 
@@ -365,7 +401,7 @@ fn check_bearer(state: &ApiState, headers: &HeaderMap) -> Result<(), ApiProblem>
         ));
     };
     let expected = format!("Bearer {}", state.config.token);
-    if value == expected {
+    if constant_time_eq(value, &expected) {
         Ok(())
     } else {
         Err(ApiProblem::unauthorized(
@@ -373,6 +409,10 @@ fn check_bearer(state: &ApiState, headers: &HeaderMap) -> Result<(), ApiProblem>
             "Bearer token is invalid",
         ))
     }
+}
+
+fn constant_time_eq(left: &str, right: &str) -> bool {
+    left.as_bytes().ct_eq(right.as_bytes()).into()
 }
 
 /// Local API error rendered as RFC 9457 `application/problem+json`.
@@ -470,6 +510,17 @@ pub trait HaGateway: Send + Sync + 'static {
     async fn services(&self, query: BTreeMap<String, String>) -> Vec<HaServiceSchema>;
     /// Test/call action.
     async fn call(&self, action: ActionDto) -> Result<ActionOutcomeDto, ApiProblem>;
+}
+
+/// Mapping/settings/targeting persistence hook supplied by the engine.
+#[async_trait]
+pub trait ConfigGateway: Send + Sync + 'static {
+    /// Called after settings change through the API.
+    async fn settings_changed(&self, settings: SettingsMap) -> Result<(), ApiProblem>;
+    /// Called after mappings change through the API.
+    async fn mappings_changed(&self, mappings: Vec<Mapping>) -> Result<(), ApiProblem>;
+    /// Called after anchors change through the API.
+    async fn anchors_changed(&self, anchors: Vec<Anchor>) -> Result<(), ApiProblem>;
 }
 
 /// Teach and realign flows supplied by the spatial lane.
@@ -763,6 +814,24 @@ impl HaGateway for FakeHa {
                 ha_ms: Some(10.0),
             }),
         })
+    }
+}
+
+/// No-op config gateway used by API tests.
+pub struct FakeConfig;
+
+#[async_trait]
+impl ConfigGateway for FakeConfig {
+    async fn settings_changed(&self, _settings: SettingsMap) -> Result<(), ApiProblem> {
+        Ok(())
+    }
+
+    async fn mappings_changed(&self, _mappings: Vec<Mapping>) -> Result<(), ApiProblem> {
+        Ok(())
+    }
+
+    async fn anchors_changed(&self, _anchors: Vec<Anchor>) -> Result<(), ApiProblem> {
+        Ok(())
     }
 }
 
@@ -1162,10 +1231,14 @@ async fn get_settings(State(state): State<Arc<ApiState>>) -> Json<SettingsMap> {
 async fn patch_settings(
     State(state): State<Arc<ApiState>>,
     Json(patch): Json<SettingsMap>,
-) -> Json<SettingsMap> {
-    let mut settings = state.settings.lock().unwrap_or_else(|err| err.into_inner());
-    settings.extend(patch);
-    json_response(settings.clone())
+) -> Result<Json<SettingsMap>, ApiProblem> {
+    let settings = {
+        let mut settings = state.settings.lock().unwrap_or_else(|err| err.into_inner());
+        settings.extend(patch);
+        settings.clone()
+    };
+    state.config_sync.settings_changed(settings.clone()).await?;
+    Ok(json_response(settings))
 }
 
 #[utoipa::path(get, path = "/api/v1/ha/discover", responses((status = 200, body = [HaDiscovery])))]
@@ -1413,11 +1486,12 @@ async fn create_mapping(
         .unwrap_or_else(|err| err.into_inner())
         .clone();
     let mapping = mapping_from_create(request, &anchors)?;
-    state
-        .mappings
-        .lock()
-        .unwrap_or_else(|err| err.into_inner())
-        .insert(mapping.id.clone(), mapping.clone());
+    let all_mappings = {
+        let mut mappings = state.mappings.lock().unwrap_or_else(|err| err.into_inner());
+        mappings.insert(mapping.id.clone(), mapping.clone());
+        mappings.values().cloned().collect::<Vec<_>>()
+    };
+    state.config_sync.mappings_changed(all_mappings).await?;
     Ok(json_response(mapping))
 }
 
@@ -1427,38 +1501,58 @@ async fn patch_mapping(
     Path(id): Path<String>,
     Json(request): Json<MappingPatch>,
 ) -> Result<Json<Mapping>, ApiProblem> {
-    let mut mappings = state.mappings.lock().unwrap_or_else(|err| err.into_inner());
-    let Some(mapping) = mappings.get_mut(&id) else {
-        return Err(ApiProblem::new(
-            StatusCode::NOT_FOUND,
-            "mapping_not_found",
-            "mapping not found",
-        ));
+    let (mapping, all_mappings) = {
+        let mut mappings = state.mappings.lock().unwrap_or_else(|err| err.into_inner());
+        let Some(mapping) = mappings.get_mut(&id) else {
+            return Err(ApiProblem::new(
+                StatusCode::NOT_FOUND,
+                "mapping_not_found",
+                "mapping not found",
+            ));
+        };
+        if let Some(name) = request.name {
+            mapping.name = name;
+        }
+        if let Some(enabled) = request.enabled {
+            mapping.enabled = enabled;
+        }
+        if let Some(action) = request.action {
+            mapping.action = action;
+        }
+        if let Some(target_mode) = request.target_mode {
+            mapping.target_mode = target_mode;
+        }
+        if let Some(anchor_id) = request.anchor_id {
+            mapping.anchor_id = Some(anchor_id);
+        }
+        if let Some(target_domain) = request.target_domain {
+            mapping.target_domain = Some(target_domain);
+        }
+        if let Some(sensitive_ack) = request.sensitive_ack {
+            mapping.sensitive_ack = sensitive_ack;
+        }
+        mapping.updated_at = now_rfc3339();
+        (
+            mapping.clone(),
+            mappings.values().cloned().collect::<Vec<_>>(),
+        )
     };
-    if let Some(name) = request.name {
-        mapping.name = name;
-    }
-    if let Some(enabled) = request.enabled {
-        mapping.enabled = enabled;
-    }
-    if let Some(action) = request.action {
-        mapping.action = action;
-    }
-    if let Some(target_mode) = request.target_mode {
-        mapping.target_mode = target_mode;
-    }
-    mapping.updated_at = now_rfc3339();
-    Ok(json_response(mapping.clone()))
+    state.config_sync.mappings_changed(all_mappings).await?;
+    Ok(json_response(mapping))
 }
 
 #[utoipa::path(delete, path = "/api/v1/mappings/{id}", responses((status = 204)))]
-async fn delete_mapping(State(state): State<Arc<ApiState>>, Path(id): Path<String>) -> StatusCode {
-    state
-        .mappings
-        .lock()
-        .unwrap_or_else(|err| err.into_inner())
-        .remove(&id);
-    no_content()
+async fn delete_mapping(
+    State(state): State<Arc<ApiState>>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiProblem> {
+    let all_mappings = {
+        let mut mappings = state.mappings.lock().unwrap_or_else(|err| err.into_inner());
+        mappings.remove(&id);
+        mappings.values().cloned().collect::<Vec<_>>()
+    };
+    state.config_sync.mappings_changed(all_mappings).await?;
+    Ok(no_content())
 }
 
 #[utoipa::path(post, path = "/api/v1/mappings/{id}/test", responses((status = 200, body = ActionOutcomeDto)))]
@@ -1473,8 +1567,22 @@ async fn test_mapping() -> Json<ActionOutcomeDto> {
 }
 
 #[utoipa::path(put, path = "/api/v1/mappings/order", request_body = MappingOrder, responses((status = 204)))]
-async fn order_mappings() -> StatusCode {
-    no_content()
+async fn order_mappings(
+    State(state): State<Arc<ApiState>>,
+    Json(order): Json<MappingOrder>,
+) -> Result<StatusCode, ApiProblem> {
+    let all_mappings = {
+        let mut mappings = state.mappings.lock().unwrap_or_else(|err| err.into_inner());
+        for (index, id) in order.0.iter().enumerate() {
+            if let Some(mapping) = mappings.get_mut(id) {
+                mapping.sort_order = i64::try_from(index).unwrap_or(i64::MAX);
+                mapping.updated_at = now_rfc3339();
+            }
+        }
+        mappings.values().cloned().collect::<Vec<_>>()
+    };
+    state.config_sync.mappings_changed(all_mappings).await?;
+    Ok(no_content())
 }
 
 #[utoipa::path(get, path = "/api/v1/activity", params(("limit" = Option<u32>, Query), ("before" = Option<String>, Query), ("status" = Option<String>, Query)), responses((status = 200, body = ActivityPage)))]
@@ -1522,7 +1630,10 @@ async fn patch_place(
 }
 
 #[utoipa::path(delete, path = "/api/v1/places/{id}", responses((status = 204)))]
-async fn delete_place(State(state): State<Arc<ApiState>>, Path(id): Path<String>) -> StatusCode {
+async fn delete_place(
+    State(state): State<Arc<ApiState>>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiProblem> {
     state
         .places
         .lock()
@@ -1538,17 +1649,26 @@ async fn delete_place(State(state): State<Arc<ApiState>>, Path(id): Path<String>
         anchors.retain(|_, anchor| anchor.place_id != id);
         ids
     };
-    state
-        .mappings
-        .lock()
-        .unwrap_or_else(|err| err.into_inner())
-        .retain(|_, mapping| {
+    let all_mappings = {
+        let mut mappings = state.mappings.lock().unwrap_or_else(|err| err.into_inner());
+        mappings.retain(|_, mapping| {
             mapping
                 .anchor_id
                 .as_ref()
                 .is_none_or(|anchor_id| !removed_anchor_ids.contains(anchor_id))
         });
-    no_content()
+        mappings.values().cloned().collect::<Vec<_>>()
+    };
+    let all_anchors = state
+        .anchors
+        .lock()
+        .unwrap_or_else(|err| err.into_inner())
+        .values()
+        .cloned()
+        .collect::<Vec<_>>();
+    state.config_sync.anchors_changed(all_anchors).await?;
+    state.config_sync.mappings_changed(all_mappings).await?;
+    Ok(no_content())
 }
 
 #[utoipa::path(post, path = "/api/v1/places/{id}/realign", responses((status = 200, body = RealignSession)))]
@@ -1607,37 +1727,49 @@ async fn patch_anchor(
     Path(id): Path<String>,
     Json(request): Json<AnchorPatch>,
 ) -> Result<Json<Anchor>, ApiProblem> {
-    let mut anchors = state.anchors.lock().unwrap_or_else(|err| err.into_inner());
-    let Some(anchor) = anchors.get_mut(&id) else {
-        return Err(ApiProblem::new(
-            StatusCode::NOT_FOUND,
-            "anchor_not_found",
-            "anchor not found",
-        ));
+    let (anchor, all_anchors) = {
+        let mut anchors = state.anchors.lock().unwrap_or_else(|err| err.into_inner());
+        let Some(anchor) = anchors.get_mut(&id) else {
+            return Err(ApiProblem::new(
+                StatusCode::NOT_FOUND,
+                "anchor_not_found",
+                "anchor not found",
+            ));
+        };
+        if let Some(name) = request.name {
+            anchor.name = name;
+        }
+        if let Some(verb_params) = request.verb_params {
+            anchor.verb_params = verb_params;
+        }
+        anchor.updated_at = now_rfc3339();
+        (
+            anchor.clone(),
+            anchors.values().cloned().collect::<Vec<_>>(),
+        )
     };
-    if let Some(name) = request.name {
-        anchor.name = name;
-    }
-    if let Some(verb_params) = request.verb_params {
-        anchor.verb_params = verb_params;
-    }
-    anchor.updated_at = now_rfc3339();
-    Ok(json_response(anchor.clone()))
+    state.config_sync.anchors_changed(all_anchors).await?;
+    Ok(json_response(anchor))
 }
 
 #[utoipa::path(delete, path = "/api/v1/anchors/{id}", responses((status = 204)))]
-async fn delete_anchor(State(state): State<Arc<ApiState>>, Path(id): Path<String>) -> StatusCode {
-    state
-        .anchors
-        .lock()
-        .unwrap_or_else(|err| err.into_inner())
-        .remove(&id);
-    state
-        .mappings
-        .lock()
-        .unwrap_or_else(|err| err.into_inner())
-        .retain(|_, mapping| mapping.anchor_id.as_ref() != Some(&id));
-    no_content()
+async fn delete_anchor(
+    State(state): State<Arc<ApiState>>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiProblem> {
+    let all_anchors = {
+        let mut anchors = state.anchors.lock().unwrap_or_else(|err| err.into_inner());
+        anchors.remove(&id);
+        anchors.values().cloned().collect::<Vec<_>>()
+    };
+    let all_mappings = {
+        let mut mappings = state.mappings.lock().unwrap_or_else(|err| err.into_inner());
+        mappings.retain(|_, mapping| mapping.anchor_id.as_ref() != Some(&id));
+        mappings.values().cloned().collect::<Vec<_>>()
+    };
+    state.config_sync.anchors_changed(all_anchors).await?;
+    state.config_sync.mappings_changed(all_mappings).await?;
+    Ok(no_content())
 }
 
 #[utoipa::path(post, path = "/api/v1/anchors/{id}/test", responses((status = 200, body = AnchorTestResponse)))]
@@ -1804,7 +1936,9 @@ async fn ws_events(
         .unwrap_or_default();
     let has_v1 = protocols.split(',').any(|item| item.trim() == "flick.v1");
     let bearer = format!("bearer.{}", state.config.token);
-    let has_token = protocols.split(',').any(|item| item.trim() == bearer);
+    let has_token = protocols
+        .split(',')
+        .any(|item| constant_time_eq(item.trim(), &bearer));
     if !has_v1 || !has_token {
         return Err(ApiProblem::unauthorized(
             "bad_ws_token",

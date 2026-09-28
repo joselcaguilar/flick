@@ -1,11 +1,12 @@
 use std::{
     env, fs,
     path::PathBuf,
+    sync::atomic::{AtomicUsize, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use flick_store::Store;
-use rusqlite::{OptionalExtension, params};
+use flick_store::{Store, configure_connection, snapshot_database};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::json;
 
 #[test]
@@ -78,10 +79,84 @@ fn initial_migration_supports_previous_queries_and_cascades_targets()
     Ok(())
 }
 
+#[test]
+fn snapshot_from_live_wal_contains_committed_rows() -> Result<(), Box<dyn std::error::Error>> {
+    let root = unique_test_dir()?;
+    fs::create_dir_all(&root)?;
+    let db_path = root.join("flick.db");
+    let store = Store::open_path(&db_path)?;
+    store
+        .settings()
+        .set("committed", &json!({"visible": true}), 1)?;
+
+    let writer = Connection::open(&db_path)?;
+    configure_connection(&writer)?;
+    writer.execute("BEGIN IMMEDIATE", [])?;
+    writer.execute(
+        "INSERT INTO settings (key, value, updated_at) VALUES (?1, ?2, ?3)",
+        params!["uncommitted", json!({"visible": false}).to_string(), 2],
+    )?;
+
+    let snapshot = snapshot_database(&db_path, &root.join("backups"))?;
+    writer.execute("ROLLBACK", [])?;
+
+    let snapshot_conn = Connection::open(snapshot)?;
+    let committed: String = snapshot_conn.query_row(
+        "SELECT value FROM settings WHERE key = ?1",
+        params!["committed"],
+        |row| row.get(0),
+    )?;
+    let uncommitted: Option<String> = snapshot_conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = ?1",
+            params!["uncommitted"],
+            |row| row.get(0),
+        )
+        .optional()?;
+    assert_eq!(committed, json!({"visible": true}).to_string());
+    assert!(uncommitted.is_none());
+
+    drop(snapshot_conn);
+    drop(writer);
+    drop(store);
+    fs::remove_dir_all(root)?;
+    Ok(())
+}
+
+#[test]
+fn additive_future_schema_opens_without_rollback() -> Result<(), Box<dyn std::error::Error>> {
+    let root = unique_test_dir()?;
+    fs::create_dir_all(&root)?;
+    let db_path = root.join("flick.db");
+    let store = Store::open_path(&db_path)?;
+    drop(store);
+    {
+        let conn = Connection::open(&db_path)?;
+        configure_connection(&conn)?;
+        conn.execute("CREATE TABLE additive_future (id INTEGER PRIMARY KEY)", [])?;
+        conn.pragma_update(None, "user_version", 2i64)?;
+    }
+
+    let reopened = Store::open_path(&db_path)?;
+    let count: i64 = reopened.connection().query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'additive_future'",
+        [],
+        |row| row.get(0),
+    )?;
+    assert_eq!(count, 1);
+
+    drop(reopened);
+    fs::remove_dir_all(root)?;
+    Ok(())
+}
+
 fn unique_test_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    // Parallel tests share a PID and macOS clocks tick in microseconds, so add a counter.
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    let seq = NEXT.fetch_add(1, Ordering::Relaxed);
     let ts = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     Ok(env::current_dir()?
         .join("target")
         .join("flick-store-tests")
-        .join(format!("{}-{ts}", std::process::id())))
+        .join(format!("{}-{ts}-{seq}", std::process::id())))
 }
