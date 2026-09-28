@@ -6,6 +6,7 @@ import { Badge, Button, GlassPanel, Kbd, ListRow, Skeleton } from "../components
 import { useEventStore } from "../events/store";
 import { GesturesLibraryRoute } from "../features/gestures/GesturesLibraryRoute";
 import { OnboardingRoute } from "../features/onboarding/OnboardingRoute";
+import { GestureStudioRoute } from "../features/studio/GestureStudioRoute";
 import { formatTime } from "../lib/utils";
 
 export interface RouteMeta {
@@ -241,13 +242,7 @@ export const routes: RouteMeta[] = [
     path: "/gestures/new",
     title: "Gesture Studio",
     description: "Record static, motion or two-hand gestures.",
-    element: (
-      <EmptyRoute
-        title="Gesture Studio"
-        description="Record takes, train locally and test the gesture before mapping it."
-        action="Ready to record"
-      />
-    ),
+    element: <GestureStudioRoute />,
   },
   {
     path: "/devices",
