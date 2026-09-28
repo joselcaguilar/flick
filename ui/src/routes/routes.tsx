@@ -1,11 +1,14 @@
 import type { ReactNode } from "react";
-import { GestureGlyph } from "../components/domain";
-import { GlassPanel } from "../components/ui";
+import { ActivityRoute } from "../features/activity/ActivityRoute";
 import { CamerasRoute } from "../features/cameras/Cameras";
 import { DashboardRoute } from "../features/dashboard/Dashboard";
 import { DevicesRoute, PlacesRoute, RealignRoute, TeachDeviceRoute } from "../features/devices/Devices";
+import { GesturesLibraryRoute } from "../features/gestures/GesturesLibraryRoute";
 import { MappingEditorRoute, MappingsRoute } from "../features/mappings/Mappings";
+import { OnboardingRoute } from "../features/onboarding/OnboardingRoute";
 import { ProRoute } from "../features/pro/Pro";
+import { SettingsRoute } from "../features/settings/SettingsRoute";
+import { GestureStudioRoute } from "../features/studio/GestureStudioRoute";
 
 export interface RouteMeta {
   path: string;
@@ -16,25 +19,6 @@ export interface RouteMeta {
   mobile?: boolean;
   shortcut?: string;
   element: ReactNode;
-}
-
-function EmptyRoute({ title, description, action }: { title: string; description: string; action?: string }) {
-  return (
-    <section className="route-panel empty-route" aria-labelledby="screen-title">
-      <div>
-        <h1 id="screen-title">{title}</h1>
-        <p>{description}</p>
-      </div>
-      <GlassPanel className="empty-state-panel">
-        <GestureGlyph name="point" />
-        <h2>{action ?? "Ready for the next UI lane"}</h2>
-        <p>
-          The route, loading state, empty state and command-palette entry are wired. Add screen-specific
-          features inside <code>src/features</code>.
-        </p>
-      </GlassPanel>
-    </section>
-  );
 }
 
 export const routes: RouteMeta[] = [
@@ -51,13 +35,7 @@ export const routes: RouteMeta[] = [
     path: "/onboarding",
     title: "Onboarding",
     description: "First-run camera, Home Assistant and first flick flow.",
-    element: (
-      <EmptyRoute
-        title="Onboarding"
-        description="Get a new household from camera permission to first gesture in under three minutes."
-        action="First run scaffold"
-      />
-    ),
+    element: <OnboardingRoute />,
   },
   {
     path: "/gestures",
@@ -66,25 +44,13 @@ export const routes: RouteMeta[] = [
     nav: true,
     mobile: true,
     shortcut: "⌘2",
-    element: (
-      <EmptyRoute
-        title="Gestures library"
-        description="Built-ins, custom gestures, enable toggles and update notes live here."
-        action="No custom gestures yet"
-      />
-    ),
+    element: <GesturesLibraryRoute />,
   },
   {
     path: "/gestures/new",
     title: "Gesture Studio",
     description: "Record static, motion or two-hand gestures.",
-    element: (
-      <EmptyRoute
-        title="Gesture Studio"
-        description="Record takes, train locally and test the gesture before mapping it."
-        action="Ready to record"
-      />
-    ),
+    element: <GestureStudioRoute />,
   },
   {
     path: "/devices",
@@ -144,13 +110,7 @@ export const routes: RouteMeta[] = [
     nav: true,
     mobile: false,
     shortcut: "⌘6",
-    element: (
-      <EmptyRoute
-        title="Activity"
-        description="Suppressed reasons and latency details explain why a gesture did or did not fire."
-        action="Why didn't it fire?"
-      />
-    ),
+    element: <ActivityRoute />,
   },
   {
     path: "/settings",
@@ -159,13 +119,7 @@ export const routes: RouteMeta[] = [
     nav: true,
     mobile: true,
     shortcut: "⌘,",
-    element: (
-      <EmptyRoute
-        title="Settings"
-        description="Theme, detection, pointing, safety, feedback, privacy, Home Assistant, updates and advanced controls."
-        action="Settings scaffold"
-      />
-    ),
+    element: <SettingsRoute />,
   },
   {
     path: "/pro",
