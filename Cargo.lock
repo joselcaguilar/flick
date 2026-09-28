@@ -1304,18 +1304,22 @@ dependencies = [
 name = "flick-api"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "axum",
  "bytes",
  "flick-core",
  "futures",
+ "image",
  "schemars",
  "serde",
  "serde_json",
  "thiserror",
+ "time",
  "tokio",
  "tower",
  "tower-http 0.7.1",
  "tracing",
+ "ulid 3.0.0",
  "utoipa",
  "utoipa-axum",
 ]
@@ -5271,6 +5275,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "flick-api",
  "tracing",
 ]
 

@@ -11,6 +11,11 @@ workspace = true
 
 [dependencies]
 flick-core.workspace = true
+
+async-trait.workspace = true
+image.workspace = true
+time.workspace = true
+ulid.workspace = true
 axum.workspace = true
 bytes.workspace = true
 futures.workspace = true

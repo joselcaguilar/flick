@@ -1,8 +1,13 @@
-//! `gen-api` xtask stub for P1-602.
+//! `gen-api` writes the committed Flick OpenAPI contract.
 
-use anyhow::{Result, bail};
+use std::{fs, path::Path};
 
-/// Runs the future API generation task.
+use anyhow::{Context, Result};
+
+/// Regenerates `crates/flick-api/openapi.json`.
 pub fn run() -> Result<()> {
-    bail!("gen-api is implemented by future task P1-602")
+    let out = Path::new("crates/flick-api/openapi.json");
+    let json = flick_api::openapi_json_pretty().context("serialize OpenAPI")?;
+    fs::write(out, format!("{json}\n")).with_context(|| format!("write {}", out.display()))?;
+    Ok(())
 }

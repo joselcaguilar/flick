@@ -1,0 +1,6087 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Flick Local API",
+    "description": "Local-first HTTP and WebSocket API for Flick.",
+    "license": {
+      "name": "Apache-2.0",
+      "identifier": "Apache-2.0"
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/activity": {
+      "get": {
+        "tags": [],
+        "operationId": "activity",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityPage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/anchors": {
+      "get": {
+        "tags": [],
+        "operationId": "list_anchors",
+        "parameters": [
+          {
+            "name": "place_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Anchor"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/anchors/{id}": {
+      "delete": {
+        "tags": [],
+        "operationId": "delete_anchor",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {}
+        }
+      },
+      "patch": {
+        "tags": [],
+        "operationId": "patch_anchor",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnchorPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Anchor"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/anchors/{id}/test": {
+      "post": {
+        "tags": [],
+        "operationId": "test_anchor",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnchorTestResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cameras": {
+      "get": {
+        "tags": [],
+        "operationId": "list_cameras",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Camera"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [],
+        "operationId": "create_camera",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Camera"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cameras/available": {
+      "get": {
+        "tags": [],
+        "operationId": "cameras_available",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AvailableCamera"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cameras/{id}": {
+      "delete": {
+        "tags": [],
+        "operationId": "delete_camera",
+        "responses": {
+          "204": {}
+        }
+      },
+      "patch": {
+        "tags": [],
+        "operationId": "patch_camera",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemJson"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cameras/{id}/preview-ticket": {
+      "post": {
+        "tags": [],
+        "operationId": "preview_ticket",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewTicket"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cameras/{id}/start": {
+      "post": {
+        "tags": [],
+        "operationId": "start_camera",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CameraStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cameras/{id}/stop": {
+      "post": {
+        "tags": [],
+        "operationId": "stop_camera",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CameraStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/capture/{session_id}/cancel": {
+      "post": {
+        "tags": [],
+        "operationId": "cancel_capture",
+        "responses": {
+          "204": {}
+        }
+      }
+    },
+    "/api/v1/classifier": {
+      "get": {
+        "tags": [],
+        "operationId": "get_classifier",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassifierReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/classifier/train": {
+      "post": {
+        "tags": [],
+        "operationId": "train_classifier",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassifierReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/diagnostics/bundle": {
+      "get": {
+        "tags": [],
+        "operationId": "diagnostics_bundle",
+        "responses": {
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemJson"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/engine/pause": {
+      "post": {
+        "tags": [],
+        "operationId": "pause_engine",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PauseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngineStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/engine/resume": {
+      "post": {
+        "tags": [],
+        "operationId": "resume_engine",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngineStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/events": {
+      "get": {
+        "tags": [],
+        "operationId": "ws_events",
+        "responses": {
+          "101": {
+            "description": "WebSocket event stream"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemJson"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gestures": {
+      "get": {
+        "tags": [],
+        "operationId": "list_gestures",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Gesture"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [],
+        "operationId": "create_gesture",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GestureCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gesture"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gestures/{id}": {
+      "delete": {
+        "tags": [],
+        "operationId": "delete_gesture",
+        "responses": {
+          "204": {}
+        }
+      },
+      "patch": {
+        "tags": [],
+        "operationId": "patch_gesture",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GesturePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemJson"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gestures/{id}/capture": {
+      "post": {
+        "tags": [],
+        "operationId": "capture_gesture",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaptureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaptureSession"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gestures/{id}/motion-takes": {
+      "get": {
+        "tags": [],
+        "operationId": "motion_takes",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MotionTake"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gestures/{id}/samples": {
+      "get": {
+        "tags": [],
+        "operationId": "gesture_samples",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Sample"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gestures/{id}/samples/{sample_id}": {
+      "delete": {
+        "tags": [],
+        "operationId": "delete_sample",
+        "responses": {
+          "204": {}
+        }
+      }
+    },
+    "/api/v1/gestures/{id}/type": {
+      "patch": {
+        "tags": [],
+        "operationId": "patch_gesture_type",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GestureTypePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemJson"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ha": {
+      "delete": {
+        "tags": [],
+        "operationId": "ha_delete",
+        "responses": {
+          "204": {}
+        }
+      }
+    },
+    "/api/v1/ha/areas": {
+      "get": {
+        "tags": [],
+        "operationId": "ha_areas",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HaArea"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ha/call": {
+      "post": {
+        "tags": [],
+        "operationId": "ha_call",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionOutcomeDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemJson"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ha/connect": {
+      "post": {
+        "tags": [],
+        "operationId": "ha_connect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HaConnectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HaInstance"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ha/discover": {
+      "get": {
+        "tags": [],
+        "operationId": "ha_discover",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HaDiscovery"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ha/entities": {
+      "get": {
+        "tags": [],
+        "operationId": "ha_entities",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "area_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HaEntity"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ha/services": {
+      "get": {
+        "tags": [],
+        "operationId": "ha_services",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HaServiceSchema"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ha/status": {
+      "get": {
+        "tags": [],
+        "operationId": "ha_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HaStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mappings": {
+      "get": {
+        "tags": [],
+        "operationId": "list_mappings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Mapping"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [],
+        "operationId": "create_mapping",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MappingCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mapping"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemJson"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mappings/order": {
+      "put": {
+        "tags": [],
+        "operationId": "order_mappings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MappingOrder"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {}
+        }
+      }
+    },
+    "/api/v1/mappings/{id}": {
+      "delete": {
+        "tags": [],
+        "operationId": "delete_mapping",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {}
+        }
+      },
+      "patch": {
+        "tags": [],
+        "operationId": "patch_mapping",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MappingPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mapping"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemJson"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mappings/{id}/test": {
+      "post": {
+        "tags": [],
+        "operationId": "test_mapping",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionOutcomeDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models": {
+      "get": {
+        "tags": [],
+        "operationId": "get_models",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ModelPack"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models/{pack_id}": {
+      "delete": {
+        "tags": [],
+        "operationId": "delete_model",
+        "parameters": [
+          {
+            "name": "pack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {}
+        }
+      }
+    },
+    "/api/v1/models/{pack_id}/install": {
+      "post": {
+        "tags": [],
+        "operationId": "install_model",
+        "parameters": [
+          {
+            "name": "pack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {}
+        }
+      }
+    },
+    "/api/v1/openapi.json": {
+      "get": {
+        "tags": [],
+        "operationId": "openapi_json",
+        "responses": {
+          "200": {
+            "description": "OpenAPI 3.1 document"
+          }
+        }
+      }
+    },
+    "/api/v1/packs/export": {
+      "post": {
+        "tags": [],
+        "operationId": "export_pack",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GesturePackDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/places": {
+      "get": {
+        "tags": [],
+        "operationId": "list_places",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Place"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/places/{id}": {
+      "delete": {
+        "tags": [],
+        "operationId": "delete_place",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {}
+        }
+      },
+      "patch": {
+        "tags": [],
+        "operationId": "patch_place",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlacePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Place"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/places/{id}/realign": {
+      "post": {
+        "tags": [],
+        "operationId": "start_realign",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RealignSession"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/realign/{session_id}/commit": {
+      "post": {
+        "tags": [],
+        "operationId": "realign_commit",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RealignCommitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/realign/{session_id}/point": {
+      "post": {
+        "tags": [],
+        "operationId": "realign_point",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RealignPointRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RealignPointResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings": {
+      "get": {
+        "tags": [],
+        "operationId": "get_settings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [],
+        "operationId": "patch_settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/setup-assistant/suggest": {
+      "post": {
+        "tags": [],
+        "operationId": "setup_suggest",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetupSuggestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SetupSuggestion"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/status": {
+      "get": {
+        "tags": [],
+        "operationId": "status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngineStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemJson"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemJson"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/teach": {
+      "post": {
+        "tags": [],
+        "operationId": "start_teach",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeachRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeachSession"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/teach/{session_id}/cancel": {
+      "post": {
+        "tags": [],
+        "operationId": "teach_cancel",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {}
+        }
+      }
+    },
+    "/api/v1/teach/{session_id}/commit": {
+      "post": {
+        "tags": [],
+        "operationId": "teach_commit",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeachCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeachCommitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/teach/{session_id}/levels/test": {
+      "post": {
+        "tags": [],
+        "operationId": "teach_level_test",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeachLevelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionOutcomeDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/teach/{session_id}/levels/use-current": {
+      "post": {
+        "tags": [],
+        "operationId": "teach_level_current",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeachLevelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeachLevelResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/teach/{session_id}/spot": {
+      "post": {
+        "tags": [],
+        "operationId": "teach_spot",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeachSpotResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/updates": {
+      "get": {
+        "tags": [],
+        "operationId": "get_updates",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateStateDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/updates/check": {
+      "post": {
+        "tags": [],
+        "operationId": "check_updates",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateStateDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/updates/install": {
+      "post": {
+        "tags": [],
+        "operationId": "install_update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {}
+        }
+      }
+    },
+    "/api/v1/updates/rollback": {
+      "post": {
+        "tags": [],
+        "operationId": "rollback_update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {}
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [],
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stream/{camera_id}.mjpg": {
+      "get": {
+        "tags": [],
+        "operationId": "stream_mjpeg",
+        "parameters": [
+          {
+            "name": "ticket",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "multipart/x-mixed-replace MJPEG stream"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemJson"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActionDto": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Direct Home Assistant service call.",
+            "required": [
+              "domain",
+              "service",
+              "target",
+              "kind"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "description": "Service data."
+              },
+              "domain": {
+                "type": "string",
+                "description": "Domain."
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "call_service"
+                ]
+              },
+              "preset": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Optional preset metadata."
+              },
+              "service": {
+                "type": "string",
+                "description": "Service."
+              },
+              "target": {
+                "$ref": "#/components/schemas/ActionTargetDto",
+                "description": "Target object."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Dial action.",
+            "required": [
+              "entity_id",
+              "property",
+              "gain",
+              "kind"
+            ],
+            "properties": {
+              "entity_id": {
+                "type": "string",
+                "description": "Entity id or `$selected`."
+              },
+              "gain": {
+                "type": "number",
+                "format": "double",
+                "description": "Gain."
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "dial"
+                ]
+              },
+              "max": {
+                "type": "object",
+                "description": "Optional max."
+              },
+              "min": {
+                "type": "object",
+                "description": "Optional min."
+              },
+              "property": {
+                "type": "string",
+                "description": "brightness_pct, volume_level, position, percentage or temperature."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Targeted verb action.",
+            "required": [
+              "verb",
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "verb"
+                ]
+              },
+              "level": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32",
+                "description": "One-based level for level_set.",
+                "minimum": 0
+              },
+              "verb": {
+                "type": "string",
+                "description": "up, down, on, off, stop, toggle or level_set."
+              }
+            }
+          }
+        ],
+        "description": "Action JSON accepted by API routes."
+      },
+      "ActionOutcomeDto": {
+        "type": "object",
+        "description": "Result of testing or dispatching an action.",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "error_code": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Stable error code."
+          },
+          "ha_context_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Home Assistant context id."
+          },
+          "latency": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LatencyBreakdown",
+                "description": "Latency object."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Message."
+          },
+          "status": {
+            "type": "string",
+            "description": "sent, ok, error, timeout, stale or suppressed."
+          }
+        }
+      },
+      "ActionResultEvent": {
+        "type": "object",
+        "description": "Action result event.",
+        "required": [
+          "activity_id",
+          "event_id",
+          "mapping_id",
+          "status",
+          "latency"
+        ],
+        "properties": {
+          "activity_id": {
+            "type": "string",
+            "description": "Activity id."
+          },
+          "error_code": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Error code."
+          },
+          "event_id": {
+            "type": "string",
+            "description": "Event id."
+          },
+          "latency": {
+            "$ref": "#/components/schemas/LatencyBreakdown",
+            "description": "Latency."
+          },
+          "mapping_id": {
+            "type": "string",
+            "description": "Mapping id."
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Message."
+          },
+          "status": {
+            "type": "string",
+            "description": "Status."
+          }
+        }
+      },
+      "ActionTargetDto": {
+        "type": "object",
+        "description": "Home Assistant target.",
+        "properties": {
+          "area_id": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Area ids."
+          },
+          "device_id": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Device ids."
+          },
+          "entity_id": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Entity ids."
+          }
+        }
+      },
+      "ActivityItem": {
+        "type": "object",
+        "description": "Activity item.",
+        "required": [
+          "id",
+          "ts",
+          "status"
+        ],
+        "properties": {
+          "action_summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Action summary."
+          },
+          "anchor_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Anchor id."
+          },
+          "gesture_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Gesture id."
+          },
+          "id": {
+            "type": "string",
+            "description": "Activity id."
+          },
+          "latency": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LatencyBreakdown",
+                "description": "Latency."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mapping_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Mapping id."
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Message."
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Reason."
+          },
+          "status": {
+            "type": "string",
+            "description": "Status."
+          },
+          "ts": {
+            "type": "string",
+            "description": "Timestamp."
+          }
+        }
+      },
+      "ActivityPage": {
+        "type": "object",
+        "description": "Activity query response.",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityItem"
+            },
+            "description": "Items."
+          },
+          "next_before": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Next cursor."
+          }
+        }
+      },
+      "Anchor": {
+        "type": "object",
+        "description": "Anchor record.",
+        "required": [
+          "id",
+          "place_id",
+          "name",
+          "target",
+          "domain",
+          "kind",
+          "verb_params",
+          "sensitive",
+          "sensitive_ack",
+          "status",
+          "verbs",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "description": "Created time."
+          },
+          "domain": {
+            "type": "string",
+            "description": "Domain."
+          },
+          "id": {
+            "type": "string",
+            "description": "Anchor id."
+          },
+          "kind": {
+            "type": "string",
+            "description": "point3d, direction or region2d."
+          },
+          "last_used_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Last used time."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name."
+          },
+          "place_id": {
+            "type": "string",
+            "description": "Place id."
+          },
+          "sensitive": {
+            "type": "boolean",
+            "description": "Sensitive."
+          },
+          "sensitive_ack": {
+            "type": "boolean",
+            "description": "Sensitive ack."
+          },
+          "status": {
+            "type": "string",
+            "description": "ok, needs_realign or needs_reteach."
+          },
+          "target": {
+            "type": "object",
+            "description": "Target JSON."
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "Updated time."
+          },
+          "verb_params": {
+            "type": "object",
+            "description": "Verb params."
+          },
+          "verbs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VerbBinding"
+            },
+            "description": "Supported verbs for UI."
+          }
+        }
+      },
+      "AnchorPatch": {
+        "type": "object",
+        "description": "Anchor patch.",
+        "required": [
+          "verb_params"
+        ],
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Name."
+          },
+          "verb_params": {
+            "type": "object",
+            "description": "Verb params JSON."
+          }
+        }
+      },
+      "AnchorTestResponse": {
+        "type": "object",
+        "description": "Anchor test response.",
+        "required": [
+          "selected",
+          "angular_error_deg"
+        ],
+        "properties": {
+          "angular_error_deg": {
+            "type": "number",
+            "format": "double",
+            "description": "Angular error."
+          },
+          "runner_up": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Runner-up anchor id."
+          },
+          "selected": {
+            "type": "boolean",
+            "description": "Selected flag."
+          }
+        }
+      },
+      "AppUpdateState": {
+        "type": "object",
+        "description": "App update state.",
+        "required": [
+          "current",
+          "state"
+        ],
+        "properties": {
+          "available": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Available version."
+          },
+          "current": {
+            "type": "string",
+            "description": "Current version."
+          },
+          "rollback_to": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Rollback target."
+          },
+          "state": {
+            "type": "string",
+            "description": "State."
+          }
+        }
+      },
+      "ArmedEvent": {
+        "type": "object",
+        "description": "Armed event.",
+        "required": [
+          "until"
+        ],
+        "properties": {
+          "until": {
+            "type": "string",
+            "description": "Expiry."
+          }
+        }
+      },
+      "AvailableCamera": {
+        "type": "object",
+        "description": "Available camera.",
+        "required": [
+          "device_ref",
+          "name",
+          "kind",
+          "formats"
+        ],
+        "properties": {
+          "device_ref": {
+            "type": "string",
+            "description": "Stable device reference."
+          },
+          "formats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CameraFormat"
+            },
+            "description": "Supported formats."
+          },
+          "kind": {
+            "type": "string",
+            "description": "Camera kind."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name."
+          }
+        }
+      },
+      "Camera": {
+        "type": "object",
+        "description": "Camera record.",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "enabled",
+          "mirror",
+          "rotation",
+          "active_fps",
+          "idle_fps",
+          "max_hands",
+          "roi",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "active_fps": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Active fps.",
+            "minimum": 0
+          },
+          "created_at": {
+            "type": "string",
+            "description": "Creation time."
+          },
+          "device_ref": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Device reference."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Enabled."
+          },
+          "id": {
+            "type": "string",
+            "description": "ULID."
+          },
+          "idle_fps": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Idle fps.",
+            "minimum": 0
+          },
+          "kind": {
+            "type": "string",
+            "description": "Camera kind."
+          },
+          "max_hands": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Max hands.",
+            "minimum": 0
+          },
+          "mirror": {
+            "type": "boolean",
+            "description": "Mirror."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name."
+          },
+          "roi": {
+            "type": "object",
+            "description": "ROI."
+          },
+          "rotation": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Rotation."
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "Update time."
+          },
+          "url_redacted": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Redacted URL."
+          }
+        }
+      },
+      "CameraCreate": {
+        "type": "object",
+        "description": "Camera create request.",
+        "required": [
+          "name",
+          "kind"
+        ],
+        "properties": {
+          "device_ref": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "OS device id or file path."
+          },
+          "kind": {
+            "type": "string",
+            "description": "local, rtsp or file."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name."
+          },
+          "url_redacted": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Redacted URL for RTSP."
+          }
+        }
+      },
+      "CameraFormat": {
+        "type": "object",
+        "description": "Available camera format.",
+        "required": [
+          "width",
+          "height",
+          "fps",
+          "format"
+        ],
+        "properties": {
+          "format": {
+            "type": "string",
+            "description": "Pixel format."
+          },
+          "fps": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Frames per second.",
+            "minimum": 0
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Height.",
+            "minimum": 0
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Width.",
+            "minimum": 0
+          }
+        }
+      },
+      "CameraPatch": {
+        "type": "object",
+        "description": "Camera patch request.",
+        "required": [
+          "roi"
+        ],
+        "properties": {
+          "active_fps": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Active fps.",
+            "minimum": 0
+          },
+          "enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Enabled flag."
+          },
+          "idle_fps": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Idle fps.",
+            "minimum": 0
+          },
+          "max_hands": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Max hands.",
+            "minimum": 0
+          },
+          "mirror": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Mirror flag."
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Name."
+          },
+          "roi": {
+            "type": "object",
+            "description": "Normalized ROI."
+          },
+          "rotation": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Rotation."
+          }
+        }
+      },
+      "CameraStatus": {
+        "type": "object",
+        "description": "Camera runtime status.",
+        "required": [
+          "camera_id",
+          "state"
+        ],
+        "properties": {
+          "camera_id": {
+            "type": "string",
+            "description": "Camera id."
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Error string."
+          },
+          "fps": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Current FPS."
+          },
+          "state": {
+            "type": "string",
+            "description": "starting, running, idle, reconnecting, error or stopped."
+          }
+        }
+      },
+      "CaptureProgressEvent": {
+        "type": "object",
+        "description": "Capture progress event.",
+        "required": [
+          "session_id",
+          "take",
+          "takes",
+          "phase"
+        ],
+        "properties": {
+          "phase": {
+            "type": "string",
+            "description": "Phase."
+          },
+          "quality_hint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Quality hint."
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Session id."
+          },
+          "take": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Current take.",
+            "minimum": 0
+          },
+          "takes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total takes.",
+            "minimum": 0
+          }
+        }
+      },
+      "CaptureRequest": {
+        "type": "object",
+        "description": "Capture request.",
+        "required": [
+          "kind",
+          "takes",
+          "take_ms"
+        ],
+        "properties": {
+          "camera_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Camera id."
+          },
+          "kind": {
+            "type": "string",
+            "description": "positive or negative."
+          },
+          "take_ms": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Take duration in milliseconds.",
+            "minimum": 0
+          },
+          "takes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of takes.",
+            "minimum": 0
+          }
+        }
+      },
+      "CaptureSession": {
+        "type": "object",
+        "description": "Capture session.",
+        "required": [
+          "id",
+          "gesture_id",
+          "kind",
+          "target_takes",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "camera_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Camera id."
+          },
+          "created_at": {
+            "type": "string",
+            "description": "Creation time."
+          },
+          "gesture_id": {
+            "type": "string",
+            "description": "Gesture id."
+          },
+          "id": {
+            "type": "string",
+            "description": "Session id."
+          },
+          "kind": {
+            "type": "string",
+            "description": "positive or negative."
+          },
+          "status": {
+            "type": "string",
+            "description": "Status."
+          },
+          "target_takes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Target takes.",
+            "minimum": 0
+          }
+        }
+      },
+      "ClassifierReport": {
+        "type": "object",
+        "description": "Classifier report.",
+        "required": [
+          "algorithm",
+          "embedder_version",
+          "active",
+          "metrics"
+        ],
+        "properties": {
+          "active": {
+            "type": "boolean",
+            "description": "Active flag."
+          },
+          "algorithm": {
+            "type": "string",
+            "description": "Algorithm."
+          },
+          "embedder_version": {
+            "type": "string",
+            "description": "Embedder version."
+          },
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Model id."
+          },
+          "metrics": {
+            "type": "object",
+            "description": "Metrics JSON."
+          },
+          "trained_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Trained time."
+          }
+        }
+      },
+      "ConfirmRequiredEvent": {
+        "type": "object",
+        "description": "Confirmation required event.",
+        "required": [
+          "event_id",
+          "mapping_id",
+          "confirm_gesture_id",
+          "expires_at"
+        ],
+        "properties": {
+          "confirm_gesture_id": {
+            "type": "string",
+            "description": "Confirmation gesture id."
+          },
+          "event_id": {
+            "type": "string",
+            "description": "Event id."
+          },
+          "expires_at": {
+            "type": "string",
+            "description": "Expiry."
+          },
+          "mapping_id": {
+            "type": "string",
+            "description": "Mapping id."
+          }
+        }
+      },
+      "EmptyEvent": {
+        "type": "object",
+        "description": "Empty event payload."
+      },
+      "EnginePausedEvent": {
+        "type": "object",
+        "description": "Engine paused event.",
+        "properties": {
+          "until": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional expiry."
+          }
+        }
+      },
+      "EngineStatus": {
+        "type": "object",
+        "description": "Engine status shown on the dashboard.",
+        "required": [
+          "paused",
+          "cameras",
+          "ha",
+          "stages"
+        ],
+        "properties": {
+          "camera_permission": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "macOS camera permission, when known."
+          },
+          "cameras": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CameraStatus"
+            },
+            "description": "Camera statuses."
+          },
+          "ha": {
+            "$ref": "#/components/schemas/HaStatus",
+            "description": "Home Assistant connection state."
+          },
+          "paused": {
+            "type": "boolean",
+            "description": "Whether recognition is paused."
+          },
+          "paused_until": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional pause expiry as RFC 3339."
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StageLatency"
+            },
+            "description": "Per-stage latency summaries."
+          }
+        }
+      },
+      "Gesture": {
+        "type": "object",
+        "description": "Gesture record.",
+        "required": [
+          "id",
+          "source",
+          "kind",
+          "hands_required",
+          "name",
+          "hand_constraint",
+          "enabled",
+          "sample_count"
+        ],
+        "properties": {
+          "accuracy": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Accuracy estimate."
+          },
+          "distinctiveness": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Distinctiveness estimate."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Enabled."
+          },
+          "hand_constraint": {
+            "type": "string",
+            "description": "Hand constraint."
+          },
+          "hands_required": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Required hands.",
+            "minimum": 0
+          },
+          "icon": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Icon."
+          },
+          "id": {
+            "type": "string",
+            "description": "Gesture id."
+          },
+          "kind": {
+            "type": "string",
+            "description": "static, motion, dial or negative."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name."
+          },
+          "sample_count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Sample count.",
+            "minimum": 0
+          },
+          "source": {
+            "type": "string",
+            "description": "Source."
+          },
+          "threshold": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Threshold."
+          }
+        }
+      },
+      "GestureCandidateEvent": {
+        "type": "object",
+        "description": "Gesture candidate event.",
+        "required": [
+          "camera_id",
+          "track_id",
+          "gesture_id",
+          "confidence",
+          "progress"
+        ],
+        "properties": {
+          "camera_id": {
+            "type": "string",
+            "description": "Camera id."
+          },
+          "confidence": {
+            "type": "number",
+            "format": "double",
+            "description": "Confidence."
+          },
+          "gesture_id": {
+            "type": "string",
+            "description": "Gesture id."
+          },
+          "progress": {
+            "type": "number",
+            "format": "double",
+            "description": "Progress."
+          },
+          "track_id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Track id.",
+            "minimum": 0
+          }
+        }
+      },
+      "GestureCreate": {
+        "type": "object",
+        "description": "Gesture create request.",
+        "required": [
+          "name",
+          "hand_constraint"
+        ],
+        "properties": {
+          "hand_constraint": {
+            "type": "string",
+            "description": "any, left or right."
+          },
+          "hands_required": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Required hands.",
+            "minimum": 0
+          },
+          "icon": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Icon."
+          },
+          "kind": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "static or motion, optional for auto-detect."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name."
+          }
+        }
+      },
+      "GestureFiredEvent": {
+        "type": "object",
+        "description": "Gesture fired event.",
+        "required": [
+          "event_id",
+          "camera_id",
+          "gesture_id",
+          "hand",
+          "confidence",
+          "mapping_ids",
+          "action_summary"
+        ],
+        "properties": {
+          "action_summary": {
+            "type": "string",
+            "description": "Action summary."
+          },
+          "camera_id": {
+            "type": "string",
+            "description": "Camera id."
+          },
+          "confidence": {
+            "type": "number",
+            "format": "double",
+            "description": "Confidence."
+          },
+          "event_id": {
+            "type": "string",
+            "description": "Event id."
+          },
+          "gesture_id": {
+            "type": "string",
+            "description": "Gesture id."
+          },
+          "hand": {
+            "type": "string",
+            "description": "Hand."
+          },
+          "mapping_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Mapping ids."
+          }
+        }
+      },
+      "GesturePackDto": {
+        "type": "object",
+        "description": "Gesture pack JSON document.",
+        "required": [
+          "format",
+          "version",
+          "name",
+          "payload"
+        ],
+        "properties": {
+          "format": {
+            "type": "string",
+            "description": "Format marker."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name."
+          },
+          "payload": {
+            "type": "object",
+            "description": "Raw payload."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Version.",
+            "minimum": 0
+          }
+        }
+      },
+      "GesturePatch": {
+        "type": "object",
+        "description": "Gesture patch request.",
+        "properties": {
+          "enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Enabled."
+          },
+          "hand_constraint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Hand constraint."
+          },
+          "icon": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Icon."
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Name."
+          },
+          "threshold": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Threshold."
+          }
+        }
+      },
+      "GestureSuppressedEvent": {
+        "type": "object",
+        "description": "Gesture suppressed event.",
+        "required": [
+          "camera_id",
+          "gesture_id",
+          "reason"
+        ],
+        "properties": {
+          "camera_id": {
+            "type": "string",
+            "description": "Camera id."
+          },
+          "gesture_id": {
+            "type": "string",
+            "description": "Gesture id."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason."
+          }
+        }
+      },
+      "GestureTypePatch": {
+        "type": "object",
+        "description": "Type override.",
+        "required": [
+          "kind",
+          "hands_required"
+        ],
+        "properties": {
+          "hands_required": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Required hands.",
+            "minimum": 0
+          },
+          "kind": {
+            "type": "string",
+            "description": "Gesture kind."
+          }
+        }
+      },
+      "GestureValueEvent": {
+        "type": "object",
+        "description": "Gesture update/end event.",
+        "required": [
+          "event_id"
+        ],
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "description": "Event id."
+          },
+          "value": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Value for dial gestures."
+          }
+        }
+      },
+      "HaArea": {
+        "type": "object",
+        "description": "Home Assistant area picker item.",
+        "required": [
+          "area_id",
+          "name"
+        ],
+        "properties": {
+          "area_id": {
+            "type": "string",
+            "description": "Area id."
+          },
+          "floor_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Floor id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name."
+          }
+        }
+      },
+      "HaConnectRequest": {
+        "type": "object",
+        "description": "Request to connect Home Assistant.",
+        "required": [
+          "base_url",
+          "token"
+        ],
+        "properties": {
+          "base_url": {
+            "type": "string",
+            "description": "Base URL."
+          },
+          "token": {
+            "type": "string",
+            "description": "Long-lived access token."
+          },
+          "trust_cert_sha256": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional pinned certificate SHA-256."
+          }
+        }
+      },
+      "HaDiscovery": {
+        "type": "object",
+        "description": "Discovered Home Assistant instance.",
+        "required": [
+          "name",
+          "base_url"
+        ],
+        "properties": {
+          "base_url": {
+            "type": "string",
+            "description": "Base URL."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "uuid": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "HA UUID when known."
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "HA version when known."
+          }
+        }
+      },
+      "HaEntity": {
+        "type": "object",
+        "description": "Home Assistant entity picker item.",
+        "required": [
+          "entity_id",
+          "name",
+          "domain",
+          "attributes"
+        ],
+        "properties": {
+          "area_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Area id."
+          },
+          "attributes": {
+            "type": "object",
+            "description": "Raw attributes."
+          },
+          "device_class": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Device class."
+          },
+          "device_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Device id."
+          },
+          "domain": {
+            "type": "string",
+            "description": "Domain."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "Entity id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Friendly name."
+          },
+          "state": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Current state."
+          },
+          "supported_features": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Supported features bitmask.",
+            "minimum": 0
+          }
+        }
+      },
+      "HaEntityEvent": {
+        "type": "object",
+        "description": "HA entity event.",
+        "required": [
+          "entity_id",
+          "state",
+          "attributes"
+        ],
+        "properties": {
+          "attributes": {
+            "type": "object",
+            "description": "Attributes."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "Entity id."
+          },
+          "state": {
+            "type": "string",
+            "description": "State."
+          }
+        }
+      },
+      "HaInstance": {
+        "type": "object",
+        "description": "Persisted Home Assistant instance.",
+        "required": [
+          "id",
+          "name",
+          "base_url",
+          "auth_kind",
+          "is_default",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "auth_kind": {
+            "type": "string",
+            "description": "Authentication kind."
+          },
+          "base_url": {
+            "type": "string",
+            "description": "Base URL."
+          },
+          "created_at": {
+            "type": "string",
+            "description": "Creation time."
+          },
+          "ha_uuid": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "HA UUID."
+          },
+          "ha_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "HA version."
+          },
+          "id": {
+            "type": "string",
+            "description": "ULID."
+          },
+          "is_default": {
+            "type": "boolean",
+            "description": "Default instance flag."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "Update time."
+          }
+        }
+      },
+      "HaServiceSchema": {
+        "type": "object",
+        "description": "Home Assistant service schema subset.",
+        "required": [
+          "domain",
+          "services"
+        ],
+        "properties": {
+          "domain": {
+            "type": "string",
+            "description": "Domain."
+          },
+          "services": {
+            "type": "object",
+            "description": "Services keyed by service name."
+          }
+        }
+      },
+      "HaStatus": {
+        "type": "object",
+        "description": "Home Assistant status response.",
+        "required": [
+          "state"
+        ],
+        "properties": {
+          "ha_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "HA version."
+          },
+          "instance": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/HaInstance",
+                "description": "Connected instance."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "type": "string",
+            "description": "disconnected, connecting, ready or auth_failed."
+          }
+        }
+      },
+      "HaStatusEvent": {
+        "type": "object",
+        "description": "HA status event.",
+        "required": [
+          "state"
+        ],
+        "properties": {
+          "ha_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "HA version."
+          },
+          "state": {
+            "type": "string",
+            "description": "State."
+          }
+        }
+      },
+      "HandEvent": {
+        "type": "object",
+        "description": "One hand in the hand stream.",
+        "required": [
+          "track_id",
+          "hand",
+          "landmarks",
+          "bbox"
+        ],
+        "properties": {
+          "bbox": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "float"
+            },
+            "description": "Bounding box x/y/w/h."
+          },
+          "hand": {
+            "type": "string",
+            "description": "left or right."
+          },
+          "landmarks": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "float"
+              }
+            },
+            "description": "21 image-space landmarks."
+          },
+          "track_id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Track id.",
+            "minimum": 0
+          }
+        }
+      },
+      "HandsEvent": {
+        "type": "object",
+        "description": "Hands stream event.",
+        "required": [
+          "camera_id",
+          "seq",
+          "hands"
+        ],
+        "properties": {
+          "camera_id": {
+            "type": "string",
+            "description": "Camera id."
+          },
+          "hands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HandEvent"
+            },
+            "description": "Hands."
+          },
+          "ray": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RayEvent",
+                "description": "Pointing ray."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Sequence.",
+            "minimum": 0
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "description": "Health check response used by the desktop supervisor.",
+        "required": [
+          "status",
+          "version",
+          "uptime_s"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Health status."
+          },
+          "uptime_s": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Uptime in whole seconds.",
+            "minimum": 0
+          },
+          "version": {
+            "type": "string",
+            "description": "Engine/API version."
+          }
+        }
+      },
+      "HelloEvent": {
+        "type": "object",
+        "description": "Hello event.",
+        "required": [
+          "engine_version",
+          "api",
+          "pro"
+        ],
+        "properties": {
+          "api": {
+            "type": "string",
+            "description": "API version."
+          },
+          "engine_version": {
+            "type": "string",
+            "description": "Engine version."
+          },
+          "pro": {
+            "type": "boolean",
+            "description": "Pro enabled."
+          }
+        }
+      },
+      "LatencyBreakdown": {
+        "type": "object",
+        "description": "Latency breakdown stored in the activity log.",
+        "properties": {
+          "detect_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Detection latency."
+          },
+          "dispatch_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Dispatch latency."
+          },
+          "ha_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Home Assistant latency."
+          }
+        }
+      },
+      "Mapping": {
+        "type": "object",
+        "description": "Mapping record.",
+        "required": [
+          "id",
+          "name",
+          "enabled",
+          "gesture_id",
+          "hand",
+          "camera_ids",
+          "target_mode",
+          "mode",
+          "action",
+          "sensitive",
+          "sensitive_ack",
+          "feedback",
+          "sort_order",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/ActionDto",
+            "description": "Action."
+          },
+          "anchor_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Anchor id."
+          },
+          "camera_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Camera ids."
+          },
+          "confirm_gesture_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Confirm gesture id."
+          },
+          "created_at": {
+            "type": "string",
+            "description": "Creation time."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Enabled."
+          },
+          "feedback": {
+            "type": "object",
+            "description": "Feedback JSON."
+          },
+          "gesture_id": {
+            "type": "string",
+            "description": "Gesture id."
+          },
+          "hand": {
+            "type": "string",
+            "description": "Hand."
+          },
+          "id": {
+            "type": "string",
+            "description": "Mapping id."
+          },
+          "mode": {
+            "type": "string",
+            "description": "Mode."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name."
+          },
+          "sensitive": {
+            "type": "boolean",
+            "description": "Sensitive."
+          },
+          "sensitive_ack": {
+            "type": "boolean",
+            "description": "Sensitive ack."
+          },
+          "sort_order": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Sort order."
+          },
+          "target_domain": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Target domain."
+          },
+          "target_mode": {
+            "$ref": "#/components/schemas/TargetModeDto",
+            "description": "Target mode."
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "Update time."
+          }
+        }
+      },
+      "MappingCreate": {
+        "type": "object",
+        "description": "Mapping create request.",
+        "required": [
+          "name",
+          "gesture_id",
+          "active_hours",
+          "action",
+          "feedback"
+        ],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/ActionDto",
+            "description": "Action."
+          },
+          "active_hours": {
+            "type": "object",
+            "description": "Active hours JSON."
+          },
+          "allow_two_hands": {
+            "type": "boolean",
+            "description": "Allow two hands."
+          },
+          "anchor_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Anchor id for anchor mappings."
+          },
+          "camera_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Camera ids."
+          },
+          "confirm_gesture_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Confirm gesture id."
+          },
+          "cooldown_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Cooldown.",
+            "minimum": 0
+          },
+          "feedback": {
+            "type": "object",
+            "description": "Feedback JSON."
+          },
+          "gesture_id": {
+            "type": "string",
+            "description": "Gesture id."
+          },
+          "hand": {
+            "type": "string",
+            "description": "Hand."
+          },
+          "hold_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Hold duration.",
+            "minimum": 0
+          },
+          "mode": {
+            "type": "string",
+            "description": "tap, hold, repeat or dial."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name."
+          },
+          "repeat_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Repeat interval.",
+            "minimum": 0
+          },
+          "require_armed": {
+            "type": "boolean",
+            "description": "Require armed."
+          },
+          "sensitive_ack": {
+            "type": "boolean",
+            "description": "Sensitive ack."
+          },
+          "sort_order": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Sort order."
+          },
+          "target_domain": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Domain for domain mappings."
+          },
+          "target_mode": {
+            "$ref": "#/components/schemas/TargetModeDto",
+            "description": "Target mode."
+          }
+        }
+      },
+      "MappingOrder": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Mapping order request."
+      },
+      "MappingPatch": {
+        "type": "object",
+        "description": "Mapping patch request.",
+        "properties": {
+          "action": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ActionDto",
+                "description": "Action."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "anchor_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Anchor id."
+          },
+          "enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Enabled."
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Name."
+          },
+          "sensitive_ack": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Sensitive ack."
+          },
+          "target_domain": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Domain."
+          },
+          "target_mode": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TargetModeDto",
+                "description": "Target mode."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "ModelActivatedEvent": {
+        "type": "object",
+        "description": "Model activated event.",
+        "required": [
+          "pack_id",
+          "version",
+          "previous"
+        ],
+        "properties": {
+          "pack_id": {
+            "type": "string",
+            "description": "Pack id."
+          },
+          "previous": {
+            "type": "string",
+            "description": "Previous version."
+          },
+          "version": {
+            "type": "string",
+            "description": "Version."
+          }
+        }
+      },
+      "ModelPack": {
+        "type": "object",
+        "description": "Model/catalog pack.",
+        "required": [
+          "id",
+          "version",
+          "kind",
+          "state",
+          "provides",
+          "sha256",
+          "source",
+          "on_demand",
+          "installed_at"
+        ],
+        "properties": {
+          "activated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Activated time."
+          },
+          "id": {
+            "type": "string",
+            "description": "Pack id."
+          },
+          "installed_at": {
+            "type": "string",
+            "description": "Installed time."
+          },
+          "kind": {
+            "type": "string",
+            "description": "model or catalog."
+          },
+          "on_demand": {
+            "type": "boolean",
+            "description": "On-demand."
+          },
+          "provides": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Provides."
+          },
+          "reject_reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Reject reason."
+          },
+          "sha256": {
+            "type": "string",
+            "description": "SHA-256."
+          },
+          "source": {
+            "type": "string",
+            "description": "Source."
+          },
+          "state": {
+            "type": "string",
+            "description": "State."
+          },
+          "version": {
+            "type": "string",
+            "description": "Version."
+          }
+        }
+      },
+      "ModelRolledBackEvent": {
+        "type": "object",
+        "description": "Model rollback event.",
+        "required": [
+          "pack_id",
+          "from",
+          "to",
+          "reason"
+        ],
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "From version."
+          },
+          "pack_id": {
+            "type": "string",
+            "description": "Pack id."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason."
+          },
+          "to": {
+            "type": "string",
+            "description": "To version."
+          }
+        }
+      },
+      "MotionTake": {
+        "type": "object",
+        "description": "Motion take summary.",
+        "required": [
+          "id",
+          "take_index",
+          "hands",
+          "trajectory",
+          "quality",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "description": "Created time."
+          },
+          "hands": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Hands.",
+            "minimum": 0
+          },
+          "id": {
+            "type": "string",
+            "description": "Take id."
+          },
+          "quality": {
+            "type": "number",
+            "format": "double",
+            "description": "Quality."
+          },
+          "take_index": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Take index.",
+            "minimum": 0
+          },
+          "trajectory": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "float"
+              }
+            },
+            "description": "Normalized trajectory for glyphs."
+          }
+        }
+      },
+      "PackExportRequest": {
+        "type": "object",
+        "description": "Gesture pack export request.",
+        "required": [
+          "gesture_ids",
+          "include_mapping_templates"
+        ],
+        "properties": {
+          "gesture_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Gesture ids."
+          },
+          "include_mapping_templates": {
+            "type": "boolean",
+            "description": "Include mapping templates."
+          }
+        }
+      },
+      "PauseRequest": {
+        "type": "object",
+        "description": "Pause request.",
+        "properties": {
+          "duration_s": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Duration in seconds. Null/omitted pauses until resumed.",
+            "minimum": 0
+          }
+        }
+      },
+      "Place": {
+        "type": "object",
+        "description": "Place record without signature bytes.",
+        "required": [
+          "id",
+          "camera_id",
+          "name",
+          "embedder_version",
+          "intrinsics",
+          "status",
+          "active",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "active": {
+            "type": "boolean",
+            "description": "Active flag."
+          },
+          "camera_id": {
+            "type": "string",
+            "description": "Camera id."
+          },
+          "created_at": {
+            "type": "string",
+            "description": "Created time."
+          },
+          "embedder_version": {
+            "type": "string",
+            "description": "Embedder version."
+          },
+          "id": {
+            "type": "string",
+            "description": "Place id."
+          },
+          "intrinsics": {
+            "type": "object",
+            "description": "Intrinsics JSON."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name."
+          },
+          "status": {
+            "type": "string",
+            "description": "ok or needs_realign."
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "Updated time."
+          }
+        }
+      },
+      "PlacePatch": {
+        "type": "object",
+        "description": "Place patch.",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name."
+          }
+        }
+      },
+      "PlaceStatusEvent": {
+        "type": "object",
+        "description": "Place status event.",
+        "required": [
+          "camera_id",
+          "place_id",
+          "state",
+          "similarity"
+        ],
+        "properties": {
+          "camera_id": {
+            "type": "string",
+            "description": "Camera id."
+          },
+          "place_id": {
+            "type": "string",
+            "description": "Place id."
+          },
+          "similarity": {
+            "type": "number",
+            "format": "double",
+            "description": "Similarity."
+          },
+          "state": {
+            "type": "string",
+            "description": "ok, switched or needs_realign."
+          }
+        }
+      },
+      "PreviewTicket": {
+        "type": "object",
+        "description": "MJPEG ticket response.",
+        "required": [
+          "url",
+          "expires_at"
+        ],
+        "properties": {
+          "expires_at": {
+            "type": "string",
+            "description": "Expiry as RFC 3339."
+          },
+          "url": {
+            "type": "string",
+            "description": "Relative stream URL."
+          }
+        }
+      },
+      "ProblemJson": {
+        "type": "object",
+        "description": "RFC 9457 problem response with a stable Flick error code.",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable snake_case code."
+          },
+          "detail": {
+            "type": "string",
+            "description": "Human-readable detail."
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "description": "HTTP status code.",
+            "minimum": 0
+          },
+          "title": {
+            "type": "string",
+            "description": "Short title."
+          },
+          "type": {
+            "type": "string",
+            "description": "Problem type URI.",
+            "example": "about:blank"
+          }
+        }
+      },
+      "RayEvent": {
+        "type": "object",
+        "description": "Ray overlay event.",
+        "required": [
+          "origin2d",
+          "tip2d",
+          "model"
+        ],
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "Ray model."
+          },
+          "origin2d": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "float"
+            },
+            "description": "Origin 2D."
+          },
+          "tip2d": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "float"
+            },
+            "description": "Tip 2D."
+          }
+        }
+      },
+      "RealignCommitResponse": {
+        "type": "object",
+        "description": "Realign commit response.",
+        "required": [
+          "applied",
+          "residual_deg",
+          "needs_reteach"
+        ],
+        "properties": {
+          "applied": {
+            "type": "boolean",
+            "description": "Applied flag."
+          },
+          "needs_reteach": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Anchor ids needing reteach."
+          },
+          "residual_deg": {
+            "type": "number",
+            "format": "double",
+            "description": "Residual degrees."
+          }
+        }
+      },
+      "RealignPointRequest": {
+        "type": "object",
+        "description": "Realign point request.",
+        "required": [
+          "anchor_id"
+        ],
+        "properties": {
+          "anchor_id": {
+            "type": "string",
+            "description": "Anchor id."
+          }
+        }
+      },
+      "RealignPointResponse": {
+        "type": "object",
+        "description": "Realign point response.",
+        "required": [
+          "captured"
+        ],
+        "properties": {
+          "captured": {
+            "type": "boolean",
+            "description": "Captured."
+          },
+          "residual_deg": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Residual degrees."
+          }
+        }
+      },
+      "RealignSession": {
+        "type": "object",
+        "description": "Realign session.",
+        "required": [
+          "id",
+          "prompts"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Session id."
+          },
+          "prompts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Anchor prompts."
+          }
+        }
+      },
+      "ResyncEvent": {
+        "type": "object",
+        "description": "Resync hint.",
+        "required": [
+          "reason",
+          "topics"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Reason."
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Topics needing REST resync."
+          }
+        }
+      },
+      "Sample": {
+        "type": "object",
+        "description": "Landmark sample summary.",
+        "required": [
+          "id",
+          "take_index",
+          "hand",
+          "landmarks_image",
+          "quality",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "description": "Created time."
+          },
+          "hand": {
+            "type": "string",
+            "description": "Hand."
+          },
+          "id": {
+            "type": "string",
+            "description": "Sample id."
+          },
+          "landmarks_image": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "float"
+              }
+            },
+            "description": "Landmarks image, 21 triples."
+          },
+          "quality": {
+            "type": "number",
+            "format": "double",
+            "description": "Quality."
+          },
+          "take_index": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Take index.",
+            "minimum": 0
+          }
+        }
+      },
+      "SettingsDto": {
+        "allOf": [
+          {
+            "type": "object",
+            "description": "Arbitrary JSON setting values keyed by stable setting name."
+          }
+        ],
+        "description": "OpenAPI schema wrapper for settings maps."
+      },
+      "SetupSuggestRequest": {
+        "type": "object",
+        "description": "Setup assistant suggestion request.",
+        "required": [
+          "camera_id",
+          "provider"
+        ],
+        "properties": {
+          "camera_id": {
+            "type": "string",
+            "description": "Camera id."
+          },
+          "provider": {
+            "type": "string",
+            "description": "local or foundry."
+          }
+        }
+      },
+      "SetupSuggestion": {
+        "type": "object",
+        "description": "Setup assistant suggestion.",
+        "required": [
+          "label",
+          "bbox",
+          "candidates"
+        ],
+        "properties": {
+          "bbox": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "float"
+            },
+            "description": "Bounding box."
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Candidate entity ids."
+          },
+          "label": {
+            "type": "string",
+            "description": "Label."
+          }
+        }
+      },
+      "StageLatency": {
+        "type": "object",
+        "description": "Per-stage latency.",
+        "required": [
+          "stage",
+          "p50_ms",
+          "p95_ms"
+        ],
+        "properties": {
+          "p50_ms": {
+            "type": "number",
+            "format": "double",
+            "description": "p50 latency in milliseconds."
+          },
+          "p95_ms": {
+            "type": "number",
+            "format": "double",
+            "description": "p95 latency in milliseconds."
+          },
+          "stage": {
+            "type": "string",
+            "description": "Stage name."
+          }
+        }
+      },
+      "TargetAmbiguousEvent": {
+        "type": "object",
+        "description": "Ambiguous target event.",
+        "required": [
+          "camera_id",
+          "anchor_ids"
+        ],
+        "properties": {
+          "anchor_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Anchor ids."
+          },
+          "camera_id": {
+            "type": "string",
+            "description": "Camera id."
+          }
+        }
+      },
+      "TargetClearedEvent": {
+        "type": "object",
+        "description": "Target cleared event.",
+        "required": [
+          "camera_id",
+          "anchor_id",
+          "reason"
+        ],
+        "properties": {
+          "anchor_id": {
+            "type": "string",
+            "description": "Anchor id."
+          },
+          "camera_id": {
+            "type": "string",
+            "description": "Camera id."
+          },
+          "reason": {
+            "type": "string",
+            "description": "timeout, hand_lost, reselected or paused."
+          }
+        }
+      },
+      "TargetHoverEvent": {
+        "type": "object",
+        "description": "Target hover event.",
+        "required": [
+          "camera_id",
+          "anchor_id",
+          "name",
+          "score",
+          "dwell_progress"
+        ],
+        "properties": {
+          "anchor_id": {
+            "type": "string",
+            "description": "Anchor id."
+          },
+          "camera_id": {
+            "type": "string",
+            "description": "Camera id."
+          },
+          "dwell_progress": {
+            "type": "number",
+            "format": "double",
+            "description": "Dwell progress."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name."
+          },
+          "runner_up": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Runner-up."
+          },
+          "score": {
+            "type": "number",
+            "format": "double",
+            "description": "Score."
+          }
+        }
+      },
+      "TargetModeDto": {
+        "type": "string",
+        "description": "Mapping target mode.",
+        "enum": [
+          "global",
+          "anchor",
+          "domain"
+        ]
+      },
+      "TargetSelectedEvent": {
+        "type": "object",
+        "description": "Target selected event.",
+        "required": [
+          "camera_id",
+          "anchor_id",
+          "name",
+          "domain",
+          "expires_at",
+          "verbs"
+        ],
+        "properties": {
+          "anchor_id": {
+            "type": "string",
+            "description": "Anchor id."
+          },
+          "camera_id": {
+            "type": "string",
+            "description": "Camera id."
+          },
+          "domain": {
+            "type": "string",
+            "description": "Domain."
+          },
+          "expires_at": {
+            "type": "string",
+            "description": "Expiry."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name."
+          },
+          "verbs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VerbBinding"
+            },
+            "description": "Verbs."
+          }
+        }
+      },
+      "TeachCommitRequest": {
+        "type": "object",
+        "description": "Teach commit request.",
+        "required": [
+          "verbs"
+        ],
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Anchor name."
+          },
+          "verbs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeachVerb"
+            },
+            "description": "Verb mappings to create."
+          }
+        }
+      },
+      "TeachCommitResponse": {
+        "type": "object",
+        "description": "Teach commit response.",
+        "required": [
+          "anchor",
+          "mapping_ids",
+          "distinctiveness_warnings"
+        ],
+        "properties": {
+          "anchor": {
+            "$ref": "#/components/schemas/Anchor",
+            "description": "Created anchor."
+          },
+          "distinctiveness_warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Distinctiveness warnings."
+          },
+          "mapping_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Mapping ids."
+          }
+        }
+      },
+      "TeachLevelRequest": {
+        "type": "object",
+        "description": "Teach level request.",
+        "required": [
+          "level"
+        ],
+        "properties": {
+          "level": {
+            "type": "integer",
+            "format": "int32",
+            "description": "One-based level.",
+            "minimum": 0
+          }
+        }
+      },
+      "TeachLevelResponse": {
+        "type": "object",
+        "description": "Teach level response.",
+        "required": [
+          "levels",
+          "current_percentage"
+        ],
+        "properties": {
+          "current_percentage": {
+            "type": "number",
+            "format": "double",
+            "description": "Current percentage."
+          },
+          "levels": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            },
+            "description": "Taught levels."
+          }
+        }
+      },
+      "TeachProgressEvent": {
+        "type": "object",
+        "description": "Teach progress event.",
+        "required": [
+          "session_id",
+          "phase"
+        ],
+        "properties": {
+          "confidence": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Confidence."
+          },
+          "hint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Hint."
+          },
+          "phase": {
+            "type": "string",
+            "description": "aiming, capturing, captured or error."
+          },
+          "ray_jitter_deg": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Ray jitter."
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Session id."
+          }
+        }
+      },
+      "TeachRequest": {
+        "type": "object",
+        "description": "Teach request.",
+        "required": [
+          "camera_id",
+          "target"
+        ],
+        "properties": {
+          "anchor_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Existing anchor id for reteach."
+          },
+          "camera_id": {
+            "type": "string",
+            "description": "Camera id."
+          },
+          "target": {
+            "type": "object",
+            "description": "Target object with exactly one entity_id/device_id/area_id."
+          }
+        }
+      },
+      "TeachSession": {
+        "type": "object",
+        "description": "Teach session.",
+        "required": [
+          "id",
+          "camera_id",
+          "target",
+          "prompt"
+        ],
+        "properties": {
+          "anchor_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Existing anchor id."
+          },
+          "camera_id": {
+            "type": "string",
+            "description": "Camera id."
+          },
+          "id": {
+            "type": "string",
+            "description": "Session id."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Prompt text."
+          },
+          "target": {
+            "type": "object",
+            "description": "Target JSON."
+          }
+        }
+      },
+      "TeachSpotResponse": {
+        "type": "object",
+        "description": "Teach spot response.",
+        "required": [
+          "spot_index",
+          "ray_jitter_deg",
+          "confidence",
+          "kind"
+        ],
+        "properties": {
+          "confidence": {
+            "type": "number",
+            "format": "double",
+            "description": "Confidence."
+          },
+          "kind": {
+            "type": "string",
+            "description": "direction or point3d."
+          },
+          "ray_jitter_deg": {
+            "type": "number",
+            "format": "double",
+            "description": "Ray jitter."
+          },
+          "residual_deg": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Residual."
+          },
+          "spot_index": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Spot index.",
+            "minimum": 0
+          }
+        }
+      },
+      "TeachVerb": {
+        "type": "object",
+        "description": "Teach verb mapping.",
+        "required": [
+          "gesture_id",
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/ActionDto",
+            "description": "Action."
+          },
+          "gesture_id": {
+            "type": "string",
+            "description": "Gesture id."
+          }
+        }
+      },
+      "TrainRequest": {
+        "type": "object",
+        "description": "Classifier training request.",
+        "properties": {
+          "algorithm": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "proto_knn or logreg."
+          }
+        }
+      },
+      "UpdateActionRequest": {
+        "type": "object",
+        "description": "Update install/rollback request.",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pack id for pack actions."
+          },
+          "kind": {
+            "type": "string",
+            "description": "app or pack."
+          }
+        }
+      },
+      "UpdateAvailableEvent": {
+        "type": "object",
+        "description": "Update available event.",
+        "required": [
+          "kind",
+          "id",
+          "version",
+          "size"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Pack id or app."
+          },
+          "kind": {
+            "type": "string",
+            "description": "app or pack."
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Size bytes.",
+            "minimum": 0
+          },
+          "version": {
+            "type": "string",
+            "description": "Version."
+          }
+        }
+      },
+      "UpdateProgressEvent": {
+        "type": "object",
+        "description": "Update progress event.",
+        "required": [
+          "kind",
+          "phase"
+        ],
+        "properties": {
+          "bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Bytes downloaded.",
+            "minimum": 0
+          },
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Id."
+          },
+          "kind": {
+            "type": "string",
+            "description": "app or pack."
+          },
+          "phase": {
+            "type": "string",
+            "description": "download, verify, selftest, benchmark or shadow."
+          },
+          "total": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Total bytes.",
+            "minimum": 0
+          }
+        }
+      },
+      "UpdateReadyEvent": {
+        "type": "object",
+        "description": "Update ready event.",
+        "required": [
+          "kind",
+          "version"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "app."
+          },
+          "version": {
+            "type": "string",
+            "description": "Version."
+          }
+        }
+      },
+      "UpdateStateDto": {
+        "type": "object",
+        "description": "Update state.",
+        "required": [
+          "channel",
+          "app",
+          "packs"
+        ],
+        "properties": {
+          "app": {
+            "$ref": "#/components/schemas/AppUpdateState",
+            "description": "App update state."
+          },
+          "busy_reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Busy reason."
+          },
+          "channel": {
+            "type": "string",
+            "description": "Channel."
+          },
+          "index_version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Index version.",
+            "minimum": 0
+          },
+          "last_check_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Last check time."
+          },
+          "packs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelPack"
+            },
+            "description": "Model/catalog packs."
+          }
+        }
+      },
+      "VerbBinding": {
+        "type": "object",
+        "description": "Verb binding shown for a selected target.",
+        "required": [
+          "gesture_id",
+          "label"
+        ],
+        "properties": {
+          "gesture_id": {
+            "type": "string",
+            "description": "Gesture id."
+          },
+          "label": {
+            "type": "string",
+            "description": "Label."
+          }
+        }
+      },
+      "WsClientMessage": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Subscribe to topics.",
+            "required": [
+              "topics",
+              "type"
+            ],
+            "properties": {
+              "topics": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "subscribe"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Unsubscribe from topics.",
+            "required": [
+              "topics",
+              "type"
+            ],
+            "properties": {
+              "topics": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "unsubscribe"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "WebSocket client command."
+      },
+      "WsServerMessage": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Initial hello.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Initial hello.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/HelloEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "hello"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Engine status.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Engine status.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/EngineStatus"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "engine_status"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Camera status.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Camera status.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/CameraStatus"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "camera_status"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Hand landmark stream.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Hand landmark stream.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/HandsEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "hands"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Gesture candidate.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Gesture candidate.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/GestureCandidateEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "gesture_candidate"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Gesture suppressed.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Gesture suppressed.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/GestureSuppressedEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "gesture_suppressed"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Gesture fired.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Gesture fired.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/GestureFiredEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "gesture_fired"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Gesture update.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Gesture update.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/GestureValueEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "gesture_update"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Gesture end.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Gesture end.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/GestureValueEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "gesture_end"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Armed.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Armed.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/ArmedEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "armed"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Disarmed.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Disarmed.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/EmptyEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "disarmed"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Confirmation required.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Confirmation required.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/ConfirmRequiredEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "confirm_required"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Action result.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Action result.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/ActionResultEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "action_result"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Home Assistant status.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Home Assistant status.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/HaStatusEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ha_status"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Entity state update.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Entity state update.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/HaEntityEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ha_entity"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Capture progress.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Capture progress.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/CaptureProgressEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "capture_progress"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Engine paused.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Engine paused.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/EnginePausedEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "engine_paused"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Engine resumed.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Engine resumed.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/EmptyEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "engine_resumed"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Target hover.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Target hover.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/TargetHoverEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "target_hover"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Target selected.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Target selected.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/TargetSelectedEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "target_selected"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Target cleared.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Target cleared.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/TargetClearedEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "target_cleared"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Target ambiguity.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Target ambiguity.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/TargetAmbiguousEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "target_ambiguous"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Place status.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Place status.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/PlaceStatusEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "place_status"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Teach progress.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Teach progress.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/TeachProgressEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "teach_progress"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Update available.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Update available.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/UpdateAvailableEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "update_available"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Update progress.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Update progress.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/UpdateProgressEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "update_progress"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "App update ready.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "App update ready.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/UpdateReadyEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "update_ready"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Model activated.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Model activated.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/ModelActivatedEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "model_activated"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Model rolled back.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Model rolled back.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/ModelRolledBackEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "model_rolled_back"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Client fell behind and must resync through REST.",
+            "required": [
+              "payload",
+              "type"
+            ],
+            "properties": {
+              "payload": {
+                "type": "object",
+                "description": "Client fell behind and must resync through REST.",
+                "required": [
+                  "ts",
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "$ref": "#/components/schemas/ResyncEvent"
+                  },
+                  "ts": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "resync"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "WebSocket server message. All variants include `ts`."
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "flick",
+      "description": "Flick local API"
+    }
+  ]
+}
