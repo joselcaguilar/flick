@@ -48,7 +48,11 @@ export function validateSentenceDraft(draft: SentenceBuilderDraft): SentenceVali
   const issues: SentenceValidationIssue[] = [];
 
   if (!draft.gestureId) {
-    issues.push({ field: "gestureId", code: "missing_gesture", message: "Pick the gesture that starts this sentence." });
+    issues.push({
+      field: "gestureId",
+      code: "missing_gesture",
+      message: "Pick the gesture that starts this sentence.",
+    });
   }
 
   if (!draft.target) {
@@ -56,30 +60,54 @@ export function validateSentenceDraft(draft: SentenceBuilderDraft): SentenceVali
   }
 
   if (!draft.action) {
-    issues.push({ field: "action", code: "missing_action", message: "Pick the Home Assistant action to send." });
+    issues.push({
+      field: "action",
+      code: "missing_action",
+      message: "Pick the Home Assistant action to send.",
+    });
   }
 
   if (draft.kind === "global" && draft.action?.kind === "verb") {
-    issues.push({ field: "action.kind", code: "verb_requires_target", message: "Device verbs need a selected device." });
+    issues.push({
+      field: "action.kind",
+      code: "verb_requires_target",
+      message: "Device verbs need a selected device.",
+    });
   }
 
   if (draft.kind === "global" && draft.action?.kind === "dial" && draft.action.entity_id === "$selected") {
-    issues.push({ field: "action.kind", code: "selected_requires_target", message: "Dialing the selected device needs a targeted sentence." });
+    issues.push({
+      field: "action.kind",
+      code: "selected_requires_target",
+      message: "Dialing the selected device needs a targeted sentence.",
+    });
   }
 
   if (draft.action?.kind === "dial" && draft.target?.domain) {
     const allowed = dialPropertiesByDomain[draft.target.domain] ?? [];
     if (!allowed.includes(draft.action.property)) {
-      issues.push({ field: "target.domain", code: "dial_requires_numeric_target", message: "That target does not expose a dial value." });
+      issues.push({
+        field: "target.domain",
+        code: "dial_requires_numeric_target",
+        message: "That target does not expose a dial value.",
+      });
     }
   }
 
   if (draft.sensitive && !draft.sensitiveAck) {
-    issues.push({ field: "sensitiveAck", code: "sensitive_ack_required", message: "Sensitive devices need an explicit acknowledgement." });
+    issues.push({
+      field: "sensitiveAck",
+      code: "sensitive_ack_required",
+      message: "Sensitive devices need an explicit acknowledgement.",
+    });
   }
 
   if (draft.sensitive && !draft.confirmGestureId) {
-    issues.push({ field: "confirmGestureId", code: "confirmation_required", message: "Pick a confirmation gesture for this sensitive mapping." });
+    issues.push({
+      field: "confirmGestureId",
+      code: "confirmation_required",
+      message: "Pick a confirmation gesture for this sensitive mapping.",
+    });
   }
 
   return issues;

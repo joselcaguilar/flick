@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.2.2/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
   "files": {
     "ignoreUnknown": false,
     "includes": ["**", "!dist", "!coverage", "!public/mockServiceWorker.js", "!src/api/schema.d.ts"]
@@ -13,12 +13,15 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "a11y": {
         "noSvgWithoutTitle": "off"
       },
       "suspicious": {
         "noArrayIndexKey": "off"
+      },
+      "style": {
+        "noDescendingSpecificity": "off"
       }
     }
   },

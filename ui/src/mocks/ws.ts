@@ -18,12 +18,24 @@ const sequence: WsServerMessage[] = [
         track_id: 1,
         hand: "right",
         bbox: { x: 0.38, y: 0.36, w: 0.22, h: 0.34 },
-        landmarks: Array.from({ length: 21 }, (_, index) => ({ x: 0.36 + index * 0.014, y: 0.7 - index * 0.018, z: 0 })),
+        landmarks: Array.from({ length: 21 }, (_, index) => ({
+          x: 0.36 + index * 0.014,
+          y: 0.7 - index * 0.018,
+          z: 0,
+        })),
       },
     ],
     ray: { origin2d: [0.58, 0.44], tip2d: [0.82, 0.22], model: "eye" },
   },
-  { type: "target.hover", ts: baseTs, camera_id: "camera-main", anchor_id: "anchor-fan-bedroom", name: "Ventilador dormitorio", score: 0.88, dwell_progress: 0.45 },
+  {
+    type: "target.hover",
+    ts: baseTs,
+    camera_id: "camera-main",
+    anchor_id: "anchor-fan-bedroom",
+    name: "Ventilador dormitorio",
+    score: 0.88,
+    dwell_progress: 0.45,
+  },
   {
     type: "target.selected",
     ts: baseTs,
@@ -37,7 +49,15 @@ const sequence: WsServerMessage[] = [
       { gesture_id: "builtin.two_hand_separate", label: "✋✋ off" },
     ],
   },
-  { type: "gesture.candidate", ts: baseTs, camera_id: "camera-main", track_id: 1, gesture_id: "builtin.circle_cw", confidence: 0.87, progress: 0.62 },
+  {
+    type: "gesture.candidate",
+    ts: baseTs,
+    camera_id: "camera-main",
+    track_id: 1,
+    gesture_id: "builtin.circle_cw",
+    confidence: 0.87,
+    progress: 0.62,
+  },
   {
     type: "gesture.fired",
     ts: baseTs,
@@ -59,7 +79,13 @@ const sequence: WsServerMessage[] = [
     message: "Done · Home Assistant confirmed",
     latency: { detect_ms: 214, dispatch_ms: 2, ha_ms: 39 },
   },
-  { type: "gesture.suppressed", ts: baseTs, camera_id: "camera-main", gesture_id: "builtin.thumb_up", reason: "target_selected" },
+  {
+    type: "gesture.suppressed",
+    ts: baseTs,
+    camera_id: "camera-main",
+    gesture_id: "builtin.thumb_up",
+    reason: "target_selected",
+  },
   {
     type: "gesture.fired",
     ts: baseTs,
@@ -84,7 +110,10 @@ const sequence: WsServerMessage[] = [
   { type: "update.ready", ts: baseTs, kind: "app", id: "app", version: "1.3.0" },
 ];
 
-export function startMockEventStream(ingest: (message: WsServerMessage) => void, _topics: WsTopic[]): EventClient {
+export function startMockEventStream(
+  ingest: (message: WsServerMessage) => void,
+  _topics: WsTopic[],
+): EventClient {
   let index = 0;
   const timers: number[] = [];
 
@@ -95,6 +124,8 @@ export function startMockEventStream(ingest: (message: WsServerMessage) => void,
   }
 
   return {
-    close: () => timers.forEach((timer) => window.clearTimeout(timer)),
+    close: () => {
+      for (const timer of timers) window.clearTimeout(timer);
+    },
   };
 }

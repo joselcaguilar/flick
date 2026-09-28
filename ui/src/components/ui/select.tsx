@@ -1,7 +1,17 @@
 import * as SelectPrimitive from "@radix-ui/react-select";
 import { cn } from "../../lib/utils";
 
-export function Select({ value, onValueChange, label, items }: { value: string; onValueChange: (value: string) => void; label: string; items: Array<{ value: string; label: string }> }) {
+export function Select({
+  value,
+  onValueChange,
+  label,
+  items,
+}: {
+  value: string;
+  onValueChange: (value: string) => void;
+  label: string;
+  items: Array<{ value: string; label: string }>;
+}) {
   return (
     <SelectPrimitive.Root value={value} onValueChange={onValueChange}>
       <SelectPrimitive.Trigger className="ui-select" aria-label={label}>

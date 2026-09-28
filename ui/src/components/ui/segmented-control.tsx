@@ -23,7 +23,13 @@ export function SegmentedControl<T extends string>({
       <legend>{label}</legend>
       {segments.map((segment) => (
         <label key={segment.value}>
-          <input type="radio" name={label} value={segment.value} checked={segment.value === value} onChange={() => onChange(segment.value)} />
+          <input
+            type="radio"
+            name={label}
+            value={segment.value}
+            checked={segment.value === value}
+            onChange={() => onChange(segment.value)}
+          />
           <span>{segment.label}</span>
         </label>
       ))}

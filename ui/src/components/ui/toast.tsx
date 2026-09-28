@@ -1,5 +1,5 @@
 import * as ToastPrimitive from "@radix-ui/react-toast";
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from "react";
 
 type ToastTone = "info" | "success" | "warning" | "danger";
 interface ToastItem {
@@ -30,9 +30,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <ToastPrimitive.Provider swipeDirection="right">
         {children}
         {toasts.map((toast) => (
-          <ToastPrimitive.Root key={toast.id} className="flick-glass ui-toast" data-tone={toast.tone} onOpenChange={(open) => !open && setToasts((current) => current.filter((item) => item.id !== toast.id))}>
+          <ToastPrimitive.Root
+            key={toast.id}
+            className="flick-glass ui-toast"
+            data-tone={toast.tone}
+            onOpenChange={(open) =>
+              !open && setToasts((current) => current.filter((item) => item.id !== toast.id))
+            }
+          >
             <ToastPrimitive.Title>{toast.title}</ToastPrimitive.Title>
-            {toast.description ? <ToastPrimitive.Description>{toast.description}</ToastPrimitive.Description> : null}
+            {toast.description ? (
+              <ToastPrimitive.Description>{toast.description}</ToastPrimitive.Description>
+            ) : null}
           </ToastPrimitive.Root>
         ))}
         <ToastPrimitive.Viewport className="ui-toast-viewport" />

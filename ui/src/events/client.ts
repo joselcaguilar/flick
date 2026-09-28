@@ -1,20 +1,30 @@
 import { getEndpoint } from "../api/client";
 import { toWsUrl } from "../api/endpoint";
 import { startMockEventStream } from "../mocks/ws";
+import { normalizeWsMessage } from "./normalize";
 import { useEventStore } from "./store";
-import type { WsServerMessage, WsTopic } from "./types";
+import type { WsTopic } from "./types";
 
 export interface EventClient {
   close: () => void;
 }
 
-const defaultTopics: WsTopic[] = ["status", "gestures", "actions", "ha", "capture", "targeting", "teach", "updates", "hands:camera-main"];
+const defaultTopics: WsTopic[] = [
+  "status",
+  "gestures",
+  "actions",
+  "ha",
+  "capture",
+  "targeting",
+  "teach",
+  "updates",
+  "hands:camera-main",
+];
 let singleton: EventClient | undefined;
 
 export async function startEventStream(topics: WsTopic[] = defaultTopics): Promise<EventClient> {
   if (singleton) return singleton;
   const endpoint = await getEndpoint();
-  const store = useEventStore.getState();
 
   if (endpoint.mock) {
     singleton = startMockEventStream((message) => useEventStore.getState().ingest(message), topics);
@@ -27,7 +37,9 @@ export async function startEventStream(topics: WsTopic[] = defaultTopics): Promi
   let attempt = 0;
 
   const connect = () => {
-    store.dispatch({ type: "connection", state: attempt > 0 ? "reconnecting" : "connecting" });
+    useEventStore
+      .getState()
+      .dispatch({ type: "connection", state: attempt > 0 ? "reconnecting" : "connecting" });
     ws = new WebSocket(toWsUrl(endpoint.baseUrl), ["flick.v1", `bearer.${endpoint.token}`]);
 
     ws.addEventListener("open", () => {
@@ -37,8 +49,7 @@ export async function startEventStream(topics: WsTopic[] = defaultTopics): Promi
     });
 
     ws.addEventListener("message", (event) => {
-      const message = JSON.parse(event.data as string) as WsServerMessage;
-      useEventStore.getState().ingest(message);
+      useEventStore.getState().ingest(normalizeWsMessage(JSON.parse(event.data as string)));
     });
 
     ws.addEventListener("close", () => {

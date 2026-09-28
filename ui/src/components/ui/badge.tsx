@@ -3,7 +3,11 @@ import { cn } from "../../lib/utils";
 
 type Tone = "neutral" | "accent" | "success" | "warning" | "danger";
 
-export function Badge({ className, tone = "neutral", ...props }: HTMLAttributes<HTMLSpanElement> & { tone?: Tone }) {
+export function Badge({
+  className,
+  tone = "neutral",
+  ...props
+}: HTMLAttributes<HTMLSpanElement> & { tone?: Tone }) {
   return <span className={cn("ui-badge", `ui-badge-${tone}`, className)} {...props} />;
 }
 

@@ -87,11 +87,18 @@ export function usePatchSettings() {
 }
 
 export function useHaDiscover() {
-  return useQuery({ queryKey: queryKeys.haDiscover, queryFn: () => api.get<HaDiscovery[]>("/api/v1/ha/discover") });
+  return useQuery({
+    queryKey: queryKeys.haDiscover,
+    queryFn: () => api.get<HaDiscovery[]>("/api/v1/ha/discover"),
+  });
 }
 
 export function useHaStatus() {
-  return useQuery({ queryKey: queryKeys.haStatus, queryFn: () => api.get<{ state: string; ha_version?: string; instance?: HaInstance }>("/api/v1/ha/status") });
+  return useQuery({
+    queryKey: queryKeys.haStatus,
+    queryFn: () =>
+      api.get<{ state: string; ha_version?: string; instance?: HaInstance }>("/api/v1/ha/status"),
+  });
 }
 
 export function useHaConnect() {
@@ -106,7 +113,10 @@ export function useHaAreas() {
 }
 
 export function useHaEntities(params = "") {
-  return useQuery({ queryKey: queryKeys.haEntities(params), queryFn: () => api.get<HaEntity[]>(`/api/v1/ha/entities${params}`) });
+  return useQuery({
+    queryKey: queryKeys.haEntities(params),
+    queryFn: () => api.get<HaEntity[]>(`/api/v1/ha/entities${params}`),
+  });
 }
 
 export function useHaCall() {
@@ -114,7 +124,10 @@ export function useHaCall() {
 }
 
 export function useCamerasAvailable() {
-  return useQuery({ queryKey: queryKeys.camerasAvailable, queryFn: () => api.get<CameraAvailable[]>("/api/v1/cameras/available") });
+  return useQuery({
+    queryKey: queryKeys.camerasAvailable,
+    queryFn: () => api.get<CameraAvailable[]>("/api/v1/cameras/available"),
+  });
 }
 
 export function useCameras() {
@@ -126,18 +139,28 @@ export function useGestures() {
 }
 
 export function useGestureMotionTakes(id: string) {
-  return useQuery({ queryKey: queryKeys.gestureMotionTakes(id), queryFn: () => api.get<MotionTake[]>(`/api/v1/gestures/${id}/motion-takes`) });
+  return useQuery({
+    queryKey: queryKeys.gestureMotionTakes(id),
+    queryFn: () => api.get<MotionTake[]>(`/api/v1/gestures/${id}/motion-takes`),
+  });
 }
 
 export function useCaptureGesture(id: string) {
   return useMutation({
-    mutationFn: (body: { camera_id?: string; kind: "positive" | "negative"; takes: number; take_ms: number }) =>
-      api.post<CaptureSession>(`/api/v1/gestures/${id}/capture`, body),
+    mutationFn: (body: {
+      camera_id?: string;
+      kind: "positive" | "negative";
+      takes: number;
+      take_ms: number;
+    }) => api.post<CaptureSession>(`/api/v1/gestures/${id}/capture`, body),
   });
 }
 
 export function useClassifier() {
-  return useQuery({ queryKey: queryKeys.classifier, queryFn: () => api.get<ClassifierReport>("/api/v1/classifier") });
+  return useQuery({
+    queryKey: queryKeys.classifier,
+    queryFn: () => api.get<ClassifierReport>("/api/v1/classifier"),
+  });
 }
 
 export function useTrainClassifier() {
@@ -153,21 +176,33 @@ export function useTestMapping(id: string) {
 }
 
 export function useActivity(params = "?limit=10") {
-  return useQuery({ queryKey: queryKeys.activity(params), queryFn: () => api.get<{ items: ActivityItem[]; next_before?: string }>(`/api/v1/activity${params}`) });
+  return useQuery({
+    queryKey: queryKeys.activity(params),
+    queryFn: () => api.get<{ items: ActivityItem[]; next_before?: string }>(`/api/v1/activity${params}`),
+  });
 }
 
 export function usePlaces(cameraId = "") {
   const suffix = cameraId ? `?camera_id=${encodeURIComponent(cameraId)}` : "";
-  return useQuery({ queryKey: queryKeys.places(cameraId), queryFn: () => api.get<Place[]>(`/api/v1/places${suffix}`) });
+  return useQuery({
+    queryKey: queryKeys.places(cameraId),
+    queryFn: () => api.get<Place[]>(`/api/v1/places${suffix}`),
+  });
 }
 
 export function useAnchors(placeId = "") {
   const suffix = placeId ? `?place_id=${encodeURIComponent(placeId)}` : "";
-  return useQuery({ queryKey: queryKeys.anchors(placeId), queryFn: () => api.get<Anchor[]>(`/api/v1/anchors${suffix}`) });
+  return useQuery({
+    queryKey: queryKeys.anchors(placeId),
+    queryFn: () => api.get<Anchor[]>(`/api/v1/anchors${suffix}`),
+  });
 }
 
 export function useStartTeach() {
-  return useMutation({ mutationFn: (body: { camera_id: string; target: Record<string, string>; anchor_id?: string }) => api.post<TeachSession>("/api/v1/teach", body) });
+  return useMutation({
+    mutationFn: (body: { camera_id: string; target: Record<string, string>; anchor_id?: string }) =>
+      api.post<TeachSession>("/api/v1/teach", body),
+  });
 }
 
 export function useStartRealign(placeId: string) {

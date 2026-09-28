@@ -44,7 +44,7 @@ export function eventReducer(state: EventStreamState, action: EventStreamAction)
           ...state,
           cameras: {
             ...state.cameras,
-            [message.camera_id]: { state: message.state, fps: message.fps, error: message.error },
+            [message.camera_id]: { state: message.state, fps: message.fps ?? 0, error: message.error },
           },
         },
         message.ts,
@@ -87,7 +87,12 @@ export function eventReducer(state: EventStreamState, action: EventStreamAction)
           suppression: { gesture_id: message.gesture_id, reason: message.reason, ts: message.ts },
           hud:
             message.reason === "no_target"
-              ? { state: "aiming", title: "Point at a device first", detail: "Circle is a device verb", updatedAt: message.ts }
+              ? {
+                  state: "aiming",
+                  title: "Point at a device first",
+                  detail: "Circle is a device verb",
+                  updatedAt: message.ts,
+                }
               : state.hud,
         },
         message.ts,
@@ -113,7 +118,9 @@ export function eventReducer(state: EventStreamState, action: EventStreamAction)
           hud: {
             state: message.status === "ok" ? "done" : "failed",
             title: state.hud.title,
-            detail: message.message ?? (message.status === "ok" ? "Done · Home Assistant confirmed" : "Home Assistant unavailable"),
+            detail:
+              message.message ??
+              (message.status === "ok" ? "Done · Home Assistant confirmed" : "Home Assistant unavailable"),
             icon: message.status === "ok" ? "✓" : "✕",
             updatedAt: message.ts,
           },
@@ -126,7 +133,12 @@ export function eventReducer(state: EventStreamState, action: EventStreamAction)
       return mark(
         {
           ...state,
-          hud: { state: "paused", title: "Flick paused", detail: message.until ? `Until ${message.until}` : "Until resumed", updatedAt: message.ts },
+          hud: {
+            state: "paused",
+            title: "Flick paused",
+            detail: message.until ? `Until ${message.until}` : "Until resumed",
+            updatedAt: message.ts,
+          },
         },
         message.ts,
       );
@@ -134,7 +146,12 @@ export function eventReducer(state: EventStreamState, action: EventStreamAction)
       return mark(
         {
           ...state,
-          hud: { state: "idle", title: "Flick is watching", detail: "Show me your hand", updatedAt: message.ts },
+          hud: {
+            state: "idle",
+            title: "Flick is watching",
+            detail: "Show me your hand",
+            updatedAt: message.ts,
+          },
         },
         message.ts,
       );
@@ -169,12 +186,24 @@ export function eventReducer(state: EventStreamState, action: EventStreamAction)
         message.ts,
       );
     case "target.cleared":
-      return mark({ ...state, selectedTarget: undefined, hud: { state: "idle", title: "Flick is watching", detail: "Show me your hand" } }, message.ts);
+      return mark(
+        {
+          ...state,
+          selectedTarget: undefined,
+          hud: { state: "idle", title: "Flick is watching", detail: "Show me your hand" },
+        },
+        message.ts,
+      );
     case "target.ambiguous":
       return mark(
         {
           ...state,
-          hud: { state: "ambiguous", title: "Two devices here", detail: "Point more precisely", updatedAt: message.ts },
+          hud: {
+            state: "ambiguous",
+            title: "Two devices here",
+            detail: "Point more precisely",
+            updatedAt: message.ts,
+          },
         },
         message.ts,
       );
@@ -185,20 +214,30 @@ export function eventReducer(state: EventStreamState, action: EventStreamAction)
           place: message,
           hud:
             message.state === "needs_realign"
-              ? { state: "camera_moved", title: "Camera moved", detail: "Re-align your devices", updatedAt: message.ts }
+              ? {
+                  state: "camera_moved",
+                  title: "Camera moved",
+                  detail: "Re-align your devices",
+                  updatedAt: message.ts,
+                }
               : state.hud,
         },
         message.ts,
       );
     case "update.available":
-    case "update.ready":
+    case "update.ready": {
+      const id = "id" in message && message.id ? message.id : "app";
       return mark(
         {
           ...state,
-          updates: [...state.updates.filter((update) => update.id !== message.id), { id: message.id, kind: message.kind, version: message.version }],
+          updates: [
+            ...state.updates.filter((update) => update.id !== id),
+            { id, kind: message.kind, version: message.version },
+          ],
         },
         message.ts,
       );
+    }
     case "update.progress":
       return mark(
         {
@@ -220,6 +259,7 @@ export function eventReducer(state: EventStreamState, action: EventStreamAction)
     case "disarmed":
     case "confirm.required":
     case "teach.progress":
+    case "resync":
       return mark(state, message.ts);
     default:
       return state;

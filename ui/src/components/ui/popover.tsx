@@ -7,7 +7,11 @@ export const PopoverTrigger = PopoverPrimitive.Trigger;
 export function PopoverContent({ className, ...props }: PopoverPrimitive.PopoverContentProps) {
   return (
     <PopoverPrimitive.Portal>
-      <PopoverPrimitive.Content className={cn("flick-glass ui-popover", className)} sideOffset={8} {...props} />
+      <PopoverPrimitive.Content
+        className={cn("flick-glass ui-popover", className)}
+        sideOffset={8}
+        {...props}
+      />
     </PopoverPrimitive.Portal>
   );
 }

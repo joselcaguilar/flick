@@ -5,7 +5,10 @@ import type { WsServerMessage } from "./types";
 const ts = "2026-09-28T15:30:00.000Z";
 
 function reduce(messages: WsServerMessage[]) {
-  return messages.reduce((state, message) => eventReducer(state, { type: "message", message }), initialEventState);
+  return messages.reduce(
+    (state, message) => eventReducer(state, { type: "message", message }),
+    initialEventState,
+  );
 }
 
 describe("eventReducer", () => {
@@ -57,7 +60,13 @@ describe("eventReducer", () => {
 
   it("shows targeting recovery copy for suppressed targeted verbs", () => {
     const state = reduce([
-      { type: "gesture.suppressed", ts, camera_id: "camera-main", gesture_id: "builtin.circle_cw", reason: "no_target" },
+      {
+        type: "gesture.suppressed",
+        ts,
+        camera_id: "camera-main",
+        gesture_id: "builtin.circle_cw",
+        reason: "no_target",
+      },
     ]);
 
     expect(state.suppression?.reason).toBe("no_target");

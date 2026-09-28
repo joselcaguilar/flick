@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { eventReducer, initialEventState, type EventStreamAction } from "./reducer";
+import { type EventStreamAction, eventReducer, initialEventState } from "./reducer";
 import type { EventStreamState, WsServerMessage } from "./types";
 
 interface EventStore extends EventStreamState {

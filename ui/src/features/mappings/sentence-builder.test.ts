@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateSentenceDraft, type SentenceBuilderDraft } from "./sentence-builder";
+import { type SentenceBuilderDraft, validateSentenceDraft } from "./sentence-builder";
 
 const baseDraft: SentenceBuilderDraft = {
   kind: "targeted",
