@@ -1,0 +1,25 @@
+{
+  "token": "mock-token",
+  "ha_version": "2026.9.0",
+  "config": {"location_name":"Demo Home","version":"2026.9.0","uuid":"demo-ha"},
+  "entities": [
+    {"entity_id":"light.bed_light","state":"off","attributes":{"friendly_name":"Bed Light","supported_features":0}},
+    {"entity_id":"light.desk_lamp","state":"on","attributes":{"friendly_name":"Desk Lamp","supported_features":0,"brightness":180}},
+    {"entity_id":"media_player.living_room","state":"paused","attributes":{"friendly_name":"Living Room","volume_level":0.35}},
+    {"entity_id":"cover.window_shade","state":"closed","attributes":{"friendly_name":"Window Shade","current_position":0,"device_class":"shade"}},
+    {"entity_id":"lock.front_door","state":"locked","attributes":{"friendly_name":"Front Door"}}
+  ],
+  "services": {
+    "light":{"turn_on":{"fields":{}},"turn_off":{"fields":{}},"toggle":{"fields":{}}},
+    "media_player":{"media_play":{"fields":{}},"media_pause":{"fields":{}},"volume_set":{"fields":{}}},
+    "cover":{"open_cover":{"fields":{}},"close_cover":{"fields":{}},"stop_cover":{"fields":{}}},
+    "lock":{"lock":{"fields":{}},"unlock":{"fields":{}}}
+  },
+  "registries": {
+    "areas": [{"area_id":"bedroom","name":"Bedroom","floor_id":null},{"area_id":"living","name":"Living room","floor_id":null}],
+    "floors": [],
+    "labels": [],
+    "devices": [{"id":"dev_light","area_id":"bedroom"},{"id":"dev_media","area_id":"living"}],
+    "entities": {"entities":[{"ei":"light.bed_light","di":"dev_light","ai":"bedroom","en":"Bed Light"},{"ei":"media_player.living_room","di":"dev_media","ai":"living","en":"Living Room"}]}
+  }
+}

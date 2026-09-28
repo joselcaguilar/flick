@@ -1,0 +1,27 @@
+{
+  "id": 7,
+  "type": "event",
+  "event": {
+    "a": {
+      "fan.ventilador_dormitorio": {
+        "s": "off",
+        "a": {
+          "friendly_name": "Ventilador dormitorio",
+          "supported_features": 53,
+          "percentage_step": 1.0,
+          "percentage": 1,
+          "direction": "reverse"
+        },
+        "lc": "2026-09-28T15:00:00+00:00",
+        "lu": "2026-09-28T15:00:00+00:00"
+      }
+    },
+    "c": {
+      "fan.ventilador_dormitorio": {
+        "+": { "s": "on", "a": { "percentage": 2 } },
+        "-": ["oscillating"]
+      }
+    },
+    "r": ["sensor.removed"]
+  }
+}

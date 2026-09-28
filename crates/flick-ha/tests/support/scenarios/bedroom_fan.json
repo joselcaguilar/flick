@@ -1,0 +1,36 @@
+{
+  "token": "mock-token",
+  "ha_version": "2026.9.0",
+  "config": {"location_name":"Mock Home","version":"2026.9.0","uuid":"mock-ha"},
+  "entities": [
+    {
+      "entity_id": "fan.ventilador_dormitorio",
+      "state": "off",
+      "attributes": {
+        "friendly_name": "Ventilador dormitorio",
+        "supported_features": 53,
+        "percentage_step": 1.0,
+        "percentage": 1,
+        "direction": "reverse",
+        "manufacturer": "Tuya"
+      },
+      "last_changed": "2026-09-28T15:00:00+00:00",
+      "last_updated": "2026-09-28T15:00:00+00:00"
+    }
+  ],
+  "services": {
+    "fan": {
+      "turn_on": {"fields":{"percentage":{"selector":{"number":{"min":1,"max":100,"step":1}}}}},
+      "turn_off": {"fields":{}},
+      "increase_speed": {"fields":{}},
+      "decrease_speed": {"fields":{}}
+    }
+  },
+  "registries": {
+    "areas": [],
+    "floors": [],
+    "labels": [],
+    "devices": [{"id":"dev_fan","manufacturer":"Tuya","name_by_user":"Ventilador dormitorio","area_id":null}],
+    "entities": {"entities":[{"ei":"fan.ventilador_dormitorio","di":"dev_fan","ai":null,"en":"Ventilador dormitorio"}]}
+  }
+}

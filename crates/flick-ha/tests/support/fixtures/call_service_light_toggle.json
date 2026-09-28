@@ -1,0 +1,1 @@
+{"id":42,"type":"call_service","domain":"light","service":"toggle","target":{"entity_id":["light.bed_light"]},"service_data":{}}
