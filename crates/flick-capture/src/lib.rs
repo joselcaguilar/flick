@@ -308,6 +308,8 @@ pub struct LocalCameraOptions {
     pub camera_id: CameraId,
     /// Device index from the native backend.
     pub index: u32,
+    /// Stable backend device id; takes precedence over `index` when present.
+    pub device_id: Option<String>,
     /// Requested width.
     pub width: u32,
     /// Requested height.
@@ -323,6 +325,7 @@ impl Default for LocalCameraOptions {
         Self {
             camera_id: CameraId::new(),
             index: 0,
+            device_id: None,
             width: 1280,
             height: 720,
             fps: 30,
@@ -345,41 +348,8 @@ impl LocalCameraSource {
     pub fn open(options: LocalCameraOptions) -> Result<Self, CaptureError> {
         ensure_camera_authorized()?;
 
-        let requested = RequestedFormat::new::<RgbFormat>(RequestedFormatType::None);
-        let mut camera =
-            Camera::new(CameraIndex::Index(options.index), requested).map_err(map_nokhwa_error)?;
-        match camera.compatible_camera_formats() {
-            Ok(formats) => {
-                if let Some(format) =
-                    choose_camera_format(&formats, options.width, options.height, options.fps)
-                {
-                    info!(
-                        width = format.width(),
-                        height = format.height(),
-                        fps = format.frame_rate(),
-                        format = %format.format(),
-                        "selected local camera format"
-                    );
-                    if let Err(err) = camera.set_camera_requset(RequestedFormat::new::<RgbFormat>(
-                        RequestedFormatType::Exact(format),
-                    )) {
-                        warn!(
-                            error = %err,
-                            width = format.width(),
-                            height = format.height(),
-                            fps = format.frame_rate(),
-                            format = %format.format(),
-                            "camera rejected selected format; keeping backend default"
-                        );
-                    }
-                } else {
-                    warn!("camera reported no decodable formats; keeping backend default");
-                }
-            }
-            Err(err) => {
-                warn!(error = %err, "failed to query camera formats; keeping backend default");
-            }
-        }
+        let index = resolve_camera_index(&options);
+        let mut camera = open_camera(&index, &options)?;
         camera.open_stream().map_err(map_nokhwa_error)?;
         let format = camera.camera_format();
         let resolution = format.resolution();
@@ -484,27 +454,108 @@ impl FrameSource for LocalCameraSource {
     }
 }
 
-fn choose_camera_format(
+/// Prefers the stable device id over the enumeration index, which shifts when
+/// Continuity or USB cameras come and go.
+fn resolve_camera_index(options: &LocalCameraOptions) -> CameraIndex {
+    let fallback = CameraIndex::Index(options.index);
+    let Some(device_id) = options.device_id.as_deref() else {
+        return fallback;
+    };
+    let devices = nokhwa::native_api_backend()
+        .and_then(|backend| nokhwa::query(backend).ok())
+        .unwrap_or_default();
+    match devices.iter().find(|device| device.misc() == device_id) {
+        Some(device) => device.index().clone(),
+        None => {
+            warn!(
+                device_id,
+                index = options.index,
+                "configured camera not found; using index"
+            );
+            fallback
+        }
+    }
+}
+
+/// AVFoundation lists each frame-rate range's minimum as a format, but only
+/// accepts range maxima, so the backend default (first listed format) can fail.
+/// Pre-query the formats and try them best-first until one is accepted.
+#[cfg(target_os = "macos")]
+fn open_camera(index: &CameraIndex, options: &LocalCameraOptions) -> Result<Camera, CaptureError> {
+    let formats = nokhwa_bindings_macos::AVCaptureDevice::new(index)
+        .and_then(|device| device.supported_formats())
+        .map_err(map_nokhwa_error)?;
+    let mut last_error = None;
+    for format in ranked_camera_formats(&formats, options.width, options.height, options.fps) {
+        let requested = RequestedFormat::new::<RgbFormat>(RequestedFormatType::Exact(format));
+        match Camera::new(index.clone(), requested) {
+            Ok(camera) => {
+                info!(%format, "selected local camera format");
+                return Ok(camera);
+            }
+            Err(err) => {
+                debug!(%format, error = %err, "camera rejected format");
+                last_error = Some(err);
+            }
+        }
+    }
+    Err(last_error.map_or_else(
+        || CaptureError::Unavailable("camera reported no decodable formats".to_owned()),
+        map_nokhwa_error,
+    ))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn open_camera(index: &CameraIndex, options: &LocalCameraOptions) -> Result<Camera, CaptureError> {
+    let requested = RequestedFormat::new::<RgbFormat>(RequestedFormatType::None);
+    let mut camera = Camera::new(index.clone(), requested).map_err(map_nokhwa_error)?;
+    match camera.compatible_camera_formats() {
+        Ok(formats) => {
+            match ranked_camera_formats(&formats, options.width, options.height, options.fps)
+                .into_iter()
+                .next()
+            {
+                Some(format) => {
+                    info!(%format, "selected local camera format");
+                    if let Err(err) = camera.set_camera_requset(RequestedFormat::new::<RgbFormat>(
+                        RequestedFormatType::Exact(format),
+                    )) {
+                        warn!(%format, error = %err, "camera rejected selected format; keeping backend default");
+                    }
+                }
+                None => warn!("camera reported no decodable formats; keeping backend default"),
+            }
+        }
+        Err(err) => {
+            warn!(error = %err, "failed to query camera formats; keeping backend default");
+        }
+    }
+    Ok(camera)
+}
+
+fn ranked_camera_formats(
     formats: &[CameraFormat],
     target_width: u32,
     target_height: u32,
     target_fps: u32,
-) -> Option<CameraFormat> {
-    formats
+) -> Vec<CameraFormat> {
+    let mut ranked: Vec<CameraFormat> = formats
         .iter()
         .copied()
         .filter(|format| format_rank(format.format()).is_some())
-        .min_by_key(|format| {
-            let resolution = format.resolution();
-            let dx = u64::from(resolution.width().abs_diff(target_width));
-            let dy = u64::from(resolution.height().abs_diff(target_height));
-            (
-                format.frame_rate() < target_fps.min(24),
-                dx.saturating_mul(dx).saturating_add(dy.saturating_mul(dy)),
-                format.frame_rate().abs_diff(target_fps),
-                format_rank(format.format()).unwrap_or(u8::MAX),
-            )
-        })
+        .collect();
+    ranked.sort_by_key(|format| {
+        let resolution = format.resolution();
+        let dx = u64::from(resolution.width().abs_diff(target_width));
+        let dy = u64::from(resolution.height().abs_diff(target_height));
+        (
+            format.frame_rate() < target_fps.min(24),
+            dx.saturating_mul(dx).saturating_add(dy.saturating_mul(dy)),
+            format.frame_rate().abs_diff(target_fps),
+            format_rank(format.format()).unwrap_or(u8::MAX),
+        )
+    });
+    ranked
 }
 
 fn format_rank(format: FrameFormat) -> Option<u8> {
@@ -553,10 +604,7 @@ fn map_nokhwa_error(err: nokhwa::NokhwaError) -> CaptureError {
         CaptureError::PermissionDenied(format!(
             "camera permission denied or unavailable: {message}"
         ))
-    } else if lower.contains("disconnect")
-        || lower.contains("not found")
-        || lower.contains("no device")
-    {
+    } else if lower.contains("disconnect") || lower.contains("no device") {
         CaptureError::Disconnected
     } else {
         CaptureError::Other(message)
@@ -1035,7 +1083,7 @@ mod tests {
     }
 
     #[test]
-    fn choose_camera_format_prefers_nearest_yuyv_without_mjpeg() {
+    fn ranked_camera_formats_prefer_nearest_yuyv_without_mjpeg() {
         let formats = [
             CameraFormat::new_from(640, 480, FrameFormat::YUYV, 30),
             CameraFormat::new_from(1280, 720, FrameFormat::YUYV, 30),
@@ -1044,7 +1092,8 @@ mod tests {
             CameraFormat::new_from(1280, 720, FrameFormat::GRAY, 30),
         ];
 
-        let chosen = choose_camera_format(&formats, 1280, 720, 30).expect("camera format");
+        let ranked = ranked_camera_formats(&formats, 1280, 720, 30);
+        let chosen = ranked.first().expect("camera format");
 
         assert_eq!(chosen.width(), 1280);
         assert_eq!(chosen.height(), 720);

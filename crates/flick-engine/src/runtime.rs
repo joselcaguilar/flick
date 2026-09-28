@@ -1264,11 +1264,11 @@ impl EngineApp {
         let index = camera
             .device_ref
             .as_deref()
-            .and_then(|value| value.parse::<u32>().ok())
-            .unwrap_or(0);
+            .and_then(|value| value.parse::<u32>().ok());
         let options = LocalCameraOptions {
             camera_id: source_id,
-            index,
+            index: index.unwrap_or(0),
+            device_id: camera.device_ref.clone().filter(|_| index.is_none()),
             width: 1280,
             height: 720,
             fps: camera.active_fps,
