@@ -138,5 +138,14 @@
     "globalTab": "Global",
     "editor": "Build a sentence",
     "sensitive": "Sensitive flow"
+  },
+  "cameras": {
+    "title": "Local cameras",
+    "permission": "Permission",
+    "phase2": "RTSP setup comes in Phase 2"
+  },
+  "pro": {
+    "title": "Core today. Pro later.",
+    "phase": "Phase 3"
   }
 }

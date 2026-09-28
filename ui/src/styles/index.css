@@ -1740,12 +1740,94 @@ body.hud-window {
   gap: 0.5rem;
 }
 
+.cameras-screen,
+.pro-screen {
+  display: grid;
+  gap: 1rem;
+}
+
+.cameras-grid,
+.pro-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(20rem, 0.8fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.camera-preview-panel,
+.camera-card,
+.pro-hero-card,
+.pro-list-card {
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--flick-shadow-glass);
+  padding: 1rem;
+}
+
+.camera-preview-panel .preview-canvas {
+  aspect-ratio: 16 / 9;
+}
+
+.camera-list-column,
+.camera-details-grid,
+.pro-list-card {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.camera-card {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.camera-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.camera-note {
+  margin: 0.8rem 0 0;
+  color: var(--flick-muted);
+  font-size: 0.9rem;
+}
+
+.pro-hero-card {
+  display: grid;
+  gap: 0.9rem;
+  align-content: start;
+  min-block-size: 20rem;
+  background:
+    radial-gradient(
+      circle at 20% 0%,
+      color-mix(in srgb, var(--flick-accent-violet) 26%, transparent),
+      transparent 18rem
+    ),
+    color-mix(in srgb, var(--flick-surface) 66%, transparent);
+}
+
+.pro-hero-card h2 {
+  max-inline-size: 12ch;
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 4.6rem);
+  line-height: 0.92;
+  letter-spacing: -0.055em;
+}
+
+.pro-hero-card p {
+  max-inline-size: 38rem;
+  margin: 0;
+  color: var(--flick-muted);
+}
+
 @media (max-width: 980px) {
   .teach-layout {
     grid-template-columns: 1fr;
   }
 
-  .mapping-editor-grid {
+  .mapping-editor-grid,
+  .cameras-grid,
+  .pro-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 import { GestureGlyph } from "../components/domain";
 import { GlassPanel } from "../components/ui";
+import { CamerasRoute } from "../features/cameras/Cameras";
 import { DashboardRoute } from "../features/dashboard/Dashboard";
 import { DevicesRoute, PlacesRoute, RealignRoute, TeachDeviceRoute } from "../features/devices/Devices";
 import { MappingEditorRoute, MappingsRoute } from "../features/mappings/Mappings";
+import { ProRoute } from "../features/pro/Pro";
 
 export interface RouteMeta {
   path: string;
@@ -133,12 +135,7 @@ export const routes: RouteMeta[] = [
     nav: true,
     mobile: false,
     shortcut: "⌘5",
-    element: (
-      <EmptyRoute
-        title="Cameras"
-        description="Local cameras are wired now; RTSP and ROI controls come in Phase 2."
-      />
-    ),
+    element: <CamerasRoute />,
   },
   {
     path: "/activity",
@@ -176,11 +173,6 @@ export const routes: RouteMeta[] = [
     description: "Future Pro capabilities.",
     nav: true,
     mobile: false,
-    element: (
-      <EmptyRoute
-        title="Pro"
-        description="Phase 3 licensing and cloud-assisted setup will appear here when enabled."
-      />
-    ),
+    element: <ProRoute />,
   },
 ];
