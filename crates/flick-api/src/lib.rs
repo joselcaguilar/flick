@@ -128,9 +128,9 @@ impl ApiGateways {
         Self {
             engine: Arc::new(FakeEngine::default()),
             ha: Arc::new(FakeHa::default()),
-            teach: Arc::new(FakeTeach::default()),
-            updates: Arc::new(FakeUpdates::default()),
-            preview: Arc::new(FakePreview::default()),
+            teach: Arc::new(FakeTeach),
+            updates: Arc::new(FakeUpdates),
+            preview: Arc::new(FakePreview),
         }
     }
 }
@@ -188,7 +188,7 @@ impl ApiState {
 }
 
 /// Builds the axum router for the local API.
-#[must_use]
+#[must_use = "the router must be served or exercised by tests"]
 pub fn router(state: ApiState) -> Router {
     let state = Arc::new(state);
     let allowed_origins = state.config.allowed_origins.clone();
