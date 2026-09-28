@@ -42,3 +42,7 @@ That feedback is binding. The previous look is now an anti-reference, not a base
 - **Stock shadcn:** acceptable only for behavior/accessibility primitives; default theme is banned.
 - **Neon gamer HUD:** visually loud and less trustworthy for accessibility and household use.
 - **Bundled SF Pro:** prohibited by license; use native platform stack instead.
+
+## 2026-09-28 — Owner approval
+
+The owner approved the v2 "Liquid command UI" direction (Raycast-like pro tool adapted to macOS 27 Liquid Glass; light + dark first-class; responsive down to 360 px). This satisfies the P1-700 approval criterion; P1-701 and later UI tasks build on it.

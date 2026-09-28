@@ -1,0 +1,230 @@
+schema_version = 1
+generated_at = "2026-09-28"
+notes = "Phase 0 spike manifest. Model binaries are downloaded to models/cache/ and are intentionally gitignored."
+
+[[models]]
+id = "palm_detection_full"
+version = "opencv-2023feb"
+format = "onnx"
+conversion_status = "selected"
+source_url = "https://huggingface.co/opencv/palm_detection_mediapipe/resolve/233e619dcea1759bf6de707b9b904fe30881ea55/palm_detection_mediapipe_2023feb.onnx"
+source_revision = "233e619dcea1759bf6de707b9b904fe30881ea55"
+license = "Apache-2.0"
+sha256 = "78ff51c38496b7fc8b8ebdb6cc8c1abb02fa6c38427c6848254cdaba57fcce7c"
+size_bytes = 3905734
+preferred_ep = ["CoreML", "CPU"]
+cache_path = "models/cache/palm_detection_full.onnx"
+preprocessing = "Letterbox frame to 192x192, RGB float32 in [0,1], NHWC."
+postprocessing = "Generate 2016 MediaPipe SSD anchors, sigmoid scores, decode regressors with x/y/w/h scale 192, weighted NMS."
+
+[[models.inputs]]
+name = "input_1"
+dtype = "float32"
+shape = "1x192x192x3"
+
+[[models.outputs]]
+name = "Identity"
+dtype = "float32"
+shape = "1x2016x18"
+description = "box/keypoint regressors"
+
+[[models.outputs]]
+name = "Identity_1"
+dtype = "float32"
+shape = "1x2016x1"
+description = "raw palm logits"
+
+[[models]]
+id = "hand_landmark_full"
+version = "opencv-2023feb"
+format = "onnx"
+conversion_status = "selected"
+source_url = "https://huggingface.co/opencv/handpose_estimation_mediapipe/resolve/4b2a0b446e5cf2f11fb6b2c7251091c035d2c1f7/handpose_estimation_mediapipe_2023feb.onnx"
+source_revision = "4b2a0b446e5cf2f11fb6b2c7251091c035d2c1f7"
+license = "Apache-2.0"
+sha256 = "db0898ae717b76b075d9bf563af315b29562e11f8df5027a1ef07b02bef6d81c"
+size_bytes = 4099621
+preferred_ep = ["CoreML", "CPU"]
+cache_path = "models/cache/hand_landmark_full.onnx"
+preprocessing = "Affine-warp rotated hand ROI to 224x224, RGB float32 in [0,1], NHWC."
+postprocessing = "Drop when presence < 0.5; project 21 image landmarks through inverse ROI transform; swap handedness for non-mirrored input."
+
+[[models.inputs]]
+name = "input_1"
+dtype = "float32"
+shape = "1x224x224x3"
+
+[[models.outputs]]
+name = "Identity"
+dtype = "float32"
+shape = "1x63"
+description = "21 image landmarks"
+
+[[models.outputs]]
+name = "Identity_1"
+dtype = "float32"
+shape = "1x1"
+description = "presence score"
+
+[[models.outputs]]
+name = "Identity_2"
+dtype = "float32"
+shape = "1x1"
+description = "handedness score"
+
+[[models.outputs]]
+name = "Identity_3"
+dtype = "float32"
+shape = "1x63"
+description = "21 world landmarks"
+
+[[models]]
+id = "gesture_embedder"
+version = "mediapipe-gesture-recognizer-float16-v1"
+format = "tflite"
+conversion_status = "blocked_needs_python312_owner_action"
+source_url = "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task"
+source_revision = "float16/1"
+license = "Apache-2.0"
+sha256 = "54abe78de1d1cd5e3cdaa0dab01db18e3ec7e09a76e7c3b5fa278572f7a60977"
+source_container_sha256 = "97952348cf6a6a4915c2ea1496b4b37ebabc50cbbf80571435643c455f2b0482"
+size_bytes = 546000
+preferred_ep = ["CPU"]
+cache_path = "models/cache/gesture_task/hand_gesture_recognizer/gesture_embedder.tflite"
+preprocessing = "MediaPipe task submodel. Inputs observed by TFLite strings: hand, handedness, world_hand. Intended ONNX contract is landmarks 1x21x3 + handedness 1x1 + world landmarks 1x21x3."
+conversion_notes = "Pure Python conversion could not be completed in this environment because PyPI wheel downloads from files.pythonhosted.org failed. TensorFlow/tf2onnx path is also blocked: TensorFlow 2.21 publishes no Python 3.14 macOS arm64 wheel. Owner action: install Homebrew python@3.12 and rerun tools/training/convert.py convert-gesture."
+
+[[models.inputs]]
+name = "hand"
+dtype = "float32"
+shape = "1x21x3"
+
+[[models.inputs]]
+name = "handedness"
+dtype = "float32"
+shape = "1x1"
+
+[[models.inputs]]
+name = "world_hand"
+dtype = "float32"
+shape = "1x21x3"
+
+[[models.outputs]]
+name = "Identity"
+dtype = "float32"
+shape = "1x128"
+
+[[models]]
+id = "canned_gesture_classifier"
+version = "mediapipe-gesture-recognizer-float16-v1"
+format = "tflite"
+conversion_status = "blocked_needs_python312_owner_action"
+source_url = "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task"
+source_revision = "float16/1"
+license = "Apache-2.0"
+sha256 = "62a87ded76da05155f6a59c8babb4c537c138c25138b29450fb030e207a5c0e9"
+source_container_sha256 = "97952348cf6a6a4915c2ea1496b4b37ebabc50cbbf80571435643c455f2b0482"
+size_bytes = 7773
+preferred_ep = ["CPU"]
+cache_path = "models/cache/gesture_task/hand_gesture_recognizer/canned_gesture_classifier.tflite"
+preprocessing = "Consumes the gesture_embedder output. Canned label order expected from spec: None, Closed_Fist, Open_Palm, Pointing_Up, Thumb_Down, Thumb_Up, Victory, ILoveYou."
+conversion_notes = "Same block as gesture_embedder. Qualcomm supplies an ONNX classifier candidate, but its contract is hand/mirrored_hand 1x64 inputs rather than the ADR-007 128-d embedder output."
+
+[[models.inputs]]
+name = "hand_embedding"
+dtype = "float32"
+shape = "1x128"
+
+[[models.outputs]]
+name = "Identity"
+dtype = "float32"
+shape = "1x8"
+
+[[models]]
+id = "canned_gesture_classifier_qaihub_candidate"
+version = "qaihub-v0.63.0-float"
+format = "onnx-external-data"
+conversion_status = "candidate_contract_mismatch"
+source_url = "https://qaihub-public-assets.s3.us-west-2.amazonaws.com/qai-hub-models/models/mediapipe_hand_gesture/releases/v0.63.0/mediapipe_hand_gesture-onnx-float.zip"
+source_revision = "qualcomm-ai-hub-models-v0.63.0"
+license = "Apache-2.0"
+sha256 = "ef912edf59a2d23e9815c442be8b698cb9c0e2cb2f0f28fb0120108fa75bbb9c"
+external_data_sha256 = "178f59f8502bfb58a4c5f4e028cd4c65278f2d6e6bf95c391c7c33b860d127fb"
+size_bytes = 168712
+external_data_size_bytes = 561152
+preferred_ep = ["CPU"]
+cache_path = "models/cache/canned_gesture_classifier_qaihub.onnx"
+preprocessing = "Requires normalized hand and mirrored_hand 64-d feature vectors from the Qualcomm MediaPipe hand gesture pipeline."
+conversion_notes = "Useful reference for Tier 0 labels, but not selected because it removes the reusable 128-d embedder required by Tier 1 ProtoKnn."
+
+[[models.inputs]]
+name = "hand"
+dtype = "float32"
+shape = "1x64"
+
+[[models.inputs]]
+name = "mirrored_hand"
+dtype = "float32"
+shape = "1x64"
+
+[[models.outputs]]
+name = "Identity"
+dtype = "float32"
+shape = "1x8"
+
+[[models]]
+id = "face_detection_short"
+version = "unity-blazeface-short-range"
+format = "onnx"
+conversion_status = "selected"
+source_url = "https://huggingface.co/unity/inference-engine-blaze-face/resolve/6b3dcfdd87c36a157477329821bab552eddc8f79/models/blaze_face_short_range.onnx"
+source_revision = "6b3dcfdd87c36a157477329821bab552eddc8f79"
+license = "Apache-2.0"
+sha256 = "587fa34c93de9a523e691669d2405671d67faad86e595e9a63c6d3db401f18f4"
+size_bytes = 418465
+preferred_ep = ["CPU", "CoreML"]
+cache_path = "models/cache/face_detection_short.onnx"
+preprocessing = "Crop/resize active pointing frame to 128x128, RGB float32 in [0,1], NHWC. Runs only while point pose is active."
+postprocessing = "Decode 896 BlazeFace anchors; regressors include box plus 6 keypoints. Eye keypoints feed flick-spatial ray estimation."
+
+[[models.inputs]]
+name = "input"
+dtype = "float32"
+shape = "1x128x128x3"
+
+[[models.outputs]]
+name = "regressors"
+dtype = "float32"
+shape = "1x896x16"
+
+[[models.outputs]]
+name = "classificators"
+dtype = "float32"
+shape = "1x896x1"
+
+[[models]]
+id = "scene_embedder"
+version = "onnx-community-dinov2-small-uint8"
+format = "onnx"
+conversion_status = "selected_ota_only"
+source_url = "https://huggingface.co/onnx-community/dinov2-small/resolve/8b1f705a3a7f6f062f6bdd21986c1583d3ef105d/onnx/model_uint8.onnx"
+source_revision = "8b1f705a3a7f6f062f6bdd21986c1583d3ef105d"
+base_model_url = "https://huggingface.co/facebook/dinov2-small"
+base_model_revision = "ed25f3a31f01632728cabb09d1542f84ab7b0056"
+license = "Apache-2.0"
+sha256 = "c179f8f7f592449c4c1bca4cd124a7538021428c5ffb89afde9503935b197efb"
+size_bytes = 24446700
+preferred_ep = ["CPU", "CoreML"]
+cache_path = "models/cache/scene_embedder_dinov2_small_uint8.onnx"
+preprocessing = "Resize/crop to 224x224, RGB float32 normalized with DINOv2/ImageNet mean/std, NCHW pixel_values."
+postprocessing = "Use last_hidden_state[:,0,:] as the 384-d CLS scene signature. OTA/on-demand pack, not in the default bundle."
+
+[[models.inputs]]
+name = "pixel_values"
+dtype = "float32"
+shape = "1x3x224x224"
+
+[[models.outputs]]
+name = "last_hidden_state"
+dtype = "float32"
+shape = "1x257x384"
