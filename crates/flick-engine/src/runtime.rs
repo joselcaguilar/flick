@@ -1,21 +1,38 @@
 //! Runtime wiring for the engine binary and local API.
 
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc, time::Instant};
+use std::{
+    collections::{BTreeMap, HashMap},
+    net::SocketAddr,
+    str::FromStr,
+    sync::Arc,
+    time::{Instant, SystemTime, UNIX_EPOCH},
+};
 
 use anyhow::Context;
 use async_trait::async_trait;
 use axum::Router;
 use flick_api::{
-    ActionDto, ActionOutcomeDto, ActionTargetDto, ApiConfig, ApiGateways, ApiProblem, ApiState,
-    AvailableCamera, CameraFormat, CameraStatus, EngineControl, EngineStatus, FakeTeach,
+    ActionDto, ActionOutcomeDto, ActionTargetDto, Anchor as ApiAnchor, ApiConfig, ApiGateways,
+    ApiProblem, ApiState, AvailableCamera, CameraFormat, CameraStatus, EngineControl, EngineStatus,
     FakeUpdates, HaArea, HaConnectRequest, HaDiscovery, HaEntity, HaGateway, HaInstance,
     HaServiceSchema, HaStatus as ApiHaStatus, LatencyBreakdown, PauseRequest, PreviewFrame,
-    PreviewSource, StageLatency, router,
+    PreviewSource, RealignCommitResponse, RealignPointRequest, RealignPointResponse,
+    RealignSession, SetupSuggestRequest, SetupSuggestion, StageLatency, TeachCommitRequest,
+    TeachCommitResponse, TeachGateway, TeachLevelRequest, TeachLevelResponse, TeachRequest,
+    TeachSession as ApiTeachSession, TeachSpotResponse, VerbBinding, router,
 };
-use flick_core::{Action, ActionOutcome, ActionStatus, ActionTarget, DialProperty, Verb};
+use flick_core::{
+    Action, ActionOutcome, ActionStatus, ActionTarget, AnchorId, CameraId, DialProperty, PlaceId,
+    Verb,
+};
 use flick_ha::{
     EntityState, HaClient, HaConnectionConfig, HaStatus, RegistrySnapshot, SafetyInput,
     SafetyValidator,
+};
+use flick_spatial::{
+    AnchorGeometry, DEFAULT_ESTIMATOR_VERSION, PlaceRecord, PlaceStatus, PointingRay, RaySource,
+    RealignPair, StoredIntrinsics, TeachObservation, TeachSession as SpatialTeachSession,
+    TeachTarget, realign,
 };
 use flick_store::Store;
 use serde_json::json;
@@ -27,6 +44,7 @@ use crate::{
     dispatcher::{
         Dispatcher, HaActionSink, NoopActionSink, owner_fan_anchor, owner_scenario_mappings,
     },
+    targeting_store::{SqliteTargetingStore, anchor_record_to_anchor, anchor_to_record},
 };
 
 /// Runs the API server until SIGTERM/Ctrl-C.
@@ -51,7 +69,7 @@ pub async fn serve(runtime: RuntimeConfig, token: String) -> anyhow::Result<()> 
     let gateways = ApiGateways {
         engine: app.clone(),
         ha: app.clone(),
-        teach: Arc::new(FakeTeach),
+        teach: app.clone(),
         updates: Arc::new(FakeUpdates),
         preview: app.clone(),
     };
@@ -158,19 +176,25 @@ struct EngineApp {
     ha_client: Mutex<Option<HaClient>>,
     ha_instance: Mutex<Option<HaInstance>>,
     registry: Mutex<RegistrySnapshot>,
+    targeting: SqliteTargetingStore,
+    teach_sessions: Mutex<HashMap<String, EngineTeachSession>>,
+    realign_sessions: Mutex<HashMap<String, EngineRealignSession>>,
 }
 
 impl EngineApp {
     fn new(runtime: RuntimeConfig, store: Arc<Store>) -> Self {
         Self {
             runtime,
-            store,
+            store: Arc::clone(&store),
             started_at: Instant::now(),
             paused: Mutex::new(false),
             dispatcher: Mutex::new(None),
             ha_client: Mutex::new(None),
             ha_instance: Mutex::new(None),
             registry: Mutex::new(RegistrySnapshot::default()),
+            targeting: SqliteTargetingStore::new(Arc::clone(&store)),
+            teach_sessions: Mutex::new(HashMap::new()),
+            realign_sessions: Mutex::new(HashMap::new()),
         }
     }
 
@@ -187,6 +211,39 @@ impl EngineApp {
         *self.ha_client.lock().await = Some(client);
         *self.ha_instance.lock().await = instance;
         *self.registry.lock().await = snapshot;
+    }
+
+    fn ensure_place(&self, camera_id: CameraId) -> Result<PlaceRecord, ApiProblem> {
+        let places = self
+            .targeting
+            .try_places_for_camera(camera_id)
+            .map_err(store_problem)?;
+        if let Some(place) = places.iter().find(|place| place.active).cloned() {
+            return Ok(place);
+        }
+        if let Some(place) = places.first().cloned() {
+            return Ok(place);
+        }
+        let intrinsics = flick_spatial::CameraIntrinsics::sane_default(1280, 720);
+        let mut scene_signature = [0.0_f32; 384];
+        scene_signature[0] = 1.0;
+        let now = now_ms();
+        let place = PlaceRecord {
+            id: PlaceId::new(),
+            camera_id,
+            name: "Default place".to_owned(),
+            scene_signature,
+            embedder_version: "engine.stub.scene.v1".to_owned(),
+            intrinsics: StoredIntrinsics::from(&intrinsics),
+            status: PlaceStatus::Ok,
+            active: true,
+            created_at: now,
+            updated_at: now,
+        };
+        self.targeting
+            .try_upsert_place(&place)
+            .map_err(store_problem)?;
+        Ok(place)
     }
 
     async fn ha_status_dto(&self) -> ApiHaStatus {
@@ -223,6 +280,18 @@ impl EngineApp {
             },
         }
     }
+}
+
+struct EngineTeachSession {
+    camera_id: String,
+    target: serde_json::Value,
+    levels: Vec<f64>,
+    spatial: SpatialTeachSession,
+}
+
+struct EngineRealignSession {
+    place_id: PlaceId,
+    pairs: Vec<RealignPair>,
 }
 
 #[async_trait]
@@ -323,6 +392,318 @@ impl EngineControl for EngineApp {
             fps: Some(0.0),
             error: None,
         }
+    }
+}
+
+#[async_trait]
+impl TeachGateway for EngineApp {
+    async fn start(&self, request: TeachRequest) -> Result<ApiTeachSession, ApiProblem> {
+        let target = teach_target_from_value(&request.target)?;
+        let anchor_id = request
+            .anchor_id
+            .as_deref()
+            .map(AnchorId::from_str)
+            .transpose()
+            .map_err(|err| ApiProblem::validation("bad_anchor_id", err.to_string()))?
+            .unwrap_or_else(AnchorId::new);
+        let domain = teach_domain(&target);
+        let name = teach_name(&target);
+        let spatial =
+            SpatialTeachSession::new(anchor_id, name, target, domain, DEFAULT_ESTIMATOR_VERSION);
+        let session = ApiTeachSession {
+            id: flick_core::TeachSessionId::new().to_string(),
+            camera_id: request.camera_id,
+            target: request.target,
+            anchor_id: request.anchor_id,
+            prompt: "Point at the device and hold still".to_owned(),
+        };
+        self.teach_sessions.lock().await.insert(
+            session.id.clone(),
+            EngineTeachSession {
+                camera_id: session.camera_id.clone(),
+                target: session.target.clone(),
+                levels: Vec::new(),
+                spatial,
+            },
+        );
+        Ok(session)
+    }
+
+    async fn spot(&self, session_id: &str) -> Result<TeachSpotResponse, ApiProblem> {
+        let mut sessions = self.teach_sessions.lock().await;
+        let session = sessions.get_mut(session_id).ok_or_else(|| {
+            ApiProblem::validation("teach_session_not_found", "teach session not found")
+        })?;
+        let spot_index = u32::try_from(session.spatial.observations().len() + 1)
+            .map_err(|err| ApiProblem::validation("too_many_spots", err.to_string()))?;
+        let observation = TeachObservation {
+            spot_index,
+            ray: PointingRay::new([0.0, 0.0, 0.0], [0.0, -0.1, 1.0], RaySource::FingerOnly),
+            frames: 1,
+            ray_jitter_deg: 0.0,
+        };
+        session.spatial.add_observation(observation);
+        Ok(TeachSpotResponse {
+            spot_index,
+            ray_jitter_deg: 0.0,
+            confidence: if spot_index >= 2 { 0.9 } else { 0.7 },
+            kind: if spot_index >= 2 {
+                "point3d"
+            } else {
+                "direction"
+            }
+            .to_owned(),
+            residual_deg: None,
+        })
+    }
+
+    async fn use_current_level(
+        &self,
+        session_id: &str,
+        request: TeachLevelRequest,
+    ) -> Result<TeachLevelResponse, ApiProblem> {
+        let mut sessions = self.teach_sessions.lock().await;
+        let session = sessions.get_mut(session_id).ok_or_else(|| {
+            ApiProblem::validation("teach_session_not_found", "teach session not found")
+        })?;
+        let level = f64::from(request.level);
+        if !session.levels.contains(&level) {
+            session.levels.push(level);
+            session.levels.sort_by(f64::total_cmp);
+        }
+        Ok(TeachLevelResponse {
+            levels: session.levels.clone(),
+            current_percentage: level,
+        })
+    }
+
+    async fn test_level(
+        &self,
+        session_id: &str,
+        request: TeachLevelRequest,
+    ) -> Result<ActionOutcomeDto, ApiProblem> {
+        let sessions = self.teach_sessions.lock().await;
+        let session = sessions.get(session_id).ok_or_else(|| {
+            ApiProblem::validation("teach_session_not_found", "teach session not found")
+        })?;
+        let Some(entity_id) = target_entity_id(&session.target) else {
+            return Err(ApiProblem::validation(
+                "unsupported_target",
+                "level test requires an entity target",
+            ));
+        };
+        let domain = entity_id
+            .split_once('.')
+            .map(|(domain, _)| domain)
+            .unwrap_or("homeassistant");
+        let action = Action::CallService {
+            domain: domain.to_owned(),
+            service: "turn_on".to_owned(),
+            target: ActionTarget {
+                entity_id: Some(vec![entity_id.to_owned()]),
+                device_id: None,
+                area_id: None,
+            },
+            data: json!({"percentage": request.level}),
+            preset: Some("teach.level_test".to_owned()),
+        };
+        let client = self.ha_client.lock().await.clone();
+        let outcome = if let Some(client) = client {
+            client.call(action).await
+        } else {
+            ActionOutcome {
+                activity_id: None,
+                status: ActionStatus::Suppressed,
+                error_code: Some("ha.not_configured".to_owned()),
+                message: Some("Home Assistant is not configured".to_owned()),
+                ha_context_id: None,
+                latency_ms: None,
+            }
+        };
+        Ok(outcome_to_dto(outcome))
+    }
+
+    async fn commit(
+        &self,
+        session_id: &str,
+        request: TeachCommitRequest,
+    ) -> Result<TeachCommitResponse, ApiProblem> {
+        let session = self
+            .teach_sessions
+            .lock()
+            .await
+            .remove(session_id)
+            .ok_or_else(|| {
+                ApiProblem::validation("teach_session_not_found", "teach session not found")
+            })?;
+        let camera_id = CameraId::from_str(&session.camera_id)
+            .map_err(|err| ApiProblem::validation("bad_camera_id", err.to_string()))?;
+        let place = self.ensure_place(camera_id)?;
+        let existing = self
+            .targeting
+            .try_anchors_for_place(place.id)
+            .map_err(store_problem)?
+            .iter()
+            .filter_map(anchor_record_to_anchor)
+            .collect::<Vec<_>>();
+        let mut outcome = session
+            .spatial
+            .finish(&existing)
+            .map_err(|err| ApiProblem::validation("teach_failed", err.to_string()))?;
+        if let Some(name) = request.name {
+            outcome.anchor.name = name;
+        }
+        if !session.levels.is_empty() {
+            outcome.anchor.verb_params = json!({ "levels": session.levels });
+        }
+        let record = anchor_to_record(place.id, &outcome.anchor, false, false, now_ms());
+        self.targeting
+            .try_upsert_anchor(&record)
+            .map_err(store_problem)?;
+        Ok(TeachCommitResponse {
+            anchor: api_anchor_from_record(&record),
+            mapping_ids: request
+                .verbs
+                .into_iter()
+                .map(|verb| verb.gesture_id)
+                .collect(),
+            distinctiveness_warnings: outcome
+                .distinctiveness_warnings
+                .into_iter()
+                .map(|warning| warning.other_anchor_id.to_string())
+                .collect(),
+        })
+    }
+
+    async fn cancel(&self, session_id: &str) -> Result<(), ApiProblem> {
+        self.teach_sessions.lock().await.remove(session_id);
+        Ok(())
+    }
+
+    async fn start_realign(&self, place_id: &str) -> Result<RealignSession, ApiProblem> {
+        let place_id = PlaceId::from_str(place_id)
+            .map_err(|err| ApiProblem::validation("bad_place_id", err.to_string()))?;
+        let anchors = self
+            .targeting
+            .try_anchors_for_place(place_id)
+            .map_err(store_problem)?;
+        let session = RealignSession {
+            id: flick_core::TeachSessionId::new().to_string(),
+            prompts: anchors
+                .iter()
+                .filter(|anchor| anchor.status == flick_core::AnchorStatus::Ok)
+                .map(|anchor| format!("Point at {}", anchor.name))
+                .collect(),
+        };
+        self.realign_sessions.lock().await.insert(
+            session.id.clone(),
+            EngineRealignSession {
+                place_id,
+                pairs: Vec::new(),
+            },
+        );
+        Ok(session)
+    }
+
+    async fn realign_point(
+        &self,
+        session_id: &str,
+        request: RealignPointRequest,
+    ) -> Result<RealignPointResponse, ApiProblem> {
+        let anchor_id = AnchorId::from_str(&request.anchor_id)
+            .map_err(|err| ApiProblem::validation("bad_anchor_id", err.to_string()))?;
+        let record = self
+            .targeting
+            .try_anchor(anchor_id)
+            .map_err(store_problem)?
+            .ok_or_else(|| ApiProblem::validation("anchor_not_found", "anchor not found"))?;
+        let anchor = anchor_record_to_anchor(&record)
+            .ok_or_else(|| ApiProblem::validation("anchor_geometry", "unsupported anchor"))?;
+        let direction = anchor.direction_from([0.0, 0.0, 0.0]);
+        let mut sessions = self.realign_sessions.lock().await;
+        let session = sessions.get_mut(session_id).ok_or_else(|| {
+            ApiProblem::validation("realign_session_not_found", "realign session not found")
+        })?;
+        session.pairs.push(RealignPair {
+            anchor_id,
+            old_direction: direction,
+            new_direction: direction,
+        });
+        let residual_deg = if session.pairs.len() >= 2 {
+            realign(&session.pairs)
+                .ok()
+                .map(|result| f64::from(result.residual_deg))
+        } else {
+            None
+        };
+        Ok(RealignPointResponse {
+            captured: true,
+            residual_deg,
+        })
+    }
+
+    async fn realign_commit(&self, session_id: &str) -> Result<RealignCommitResponse, ApiProblem> {
+        let session = self
+            .realign_sessions
+            .lock()
+            .await
+            .remove(session_id)
+            .ok_or_else(|| {
+                ApiProblem::validation("realign_session_not_found", "realign session not found")
+            })?;
+        let result = realign(&session.pairs)
+            .map_err(|err| ApiProblem::validation("realign_failed", err.to_string()))?;
+        let records = self
+            .targeting
+            .try_anchors_for_place(session.place_id)
+            .map_err(store_problem)?;
+        for record in records {
+            let Some(mut anchor) = anchor_record_to_anchor(&record) else {
+                continue;
+            };
+            anchor.geometry = match anchor.geometry {
+                AnchorGeometry::Point3d {
+                    position,
+                    covariance,
+                } => AnchorGeometry::Point3d {
+                    position: result.transform.transform_point(position),
+                    covariance,
+                },
+                AnchorGeometry::Direction {
+                    direction,
+                    teach_origin,
+                    covariance,
+                } => AnchorGeometry::Direction {
+                    direction: result.transform.transform_direction(direction),
+                    teach_origin,
+                    covariance,
+                },
+            };
+            let mut updated = anchor_to_record(
+                record.place_id,
+                &anchor,
+                record.sensitive,
+                record.sensitive_ack,
+                now_ms(),
+            );
+            updated.created_at = record.created_at;
+            updated.last_used_at = record.last_used_at;
+            self.targeting
+                .try_upsert_anchor(&updated)
+                .map_err(store_problem)?;
+        }
+        Ok(RealignCommitResponse {
+            applied: true,
+            residual_deg: f64::from(result.residual_deg),
+            needs_reteach: Vec::new(),
+        })
+    }
+
+    async fn suggest(
+        &self,
+        _request: SetupSuggestRequest,
+    ) -> Result<Vec<SetupSuggestion>, ApiProblem> {
+        Ok(Vec::new())
     }
 }
 
@@ -613,6 +994,90 @@ fn outcome_to_dto(outcome: ActionOutcome) -> ActionOutcomeDto {
             ha_ms: outcome.latency_ms.map(|value| value as f64),
         }),
     }
+}
+
+fn teach_target_from_value(value: &serde_json::Value) -> Result<TeachTarget, ApiProblem> {
+    serde_json::from_value(value.clone())
+        .map_err(|err| ApiProblem::validation("bad_teach_target", err.to_string()))
+}
+
+fn teach_domain(target: &TeachTarget) -> String {
+    match target {
+        TeachTarget::Entity(entity_id) => entity_id
+            .split_once('.')
+            .map(|(domain, _)| domain.to_owned())
+            .unwrap_or_else(|| "homeassistant".to_owned()),
+        TeachTarget::Device(_) | TeachTarget::Area(_) => "homeassistant".to_owned(),
+    }
+}
+
+fn teach_name(target: &TeachTarget) -> String {
+    match target {
+        TeachTarget::Entity(entity_id) => entity_id.clone(),
+        TeachTarget::Device(device_id) => device_id.clone(),
+        TeachTarget::Area(area_id) => area_id.clone(),
+    }
+}
+
+fn target_entity_id(target: &serde_json::Value) -> Option<&str> {
+    target.get("entity_id").and_then(serde_json::Value::as_str)
+}
+
+fn api_anchor_from_record(record: &flick_spatial::AnchorRecord) -> ApiAnchor {
+    ApiAnchor {
+        id: record.id.to_string(),
+        place_id: record.place_id.to_string(),
+        name: record.name.clone(),
+        target: serde_json::to_value(&record.target).unwrap_or_else(|_| json!({})),
+        domain: record.domain.clone(),
+        kind: anchor_kind_str(record.kind).to_owned(),
+        verb_params: record.verb_params.clone(),
+        sensitive: record.sensitive,
+        sensitive_ack: record.sensitive_ack,
+        status: anchor_status_str(record.status).to_owned(),
+        verbs: Vec::<VerbBinding>::new(),
+        last_used_at: record.last_used_at.map(ms_rfc3339),
+        created_at: ms_rfc3339(record.created_at),
+        updated_at: ms_rfc3339(record.updated_at),
+    }
+}
+
+const fn anchor_kind_str(value: flick_core::AnchorKind) -> &'static str {
+    match value {
+        flick_core::AnchorKind::Point3d => "point3d",
+        flick_core::AnchorKind::Direction => "direction",
+        flick_core::AnchorKind::Region2d => "region2d",
+    }
+}
+
+const fn anchor_status_str(value: flick_core::AnchorStatus) -> &'static str {
+    match value {
+        flick_core::AnchorStatus::Ok => "ok",
+        flick_core::AnchorStatus::NeedsRealign => "needs_realign",
+        flick_core::AnchorStatus::NeedsReteach => "needs_reteach",
+    }
+}
+
+fn store_problem(err: flick_core::StoreError) -> ApiProblem {
+    ApiProblem::validation("store_error", err.to_string())
+}
+
+fn now_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .try_into()
+        .unwrap_or(i64::MAX)
+}
+
+fn ms_rfc3339(value: i64) -> String {
+    let Ok(datetime) = OffsetDateTime::from_unix_timestamp(value.div_euclid(1_000)) else {
+        return "1970-01-01T00:00:00Z".to_owned();
+    };
+    datetime
+        .format(&Rfc3339)
+        .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_owned())
 }
 
 fn now_rfc3339() -> String {

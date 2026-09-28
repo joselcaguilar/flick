@@ -28,6 +28,7 @@ flick-api = { path = "crates/flick-api" }
 flick-core = { path = "crates/flick-core" }
 flick-gestures = { path = "crates/flick-gestures" }
 flick-ha = { path = "crates/flick-ha" }
+flick-spatial = { path = "crates/flick-spatial" }
 flick-store = { path = "crates/flick-store" }
 
 # core/runtime

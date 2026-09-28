@@ -168,6 +168,24 @@ impl DispatcherAnchor {
     pub fn verb_target(&self) -> VerbTarget {
         VerbTarget::new(self.entity.clone(), self.levels.clone())
     }
+
+    /// Builds dispatcher target metadata from a spatial anchor and HA entity state.
+    #[must_use]
+    pub fn from_spatial(anchor: &flick_spatial::Anchor, entity: EntityState) -> Self {
+        let levels = anchor
+            .verb_params
+            .get("levels")
+            .and_then(serde_json::Value::as_array)
+            .map(|items| items.iter().filter_map(serde_json::Value::as_f64).collect())
+            .unwrap_or_default();
+        Self {
+            id: anchor.id,
+            name: anchor.name.clone(),
+            domain: anchor.domain.clone(),
+            entity,
+            levels,
+        }
+    }
 }
 
 /// Sink adapter around the real HA client.
@@ -1061,10 +1079,14 @@ pub fn owner_fan_anchor() -> DispatcherAnchor {
 
 /// Owner scenario mappings used by replay, HA E2E and dev mode.
 pub fn owner_scenario_mappings() -> Vec<DispatcherMapping> {
+    owner_scenario_mappings_for(owner_fan_anchor().id)
+}
+
+/// Owner scenario mappings using the supplied targeting anchor id.
+pub fn owner_scenario_mappings_for(anchor: AnchorId) -> Vec<DispatcherMapping> {
     let thumb_mapping = parse_mapping_id("01J00000000000000000000010");
     let circle_mapping = parse_mapping_id("01J00000000000000000000011");
     let stop_mapping = parse_mapping_id("01J00000000000000000000012");
-    let anchor = owner_fan_anchor().id;
     vec![
         DispatcherMapping::global(
             thumb_mapping,
