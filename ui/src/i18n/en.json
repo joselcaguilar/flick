@@ -124,5 +124,12 @@
     "coach": "Hold still. The ring fills when the ray jitters less than 2°.",
     "capturing": "Capturing spot 1",
     "privacy": "Median ray only · no camera image saved"
+  },
+  "devices": {
+    "title": "Taught devices",
+    "teach": "Teach a device",
+    "places": "Places",
+    "realign": "Re-align devices",
+    "onboardingStep5": "Point at a device"
   }
 }

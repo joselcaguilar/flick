@@ -1262,3 +1262,193 @@ body.hud-window {
     box-shadow: none;
   }
 }
+
+.devices-screen,
+.teach-screen {
+  display: grid;
+  gap: 1rem;
+}
+
+.devices-place-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(25rem, 100%), 1fr));
+  gap: 1rem;
+}
+
+.place-card,
+.teach-step-card,
+.picked-device-card,
+.teach-preview-panel,
+.onboarding-teach-step {
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--flick-shadow-glass);
+  padding: 1rem;
+}
+
+.room-sketch {
+  position: relative;
+  overflow: hidden;
+  min-block-size: 12rem;
+  margin-block: 1rem;
+  border: 1px solid var(--flick-border);
+  border-radius: 1.5rem;
+  background:
+    radial-gradient(
+      circle at 50% 100%,
+      color-mix(in srgb, var(--flick-accent-blue) 16%, transparent),
+      transparent 42%
+    ),
+    linear-gradient(color-mix(in srgb, var(--flick-text) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--flick-text) 8%, transparent) 1px, transparent 1px);
+  background-size:
+    auto,
+    2.5rem 2.5rem,
+    2.5rem 2.5rem;
+}
+
+.camera-dot {
+  position: absolute;
+  inset-inline-start: 50%;
+  inset-block-end: 1rem;
+  translate: -50% 0;
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-pill);
+  background: var(--flick-material-glass-strong);
+  padding: 0.45rem 0.7rem;
+  color: var(--flick-text);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.room-sketch i {
+  position: absolute;
+  inset-inline-start: 50%;
+  inset-block-end: 3rem;
+  inline-size: 1px;
+  block-size: 7.5rem;
+  transform-origin: bottom center;
+  background: linear-gradient(0deg, var(--flick-accent-blue), transparent);
+}
+
+.room-sketch i::before {
+  position: absolute;
+  inset-block-start: -0.2rem;
+  inset-inline-start: -0.35rem;
+  inline-size: 0.7rem;
+  block-size: 0.7rem;
+  border-radius: 50%;
+  background: var(--flick-accent-mint);
+  content: "";
+}
+
+.room-sketch b {
+  position: absolute;
+  inset-block-start: 0.25rem;
+  inset-inline-start: 0.85rem;
+  min-inline-size: 8rem;
+  color: var(--flick-text);
+  font-style: normal;
+  font-size: 0.75rem;
+}
+
+.device-card-list,
+.sentence-stack {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.device-card {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid var(--flick-border);
+  border-radius: 1.35rem;
+  background: color-mix(in srgb, var(--flick-surface) 58%, transparent);
+  padding: 0.85rem;
+}
+
+.device-card-meta,
+.device-card-actions,
+.level-actions,
+.teach-ray-caption {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.device-card-meta,
+.teach-ray-caption {
+  color: var(--flick-muted);
+  font-size: 0.85rem;
+}
+
+.verb-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.verb-list span,
+.sentence-stack p {
+  margin: 0;
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--flick-accent-blue) 12%, transparent);
+  padding: 0.45rem 0.65rem;
+}
+
+.teach-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(19rem, 0.75fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.teach-main,
+.teach-side {
+  display: grid;
+  gap: 1rem;
+}
+
+.teach-preview-panel .preview-canvas {
+  aspect-ratio: 16 / 9;
+}
+
+.teach-step-card h2,
+.onboarding-teach-step h2 {
+  margin: 0.4rem 0;
+  font-size: clamp(1.25rem, 2vw, 1.75rem);
+  letter-spacing: -0.035em;
+}
+
+.teach-step-card p,
+.onboarding-teach-step p {
+  margin: 0.35rem 0;
+  color: var(--flick-muted);
+}
+
+.picked-device-card {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.picked-device-card > span,
+.teach-step-card > span,
+.onboarding-teach-step > div > span {
+  color: var(--flick-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.onboarding-teach-step {
+  max-inline-size: 30rem;
+  display: grid;
+  gap: 0.8rem;
+}
+
+@media (max-width: 980px) {
+  .teach-layout {
+    grid-template-columns: 1fr;
+  }
+}

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { GestureGlyph } from "../components/domain";
 import { GlassPanel } from "../components/ui";
 import { DashboardRoute } from "../features/dashboard/Dashboard";
+import { DevicesRoute, PlacesRoute, RealignRoute, TeachDeviceRoute } from "../features/devices/Devices";
 
 export interface RouteMeta {
   path: string;
@@ -89,43 +90,25 @@ export const routes: RouteMeta[] = [
     nav: true,
     mobile: true,
     shortcut: "⌘3",
-    element: (
-      <EmptyRoute
-        title="Devices"
-        description="Point at something in the room — Flick will remember it."
-        action="No devices taught"
-      />
-    ),
+    element: <DevicesRoute />,
   },
   {
     path: "/devices/teach",
     title: "Teach a device",
     description: "Pick a device, point from two spots and test verbs.",
-    element: (
-      <EmptyRoute
-        title="Teach a device"
-        description="Point at Ventilador dormitorio and hold still. The owner fan scenario is seeded in mocks."
-        action="Point from spot 1"
-      />
-    ),
+    element: <TeachDeviceRoute />,
   },
   {
     path: "/devices/places",
     title: "Places",
     description: "Per-camera places and taught anchor directions.",
-    element: <EmptyRoute title="Places" description="Places organize taught devices per camera and room." />,
+    element: <PlacesRoute />,
   },
   {
     path: "/devices/realign",
     title: "Re-align devices",
     description: "Recover pointing after a camera move.",
-    element: (
-      <EmptyRoute
-        title="Re-align devices"
-        description="Point at two known devices to recover after the camera moved."
-        action="Camera moved recovery"
-      />
-    ),
+    element: <RealignRoute />,
   },
   {
     path: "/mappings",
