@@ -1,7 +1,9 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { retryEngineConnection } from "../../api/client";
 import { usePauseEngine, useResumeEngine, useStatus } from "../../api/hooks";
-import { startEventStream } from "../../events/client";
+import { restartEventStream, startEventStream } from "../../events/client";
 import { useEventStore } from "../../events/store";
 import { routes } from "../../routes/routes";
 import { useTheme } from "../../theme";
@@ -27,7 +29,9 @@ function StatusIndicator({ label, value }: { label: string; value: string }) {
 export function AppShell() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [retryingEngine, setRetryingEngine] = useState(false);
   const location = useLocation();
+  const queryClient = useQueryClient();
   const status = useStatus();
   const events = useEventStore();
   const pause = usePauseEngine();
@@ -60,6 +64,28 @@ export function AppShell() {
 
   const engineValue = status.data?.paused ? "paused" : (status.data?.cameras[0]?.state ?? events.connection);
   const haValue = status.data?.ha.state ?? events.ha.state;
+  const engineRecoverable = status.isError || events.connection === "error" || events.connection === "closed";
+
+  async function retryEngine() {
+    setRetryingEngine(true);
+    try {
+      await retryEngineConnection();
+      await Promise.all([queryClient.invalidateQueries(), restartEventStream().then(() => undefined)]);
+      show({
+        tone: "success",
+        title: "Retrying engine",
+        description: "Flick is checking the local engine again.",
+      });
+    } catch (error) {
+      show({
+        tone: "danger",
+        title: "Engine retry failed",
+        description: error instanceof Error ? error.message : "Flick could not reach the local engine.",
+      });
+    } finally {
+      setRetryingEngine(false);
+    }
+  }
 
   async function togglePause() {
     if (status.data?.paused) {
@@ -138,6 +164,19 @@ export function AppShell() {
       </header>
 
       <main id="main-content" className="shell-content" data-route={location.pathname}>
+        {engineRecoverable ? (
+          <section className="engine-recovery-banner flick-glass" role="alert" aria-live="polite">
+            <div>
+              <strong>Engine unreachable</strong>
+              <span>
+                Flick could not reach the local engine. Retry starts the desktop engine again when available.
+              </span>
+            </div>
+            <Button variant="primary" size="sm" onClick={retryEngine} loading={retryingEngine}>
+              Retry
+            </Button>
+          </section>
+        ) : null}
         <Outlet />
       </main>
 

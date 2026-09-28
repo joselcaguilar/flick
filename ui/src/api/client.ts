@@ -1,5 +1,5 @@
 import createClient, { type Middleware } from "openapi-fetch";
-import { type EngineEndpoint, resolveEngineEndpoint } from "./endpoint";
+import { type EngineEndpoint, isTauriRuntime, resolveEngineEndpoint } from "./endpoint";
 import type { paths } from "./schema";
 import type { Action, SettingsPatch } from "./types";
 
@@ -12,6 +12,16 @@ export function getEndpoint() {
 
 export function resetEndpointForTests() {
   endpointPromise = undefined;
+}
+
+export async function retryEngineConnection() {
+  endpointPromise = undefined;
+  if (isTauriRuntime()) {
+    const tauri = await import("@tauri-apps/api/core");
+    await tauri.invoke("engine_retry");
+    endpointPromise = undefined;
+  }
+  return getEndpoint();
 }
 
 const authMiddleware: Middleware = {

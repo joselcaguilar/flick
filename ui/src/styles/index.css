@@ -247,6 +247,33 @@ code,
   font-size: 0.82rem;
 }
 
+.engine-recovery-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-block-end: 1rem;
+  border: 1px solid color-mix(in srgb, var(--flick-accent-red) 36%, var(--flick-border));
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--flick-shadow-glass);
+  padding: 0.85rem 1rem;
+}
+
+.engine-recovery-banner div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.engine-recovery-banner strong {
+  color: var(--flick-text);
+  font-size: 0.95rem;
+}
+
+.engine-recovery-banner span {
+  color: var(--flick-muted);
+  font-size: 0.86rem;
+}
+
 .shell-content {
   min-inline-size: 0;
   padding-block-end: 1rem;
@@ -1007,6 +1034,11 @@ body.hud-window {
   .preview-overlay-card {
     position: static;
     margin-block-start: 0.65rem;
+  }
+
+  .engine-recovery-banner {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .status-strip {

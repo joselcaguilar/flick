@@ -79,3 +79,8 @@ export async function startEventStream(topics: WsTopic[] = defaultTopics): Promi
 
   return singleton;
 }
+
+export async function restartEventStream(topics: WsTopic[] = defaultTopics): Promise<EventClient> {
+  singleton?.close();
+  return startEventStream(topics);
+}

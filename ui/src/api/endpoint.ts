@@ -6,6 +6,10 @@ export interface EngineEndpoint {
   mock: boolean;
 }
 
+export function isTauriRuntime() {
+  return isBrowser && Boolean(window.__TAURI_INTERNALS__);
+}
+
 function normalizeBaseUrl(value: string) {
   return value.replace(/\/$/, "");
 }
@@ -24,7 +28,7 @@ export async function resolveEngineEndpoint(): Promise<EngineEndpoint> {
     return { baseUrl: normalizeBaseUrl(envUrl), token: envToken ?? "dev-token", mock };
   }
 
-  if (!mock && isBrowser && window.__TAURI_INTERNALS__) {
+  if (!mock && isTauriRuntime()) {
     const tauri = await import("@tauri-apps/api/core");
     const endpoint = await tauri.invoke<{ base_url: string; token: string }>("engine_endpoint");
     return { baseUrl: normalizeBaseUrl(endpoint.base_url), token: endpoint.token, mock: false };
