@@ -4,6 +4,7 @@ import { useActivity, useStatus, useUpdates } from "../api/hooks";
 import { ConfidenceMeter, DevicePill, GestureGlyph, PreviewCanvas } from "../components/domain";
 import { Badge, Button, GlassPanel, Kbd, ListRow, Skeleton } from "../components/ui";
 import { useEventStore } from "../events/store";
+import { ActivityRoute } from "../features/activity/ActivityRoute";
 import { GesturesLibraryRoute } from "../features/gestures/GesturesLibraryRoute";
 import { OnboardingRoute } from "../features/onboarding/OnboardingRoute";
 import { GestureStudioRoute } from "../features/studio/GestureStudioRoute";
@@ -337,13 +338,7 @@ export const routes: RouteMeta[] = [
     nav: true,
     mobile: false,
     shortcut: "⌘6",
-    element: (
-      <EmptyRoute
-        title="Activity"
-        description="Suppressed reasons and latency details explain why a gesture did or did not fire."
-        action="Why didn't it fire?"
-      />
-    ),
+    element: <ActivityRoute />,
   },
   {
     path: "/settings",

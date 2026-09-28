@@ -1,0 +1,230 @@
+.activity-route {
+  display: grid;
+  gap: 1rem;
+}
+
+.activity-hero {
+  max-inline-size: 72rem;
+  padding: 1rem 0.35rem 0;
+}
+
+.activity-hero h1,
+.activity-list-heading h2,
+.debug-heading h2,
+.activity-debug-panel h3 {
+  margin: 0;
+  letter-spacing: -0.045em;
+}
+
+.activity-hero h1 {
+  max-inline-size: 12ch;
+  font-size: clamp(2.2rem, 6vw, 5rem);
+  line-height: 0.92;
+}
+
+.activity-hero p:not(.route-path),
+.activity-list-heading span,
+.activity-debug-panel p,
+.activity-row small,
+.latency-stack,
+.debug-aliases span {
+  color: var(--flick-muted);
+}
+
+.activity-toolbar,
+.activity-list-panel,
+.activity-debug-panel {
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--flick-shadow-glass);
+  padding: 1rem;
+}
+
+.activity-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.ui-select {
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-pill);
+  color: var(--flick-text);
+  background: color-mix(in srgb, var(--flick-surface) 76%, transparent);
+  min-block-size: 2.75rem;
+  padding: 0 0.9rem;
+}
+
+.activity-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(20rem, 0.8fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.activity-list-panel,
+.activity-debug-panel {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.activity-list-heading,
+.debug-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.activity-list-heading h2,
+.debug-heading h2 {
+  margin-block-start: 0.45rem;
+  font-size: clamp(1.45rem, 2.8vw, 2.35rem);
+  line-height: 1;
+}
+
+.activity-table {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.activity-row {
+  display: grid;
+  grid-template-columns: 4rem minmax(12rem, 1.1fr) minmax(12rem, 1fr) auto minmax(12rem, 0.9fr);
+  align-items: center;
+  gap: 0.75rem;
+  inline-size: 100%;
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--flick-surface) 62%, transparent);
+  color: var(--flick-text);
+  padding: 0.7rem;
+  text-align: start;
+}
+
+.activity-row[data-selected="true"] {
+  border-color: color-mix(in srgb, var(--flick-accent-blue) 42%, var(--flick-border));
+  background: color-mix(in srgb, var(--flick-accent-blue) 12%, transparent);
+}
+
+.activity-time {
+  color: var(--flick-muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.activity-gesture {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.activity-row strong,
+.activity-row small {
+  display: block;
+}
+
+.latency-stack {
+  font-size: 0.82rem;
+}
+
+.selected-debug-card,
+.debug-reason-card,
+.debug-aliases {
+  display: grid;
+  gap: 0.55rem;
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--flick-surface) 62%, transparent);
+  padding: 0.85rem;
+}
+
+.selected-debug-card h3 {
+  font-size: 1.35rem;
+}
+
+.latency-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.latency-grid span {
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--flick-text) 8%, transparent);
+  color: var(--flick-muted);
+  padding: 0.55rem;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.all-reasons {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.debug-reason-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.debug-reason-card p {
+  margin: 0;
+  color: var(--flick-text);
+  font-weight: 700;
+}
+
+.debug-aliases strong,
+.debug-aliases span {
+  display: block;
+}
+
+@media (max-width: 1180px) {
+  .activity-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .activity-row {
+    grid-template-columns: 4rem minmax(0, 1fr) auto;
+  }
+
+  .activity-row > span:nth-child(3),
+  .latency-stack {
+    grid-column: 2 / -1;
+  }
+}
+
+@media (max-width: 720px) {
+  .activity-hero h1 {
+    font-size: clamp(2.1rem, 14vw, 3.7rem);
+  }
+
+  .activity-toolbar,
+  .activity-list-panel,
+  .activity-debug-panel {
+    border-radius: 1.5rem;
+  }
+
+  .activity-toolbar,
+  .activity-toolbar .ui-select,
+  .activity-toolbar .ui-button {
+    inline-size: 100%;
+  }
+
+  .activity-row {
+    grid-template-columns: 1fr;
+  }
+
+  .activity-row > *,
+  .activity-row > span:nth-child(3),
+  .latency-stack {
+    grid-column: auto;
+  }
+
+  .debug-reason-grid,
+  .latency-grid {
+    grid-template-columns: 1fr;
+  }
+}
