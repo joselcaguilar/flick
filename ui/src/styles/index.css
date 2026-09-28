@@ -389,6 +389,7 @@ code,
   position: absolute;
   inset-inline: 2rem;
   inset-block-end: 2rem;
+  pointer-events: none;
   display: flex;
   flex-wrap: wrap;
   gap: 0.65rem;

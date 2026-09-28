@@ -132,16 +132,20 @@ export function GestureStudioRoute() {
   useEffect(() => {
     if (countdown === 0 && phase === "countdown") {
       setPhase("recording");
-      const timer = window.setTimeout(
-        () => {
-          setTakes((current) => current + 1);
-          setPhase("ready");
-        },
-        type === "static" ? 650 : 900,
-      );
-      return () => window.clearTimeout(timer);
     }
-  }, [countdown, phase, type]);
+  }, [countdown, phase]);
+
+  useEffect(() => {
+    if (phase !== "recording") return;
+    const timer = window.setTimeout(
+      () => {
+        setTakes((current) => current + 1);
+        setPhase("ready");
+      },
+      type === "static" ? 650 : 900,
+    );
+    return () => window.clearTimeout(timer);
+  }, [phase, type]);
 
   async function recordTake() {
     setPhase("countdown");

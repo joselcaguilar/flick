@@ -17,3 +17,4 @@ __pycache__/
 /ui/playwright-report/
 /apps/desktop/src-tauri/gen/
 /apps/desktop/src-tauri/binaries/
+/.e2e-data/

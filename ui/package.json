@@ -10,6 +10,7 @@
     "lint": "biome check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "e2e": "playwright test",
     "gen:api": "openapi-typescript ${OPENAPI_PATH:-../crates/flick-api/openapi.json} -o src/api/schema.d.ts",
     "detect": "node scripts/detect.mjs --json src",
     "screenshots:shell": "node scripts/capture-screenshots.mjs",

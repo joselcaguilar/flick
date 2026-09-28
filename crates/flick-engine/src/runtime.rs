@@ -296,11 +296,9 @@ fn bedroom_fan_scenario() -> flick_ha::mock::MockScenario {
 
 fn dev_custom_motion_mapping() -> DispatcherMapping {
     DispatcherMapping::global(
-        MappingId::from_str("01J00000000000000000000013")
-            .expect("static dev mapping id should parse"),
+        parse_dev_mapping_id("01J00000000000000000000013"),
         "Custom motion toggles bed light",
-        GestureId::from_str("motion.01J00000000000000000000003")
-            .expect("static dev gesture id should parse"),
+        parse_dev_gesture_id("motion.01J00000000000000000000003"),
         Action::CallService {
             domain: "light".to_owned(),
             service: "toggle".to_owned(),
@@ -313,6 +311,20 @@ fn dev_custom_motion_mapping() -> DispatcherMapping {
             preset: Some("light.toggle".to_owned()),
         },
     )
+}
+
+fn parse_dev_mapping_id(value: &str) -> MappingId {
+    match MappingId::from_str(value) {
+        Ok(id) => id,
+        Err(err) => panic!("invalid static dev mapping id {value}: {err}"),
+    }
+}
+
+fn parse_dev_gesture_id(value: &str) -> GestureId {
+    match GestureId::from_str(value) {
+        Ok(id) => id,
+        Err(err) => panic!("invalid static dev gesture id {value}: {err}"),
+    }
 }
 
 struct EngineApp {

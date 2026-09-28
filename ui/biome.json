@@ -2,7 +2,15 @@
   "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
   "files": {
     "ignoreUnknown": false,
-    "includes": ["**", "!dist", "!coverage", "!public/mockServiceWorker.js", "!src/api/schema.d.ts"]
+    "includes": [
+      "**",
+      "!dist",
+      "!coverage",
+      "!test-results",
+      "!playwright-report",
+      "!public/mockServiceWorker.js",
+      "!src/api/schema.d.ts"
+    ]
   },
   "formatter": {
     "enabled": true,
