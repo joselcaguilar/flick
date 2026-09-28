@@ -1421,7 +1421,9 @@ version = "0.1.0"
 dependencies = [
  "flick-core",
  "nalgebra",
+ "proptest",
  "serde",
+ "serde_json",
  "smallvec",
  "thiserror",
  "tracing",
