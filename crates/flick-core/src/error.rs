@@ -11,6 +11,9 @@ pub enum CaptureError {
     /// The requested source is unavailable or permission was denied.
     #[error("capture source unavailable: {0}")]
     Unavailable(String),
+    /// Camera permission is denied, restricted or still unavailable after prompting.
+    #[error("camera permission denied: {0}")]
+    PermissionDenied(String),
     /// The source produced an unsupported pixel format or dimensions.
     #[error("unsupported capture format: {0}")]
     UnsupportedFormat(String),

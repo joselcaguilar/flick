@@ -64,6 +64,7 @@ ndarray = "0.17.2"
 image = "0.25.10"
 fast_image_resize = "6.1.0"
 nokhwa = { version = "0.10.11", features = ["input-native", "output-threaded"] }
+nokhwa-bindings-macos = "0.2.4"
 rand = "0.10.3"
 rand_distr = "0.6.0"
 

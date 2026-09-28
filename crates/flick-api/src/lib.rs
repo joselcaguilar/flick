@@ -485,6 +485,14 @@ pub trait EngineControl: Send + Sync + 'static {
     async fn resume(&self) -> EngineStatus;
     /// Lists available cameras.
     async fn available_cameras(&self) -> Vec<AvailableCamera>;
+    /// Lists configured cameras.
+    async fn cameras(&self) -> Vec<Camera>;
+    /// Creates a configured camera.
+    async fn create_camera(&self, request: CameraCreate) -> Result<Camera, ApiProblem>;
+    /// Updates a configured camera.
+    async fn patch_camera(&self, id: &str, request: CameraPatch) -> Result<Camera, ApiProblem>;
+    /// Deletes a configured camera.
+    async fn delete_camera(&self, id: &str) -> Result<(), ApiProblem>;
     /// Starts camera capture.
     async fn start_camera(&self, camera_id: &str) -> CameraStatus;
     /// Stops camera capture.
@@ -674,6 +682,54 @@ impl EngineControl for FakeEngine {
                 format: "rgb".to_owned(),
             }],
         }]
+    }
+
+    async fn cameras(&self) -> Vec<Camera> {
+        Vec::new()
+    }
+
+    async fn create_camera(&self, request: CameraCreate) -> Result<Camera, ApiProblem> {
+        let now = now_rfc3339();
+        Ok(Camera {
+            id: make_id(),
+            name: request.name,
+            kind: request.kind,
+            device_ref: request.device_ref,
+            url_redacted: request.url_redacted,
+            enabled: true,
+            mirror: true,
+            rotation: 0,
+            active_fps: 30,
+            idle_fps: 5,
+            max_hands: 2,
+            roi: None,
+            created_at: now.clone(),
+            updated_at: now,
+        })
+    }
+
+    async fn patch_camera(&self, id: &str, request: CameraPatch) -> Result<Camera, ApiProblem> {
+        let now = now_rfc3339();
+        Ok(Camera {
+            id: id.to_owned(),
+            name: request.name.unwrap_or_else(|| "Dev Camera".to_owned()),
+            kind: "local".to_owned(),
+            device_ref: Some("dev-camera".to_owned()),
+            url_redacted: None,
+            enabled: request.enabled.unwrap_or(true),
+            mirror: request.mirror.unwrap_or(true),
+            rotation: request.rotation.unwrap_or(0),
+            active_fps: request.active_fps.unwrap_or(30),
+            idle_fps: request.idle_fps.unwrap_or(5),
+            max_hands: request.max_hands.unwrap_or(2),
+            roi: request.roi,
+            created_at: now.clone(),
+            updated_at: now,
+        })
+    }
+
+    async fn delete_camera(&self, _id: &str) -> Result<(), ApiProblem> {
+        Ok(())
     }
 
     async fn start_camera(&self, camera_id: &str) -> CameraStatus {
@@ -1299,39 +1355,38 @@ async fn cameras_available(State(state): State<Arc<ApiState>>) -> Json<Vec<Avail
 }
 
 #[utoipa::path(get, path = "/api/v1/cameras", responses((status = 200, body = [Camera])))]
-async fn list_cameras() -> Json<Vec<Camera>> {
-    json_response(vec![])
+async fn list_cameras(State(state): State<Arc<ApiState>>) -> Json<Vec<Camera>> {
+    json_response(state.engine.cameras().await)
 }
 
 #[utoipa::path(post, path = "/api/v1/cameras", request_body = CameraCreate, responses((status = 200, body = Camera)))]
-async fn create_camera(Json(request): Json<CameraCreate>) -> Json<Camera> {
-    let now = now_rfc3339();
-    json_response(Camera {
-        id: make_id(),
-        name: request.name,
-        kind: request.kind,
-        device_ref: request.device_ref,
-        url_redacted: request.url_redacted,
-        enabled: true,
-        mirror: true,
-        rotation: 0,
-        active_fps: 30,
-        idle_fps: 5,
-        max_hands: 2,
-        roi: None,
-        created_at: now.clone(),
-        updated_at: now,
-    })
+async fn create_camera(
+    State(state): State<Arc<ApiState>>,
+    Json(request): Json<CameraCreate>,
+) -> Result<Json<Camera>, ApiProblem> {
+    state.engine.create_camera(request).await.map(json_response)
 }
 
-#[utoipa::path(patch, path = "/api/v1/cameras/{id}", request_body = CameraPatch, responses((status = 501, body = ProblemJson)))]
-async fn patch_camera() -> Result<Json<Camera>, ApiProblem> {
-    Err(not_implemented("camera_persistence_not_ready"))
+#[utoipa::path(patch, path = "/api/v1/cameras/{id}", request_body = CameraPatch, responses((status = 200, body = Camera), (status = 404, body = ProblemJson)))]
+async fn patch_camera(
+    State(state): State<Arc<ApiState>>,
+    Path(id): Path<String>,
+    Json(request): Json<CameraPatch>,
+) -> Result<Json<Camera>, ApiProblem> {
+    state
+        .engine
+        .patch_camera(&id, request)
+        .await
+        .map(json_response)
 }
 
 #[utoipa::path(delete, path = "/api/v1/cameras/{id}", responses((status = 204)))]
-async fn delete_camera() -> StatusCode {
-    no_content()
+async fn delete_camera(
+    State(state): State<Arc<ApiState>>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiProblem> {
+    state.engine.delete_camera(&id).await?;
+    Ok(no_content())
 }
 
 #[utoipa::path(post, path = "/api/v1/cameras/{id}/start", responses((status = 200, body = CameraStatus)))]

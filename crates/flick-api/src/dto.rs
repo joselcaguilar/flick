@@ -367,7 +367,7 @@ pub struct Camera {
 pub struct CameraStatus {
     /// Camera id.
     pub camera_id: String,
-    /// starting, running, idle, reconnecting, error or stopped.
+    /// starting, running, idle, reconnecting, permission_denied, error, disabled or stopped.
     pub state: String,
     /// Current FPS.
     pub fps: Option<f64>,

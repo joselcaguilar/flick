@@ -225,6 +225,16 @@
       "delete": {
         "tags": [],
         "operationId": "delete_camera",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "204": {}
         }
@@ -232,6 +242,16 @@
       "patch": {
         "tags": [],
         "operationId": "patch_camera",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -243,7 +263,16 @@
           "required": true
         },
         "responses": {
-          "501": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Camera"
+                }
+              }
+            }
+          },
+          "404": {
             "content": {
               "application/json": {
                 "schema": {
@@ -2511,7 +2540,7 @@
           },
           "state": {
             "type": "string",
-            "description": "starting, running, idle, reconnecting, error or stopped."
+            "description": "starting, running, idle, reconnecting, permission_denied, error, disabled or stopped."
           }
         }
       },

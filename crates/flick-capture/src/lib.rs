@@ -17,7 +17,7 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, bounded};
 use flick_core::{CameraId, CaptureError, Frame, FrameSource, PixelFormat, SourceInfo, SourceKind};
 use image::ImageReader;
 use nokhwa::{
@@ -26,17 +26,21 @@ use nokhwa::{
     utils::{CameraFormat, CameraIndex, FrameFormat, RequestedFormat, RequestedFormatType},
 };
 use parking_lot::{Condvar, Mutex};
-use tracing::{debug, error, warn};
+use tracing::{error, warn};
 
 const SUPERVISOR_RETRY: Duration = Duration::from_secs(2);
 
 /// macOS camera authorization state as exposed to the engine status endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CameraPermissionStatus {
+    /// macOS has not yet asked the user for camera access.
+    NotDetermined,
+    /// Camera access is blocked by system policy.
+    Restricted,
+    /// The user denied camera access.
+    Denied,
     /// The platform reports that camera access is authorized.
     Authorized,
-    /// The platform reports that camera access is not currently authorized.
-    NotAuthorized,
     /// The current platform/backend cannot report a detailed authorization state.
     Unknown,
 }
@@ -46,16 +50,64 @@ pub enum CameraPermissionStatus {
 pub fn camera_permission_status() -> CameraPermissionStatus {
     #[cfg(target_os = "macos")]
     {
-        if nokhwa::nokhwa_check() {
-            CameraPermissionStatus::Authorized
-        } else {
-            CameraPermissionStatus::NotAuthorized
-        }
+        macos_camera_permission_status()
     }
     #[cfg(not(target_os = "macos"))]
     {
         CameraPermissionStatus::Unknown
     }
+}
+
+#[cfg(target_os = "macos")]
+fn macos_camera_permission_status() -> CameraPermissionStatus {
+    use nokhwa_bindings_macos::{AVAuthorizationStatus, current_authorization_status};
+
+    match current_authorization_status() {
+        AVAuthorizationStatus::NotDetermined => CameraPermissionStatus::NotDetermined,
+        AVAuthorizationStatus::Restricted => CameraPermissionStatus::Restricted,
+        AVAuthorizationStatus::Denied => CameraPermissionStatus::Denied,
+        AVAuthorizationStatus::Authorized => CameraPermissionStatus::Authorized,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn ensure_camera_authorized() -> Result<(), CaptureError> {
+    match macos_camera_permission_status() {
+        CameraPermissionStatus::Authorized => Ok(()),
+        CameraPermissionStatus::NotDetermined => request_camera_access(Duration::from_secs(120)),
+        CameraPermissionStatus::Restricted => Err(CaptureError::PermissionDenied(
+            "camera access is restricted by system policy".to_owned(),
+        )),
+        CameraPermissionStatus::Denied => Err(CaptureError::PermissionDenied(
+            "camera access was denied; enable it in macOS Settings → Privacy & Security → Camera"
+                .to_owned(),
+        )),
+        CameraPermissionStatus::Unknown => Err(CaptureError::Unavailable(
+            "camera permission status is unknown".to_owned(),
+        )),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn request_camera_access(timeout: Duration) -> Result<(), CaptureError> {
+    let (tx, rx) = bounded(1);
+    nokhwa_bindings_macos::request_permission_with_callback(move |granted| {
+        let _ = tx.send(granted);
+    });
+    match rx.recv_timeout(timeout) {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(CaptureError::PermissionDenied(
+            "camera access was denied by the user".to_owned(),
+        )),
+        Err(_) => Err(CaptureError::PermissionDenied(
+            "timed out waiting for camera permission".to_owned(),
+        )),
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn ensure_camera_authorized() -> Result<(), CaptureError> {
+    Ok(())
 }
 
 #[derive(Debug, Default)]
@@ -287,10 +339,7 @@ pub struct LocalCameraSource {
 impl LocalCameraSource {
     /// Opens a local camera with the requested options.
     pub fn open(options: LocalCameraOptions) -> Result<Self, CaptureError> {
-        #[cfg(target_os = "macos")]
-        nokhwa::nokhwa_initialize(|granted| {
-            debug!(granted, "nokhwa camera initialization completed");
-        });
+        ensure_camera_authorized()?;
 
         let camera_format = CameraFormat::new_from(
             options.width,
@@ -394,7 +443,7 @@ fn map_nokhwa_error(err: nokhwa::NokhwaError) -> CaptureError {
     let message = err.to_string();
     let lower = message.to_ascii_lowercase();
     if lower.contains("permission") || lower.contains("authoriz") || lower.contains("denied") {
-        CaptureError::Unavailable(format!(
+        CaptureError::PermissionDenied(format!(
             "camera permission denied or unavailable: {message}"
         ))
     } else if lower.contains("disconnect")

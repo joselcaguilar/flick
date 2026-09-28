@@ -1285,7 +1285,7 @@ export interface components {
              * @description Current FPS.
              */
             fps?: number | null;
-            /** @description starting, running, idle, reconnecting, error or stopped. */
+            /** @description starting, running, idle, reconnecting, permission_denied, error, disabled or stopped. */
             state: string;
         };
         /** @description Capture progress event. */
@@ -2762,7 +2762,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2779,7 +2781,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -2788,7 +2792,15 @@ export interface operations {
             };
         };
         responses: {
-            501: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Camera"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

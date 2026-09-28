@@ -1950,6 +1950,7 @@ dependencies = [
  "flick-core",
  "image",
  "nokhwa",
+ "nokhwa-bindings-macos",
  "parking_lot",
  "thiserror 2.0.21",
  "tracing",

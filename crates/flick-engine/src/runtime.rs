@@ -26,14 +26,14 @@ use axum::{
 };
 use flick_api::{
     ActionDto, ActionOutcomeDto, ActionTargetDto, Anchor as ApiAnchor, ApiConfig, ApiGateways,
-    ApiProblem, ApiState, AvailableCamera, CameraFormat, CameraStatus, ConfigGateway,
-    EngineControl, EngineStatus, FakeUpdates, HaArea, HaConnectRequest, HaDiscovery, HaEntity,
-    HaGateway, HaInstance, HaServiceSchema, HaStatus as ApiHaStatus, LatencyBreakdown, Mapping,
-    PauseRequest, PreviewFrame, PreviewSource, RealignCommitResponse, RealignPointRequest,
-    RealignPointResponse, RealignSession, SettingsMap, SetupSuggestRequest, SetupSuggestion,
-    StageLatency, TargetModeDto, TeachCommitRequest, TeachCommitResponse, TeachGateway,
-    TeachLevelRequest, TeachLevelResponse, TeachRequest, TeachSession as ApiTeachSession,
-    TeachSpotResponse, VerbBinding, router,
+    ApiProblem, ApiState, AvailableCamera, Camera as ApiCamera, CameraCreate, CameraFormat,
+    CameraPatch, CameraStatus, ConfigGateway, EngineControl, EngineStatus, EventHub, FakeUpdates,
+    HaArea, HaConnectRequest, HaDiscovery, HaEntity, HaGateway, HaInstance, HaServiceSchema,
+    HaStatus as ApiHaStatus, LatencyBreakdown, Mapping, PauseRequest, PreviewFrame, PreviewSource,
+    RealignCommitResponse, RealignPointRequest, RealignPointResponse, RealignSession, SettingsMap,
+    SetupSuggestRequest, SetupSuggestion, StageLatency, TargetModeDto, TeachCommitRequest,
+    TeachCommitResponse, TeachGateway, TeachLevelRequest, TeachLevelResponse, TeachRequest,
+    TeachSession as ApiTeachSession, TeachSpotResponse, VerbBinding, WsServerMessage, router,
 };
 use flick_capture::{
     CameraPermissionStatus, CaptureHandle, CaptureStatus, FileSource, FileSourceOptions,
@@ -43,7 +43,7 @@ use flick_capture::{
 use flick_core::{
     Action, ActionOutcome, ActionStatus, ActionTarget, AnchorId, CameraId, DialProperty, Frame,
     FrameSource, GestureId, HandFrame, HandPipeline, MappingId, PlaceId, SourceInfo, SourceKind,
-    Verb,
+    StoreError, Verb,
 };
 use flick_gestures::{GestureEngine, GestureEngineConfig};
 use flick_ha::{
@@ -118,10 +118,12 @@ pub async fn serve(runtime: RuntimeConfig, token: String) -> anyhow::Result<()> 
         api_mappings.extend(owner_mappings.iter().map(api_mapping_from_dispatcher));
         dispatcher_mappings.extend(owner_mappings);
     }
+    let onboarding_completed = settings_bool(&settings_map, "onboarding.completed");
     state.replace_settings(settings_map);
     state.replace_mappings(api_mappings);
     state.replace_anchors(api_anchors);
     let events = state.events();
+    app.set_events(events.clone()).await;
     let sink = if let Some(client) = app.ha_client.lock().await.clone() {
         Arc::new(HaActionSink::new(client)) as Arc<dyn flick_core::ActionSink>
     } else {
@@ -137,6 +139,7 @@ pub async fn serve(runtime: RuntimeConfig, token: String) -> anyhow::Result<()> 
         .build();
     app.set_dispatcher(dispatcher).await;
     app.configure_fake_landmarks().await;
+    app.spawn_camera_autostart(onboarding_completed).await;
 
     if runtime.sidecar {
         println!(
@@ -301,6 +304,117 @@ fn load_settings(state: &ApiState, store: &Store) -> anyhow::Result<SettingsMap>
         settings.insert(key, value);
     }
     Ok(settings)
+}
+
+fn settings_bool(settings: &SettingsMap, key: &str) -> bool {
+    settings
+        .get(key)
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+}
+
+fn load_cameras(store: &Store) -> flick_store::Result<Vec<ApiCamera>> {
+    let conn = store.connection();
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, kind, device_ref, url_redacted, enabled, mirror, rotation, \
+             active_fps, idle_fps, max_hands, roi, created_at, updated_at \
+             FROM cameras ORDER BY created_at",
+        )
+        .map_err(store_database_error)?;
+    let rows = stmt
+        .query_map([], camera_from_row)
+        .map_err(store_database_error)?;
+    rows.map(|row| row.map_err(store_database_error)).collect()
+}
+
+fn load_camera(store: &Store, id: &str) -> flick_store::Result<Option<ApiCamera>> {
+    let conn = store.connection();
+    conn.query_row(
+        "SELECT id, name, kind, device_ref, url_redacted, enabled, mirror, rotation, \
+         active_fps, idle_fps, max_hands, roi, created_at, updated_at \
+         FROM cameras WHERE id = ?1",
+        params![id],
+        camera_from_row,
+    )
+    .optional()
+    .map_err(store_database_error)
+}
+
+fn upsert_camera(store: &Store, camera: &ApiCamera) -> flick_store::Result<()> {
+    let conn = store.connection();
+    let roi = camera
+        .roi
+        .as_ref()
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(|err| StoreError::InvalidJson(err.to_string()))?;
+    conn.execute(
+        "INSERT INTO cameras \
+         (id, name, kind, device_ref, url_redacted, enabled, mirror, rotation, active_fps, idle_fps, max_hands, roi, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14) \
+         ON CONFLICT(id) DO UPDATE SET name = excluded.name, kind = excluded.kind, device_ref = excluded.device_ref, \
+         url_redacted = excluded.url_redacted, enabled = excluded.enabled, mirror = excluded.mirror, rotation = excluded.rotation, \
+         active_fps = excluded.active_fps, idle_fps = excluded.idle_fps, max_hands = excluded.max_hands, roi = excluded.roi, \
+         updated_at = excluded.updated_at",
+        params![
+            camera.id,
+            camera.name,
+            camera.kind,
+            camera.device_ref,
+            camera.url_redacted,
+            if camera.enabled { 1 } else { 0 },
+            if camera.mirror { 1 } else { 0 },
+            camera.rotation,
+            camera.active_fps,
+            camera.idle_fps,
+            camera.max_hands,
+            roi,
+            ms_from_rfc3339(&camera.created_at),
+            ms_from_rfc3339(&camera.updated_at),
+        ],
+    )
+    .map_err(store_database_error)?;
+    Ok(())
+}
+
+fn delete_camera_row(store: &Store, id: &str) -> flick_store::Result<()> {
+    let conn = store.connection();
+    conn.execute("DELETE FROM cameras WHERE id = ?1", params![id])
+        .map_err(store_database_error)?;
+    Ok(())
+}
+
+fn camera_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ApiCamera> {
+    let roi_raw: Option<String> = row.get(11)?;
+    let created_at: i64 = row.get(12)?;
+    let updated_at: i64 = row.get(13)?;
+    Ok(ApiCamera {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        kind: row.get(2)?,
+        device_ref: row.get(3)?,
+        url_redacted: row.get(4)?,
+        enabled: row.get::<_, i64>(5)? != 0,
+        mirror: row.get::<_, i64>(6)? != 0,
+        rotation: row.get(7)?,
+        active_fps: row.get(8)?,
+        idle_fps: row.get(9)?,
+        max_hands: row.get(10)?,
+        roi: roi_raw.and_then(|raw| serde_json::from_str(&raw).ok()),
+        created_at: rfc3339_from_ms(created_at),
+        updated_at: rfc3339_from_ms(updated_at),
+    })
+}
+
+fn store_database_error(err: rusqlite::Error) -> StoreError {
+    StoreError::Database(err.to_string())
+}
+
+fn ms_from_rfc3339(value: &str) -> i64 {
+    OffsetDateTime::parse(value, &Rfc3339)
+        .map(|time| i64::try_from(time.unix_timestamp_nanos() / 1_000_000).unwrap_or(i64::MAX))
+        .unwrap_or_else(|_| now_ms())
 }
 
 fn dispatcher_settings_from_map(settings: &SettingsMap) -> DispatcherSettings {
@@ -853,6 +967,7 @@ struct EngineApp {
     store: Arc<Store>,
     started_at: Instant,
     paused: Mutex<bool>,
+    events: Mutex<Option<EventHub>>,
     dispatcher: Mutex<Option<Dispatcher>>,
     ha_client: Mutex<Option<HaClient>>,
     mock_ha_handle: Mutex<Option<flick_ha::mock::MockHaHandle>>,
@@ -873,6 +988,7 @@ impl EngineApp {
             store: Arc::clone(&store),
             started_at: Instant::now(),
             paused: Mutex::new(false),
+            events: Mutex::new(None),
             dispatcher: Mutex::new(None),
             ha_client: Mutex::new(None),
             mock_ha_handle: Mutex::new(None),
@@ -898,6 +1014,10 @@ impl EngineApp {
             .await;
         dispatcher.set_paused(*self.paused.lock().await).await;
         *self.dispatcher.lock().await = Some(dispatcher);
+    }
+
+    async fn set_events(&self, events: EventHub) {
+        *self.events.lock().await = Some(events);
     }
 
     async fn set_ha_client(
@@ -1038,6 +1158,165 @@ impl EngineApp {
             dispatcher.set_anchors(dispatcher_anchors).await;
         }
         Ok(())
+    }
+
+    async fn spawn_camera_autostart(self: &Arc<Self>, onboarding_completed: bool) {
+        if (self.runtime.dev && !self.runtime.sidecar)
+            || self.runtime.fake_camera.is_some()
+            || self.runtime.fake_landmarks.is_some()
+        {
+            return;
+        }
+        let app = Arc::clone(self);
+        tokio::spawn(async move {
+            if let Err(err) = app.autostart_cameras(onboarding_completed).await {
+                tracing::warn!(error = %err, "camera autostart failed");
+            }
+        });
+    }
+
+    async fn autostart_cameras(&self, onboarding_completed: bool) -> anyhow::Result<()> {
+        let permission = camera_permission_status();
+        tracing::info!(
+            permission = permission_status_str(permission),
+            "camera autostart check"
+        );
+        let mut cameras = load_cameras(&self.store)?;
+        if cameras.is_empty() {
+            if !onboarding_completed && permission != CameraPermissionStatus::Authorized {
+                tracing::info!(
+                    permission = permission_status_str(permission),
+                    "skipping default camera creation until onboarding completes or permission is authorized"
+                );
+                return Ok(());
+            }
+            if let Some(camera) = self.create_default_camera().await? {
+                cameras.push(camera);
+            }
+        }
+        if let Some(camera) = cameras
+            .into_iter()
+            .filter(|camera| camera.enabled && camera.kind == "local")
+            .min_by(|left, right| left.created_at.cmp(&right.created_at))
+        {
+            tracing::info!(camera_id = %camera.id, camera_name = %camera.name, "autostarting camera");
+            let _ = self.start_configured_camera(&camera).await;
+        }
+        Ok(())
+    }
+
+    async fn create_default_camera(&self) -> anyhow::Result<Option<ApiCamera>> {
+        let device = LocalCameraSource::enumerate()
+            .unwrap_or_default()
+            .into_iter()
+            .next();
+        let device_ref = device
+            .as_ref()
+            .map(|device| device.stable_id.clone())
+            .unwrap_or_else(|| "0".to_owned());
+        let name = device
+            .as_ref()
+            .map(|device| device.name.clone())
+            .unwrap_or_else(|| "Built-in camera".to_owned());
+        let now = now_ms();
+        let camera = ApiCamera {
+            id: CameraId::new().to_string(),
+            name,
+            kind: "local".to_owned(),
+            device_ref: Some(device_ref),
+            url_redacted: None,
+            enabled: true,
+            mirror: true,
+            rotation: 0,
+            active_fps: 30,
+            idle_fps: 5,
+            max_hands: 2,
+            roi: None,
+            created_at: rfc3339_from_ms(now),
+            updated_at: rfc3339_from_ms(now),
+        };
+        upsert_camera(&self.store, &camera)?;
+        tracing::info!(
+            camera_id = %camera.id,
+            device_ref = ?camera.device_ref,
+            "created default camera row"
+        );
+        Ok(Some(camera))
+    }
+
+    async fn start_configured_camera(&self, camera: &ApiCamera) -> CameraStatus {
+        if let Some(path) = self.runtime.fake_camera.as_deref() {
+            return self
+                .finish_camera_start(&camera.id, self.start_file_camera(path).await)
+                .await;
+        }
+        if camera.kind != "local" {
+            let status = CameraStatus {
+                camera_id: camera.id.clone(),
+                state: "error".to_owned(),
+                fps: Some(0.0),
+                error: Some(format!("unsupported camera kind {}", camera.kind)),
+            };
+            self.publish_camera_status(status.clone()).await;
+            return status;
+        }
+        let source_id = CameraId::from_str(&camera.id).unwrap_or_else(|_| CameraId::new());
+        let index = camera
+            .device_ref
+            .as_deref()
+            .and_then(|value| value.parse::<u32>().ok())
+            .unwrap_or(0);
+        let options = LocalCameraOptions {
+            camera_id: source_id,
+            index,
+            width: 1280,
+            height: 720,
+            fps: camera.active_fps,
+            mirror: camera.mirror,
+        };
+        tracing::info!(
+            camera_id = %camera.id,
+            device_ref = ?camera.device_ref,
+            permission = permission_status_str(camera_permission_status()),
+            "starting local camera"
+        );
+        let opened = tokio::task::spawn_blocking(move || LocalCameraSource::open(options))
+            .await
+            .map_err(|err| anyhow::anyhow!("camera worker failed: {err}"))
+            .and_then(|result| result.map_err(anyhow::Error::from));
+        let status = match opened {
+            Ok(source) => self.start_source(source).await,
+            Err(err) => Err(err),
+        };
+        self.finish_camera_start(&camera.id, status).await
+    }
+
+    async fn finish_camera_start(
+        &self,
+        camera_id: &str,
+        result: anyhow::Result<CameraStatus>,
+    ) -> CameraStatus {
+        let status = match result {
+            Ok(status) => status,
+            Err(err) => camera_error_status(camera_id, &err),
+        };
+        self.publish_camera_status(status.clone()).await;
+        status
+    }
+
+    async fn publish_camera_status(&self, status: CameraStatus) {
+        tracing::info!(
+            camera_id = %status.camera_id,
+            state = %status.state,
+            error = ?status.error,
+            "camera status changed"
+        );
+        if let Some(events) = self.events.lock().await.clone() {
+            events.publish(WsServerMessage::CameraStatus {
+                ts: now_rfc3339(),
+                payload: status,
+            });
+        }
     }
 
     async fn start_file_camera(&self, path: &Path) -> anyhow::Result<CameraStatus> {
@@ -1310,12 +1589,25 @@ impl EngineControl for EngineApp {
             .as_ref()
             .map(|capture| vec![capture.status()])
             .unwrap_or_else(|| {
-                vec![CameraStatus {
-                    camera_id: "dev-camera".to_owned(),
-                    state: "idle".to_owned(),
-                    fps: Some(0.0),
-                    error: None,
-                }]
+                let configured = load_cameras(&self.store).unwrap_or_default();
+                if configured.is_empty() {
+                    vec![CameraStatus {
+                        camera_id: "dev-camera".to_owned(),
+                        state: "idle".to_owned(),
+                        fps: Some(0.0),
+                        error: None,
+                    }]
+                } else {
+                    configured
+                        .into_iter()
+                        .map(|camera| CameraStatus {
+                            camera_id: camera.id,
+                            state: if camera.enabled { "idle" } else { "disabled" }.to_owned(),
+                            fps: Some(0.0),
+                            error: None,
+                        })
+                        .collect()
+                }
             });
         let stages = capture
             .as_ref()
@@ -1393,26 +1685,110 @@ impl EngineControl for EngineApp {
         }
     }
 
-    async fn start_camera(&self, camera_id: &str) -> CameraStatus {
-        let result = if let Some(path) = self.runtime.fake_camera.as_deref() {
-            self.start_file_camera(path).await
-        } else {
-            let source_id = CameraId::from_str(camera_id).unwrap_or_else(|_| CameraId::new());
-            let index = camera_id.parse::<u32>().unwrap_or(0);
-            match LocalCameraSource::open(LocalCameraOptions {
-                camera_id: source_id,
-                index,
-                width: 1280,
-                height: 720,
-                fps: 30,
-                mirror: true,
-            }) {
-                Ok(source) => self.start_source(source).await,
-                Err(err) => Err(anyhow::Error::from(err)),
-            }
+    async fn cameras(&self) -> Vec<ApiCamera> {
+        load_cameras(&self.store).unwrap_or_default()
+    }
+
+    async fn create_camera(&self, request: CameraCreate) -> Result<ApiCamera, ApiProblem> {
+        let now = now_ms();
+        let camera = ApiCamera {
+            id: CameraId::new().to_string(),
+            name: request.name,
+            kind: request.kind,
+            device_ref: request.device_ref,
+            url_redacted: request.url_redacted,
+            enabled: true,
+            mirror: true,
+            rotation: 0,
+            active_fps: 30,
+            idle_fps: 5,
+            max_hands: 2,
+            roi: None,
+            created_at: rfc3339_from_ms(now),
+            updated_at: rfc3339_from_ms(now),
         };
-        match result {
-            Ok(status) => status,
+        upsert_camera(&self.store, &camera).map_err(store_problem)?;
+        let _ = self.start_configured_camera(&camera).await;
+        Ok(camera)
+    }
+
+    async fn patch_camera(&self, id: &str, request: CameraPatch) -> Result<ApiCamera, ApiProblem> {
+        let mut camera = load_camera(&self.store, id)
+            .map_err(store_problem)?
+            .ok_or_else(|| {
+                ApiProblem::new(
+                    StatusCode::NOT_FOUND,
+                    "camera_not_found",
+                    "camera not found",
+                )
+            })?;
+        let was_enabled = camera.enabled;
+        if let Some(name) = request.name {
+            camera.name = name;
+        }
+        if let Some(enabled) = request.enabled {
+            camera.enabled = enabled;
+        }
+        if let Some(mirror) = request.mirror {
+            camera.mirror = mirror;
+        }
+        if let Some(rotation) = request.rotation {
+            camera.rotation = rotation;
+        }
+        if let Some(active_fps) = request.active_fps {
+            camera.active_fps = active_fps;
+        }
+        if let Some(idle_fps) = request.idle_fps {
+            camera.idle_fps = idle_fps;
+        }
+        if let Some(max_hands) = request.max_hands {
+            camera.max_hands = max_hands;
+        }
+        if request.roi.is_some() {
+            camera.roi = request.roi;
+        }
+        camera.updated_at = now_rfc3339();
+        upsert_camera(&self.store, &camera).map_err(store_problem)?;
+        match (was_enabled, camera.enabled) {
+            (false, true) => {
+                let _ = self.start_configured_camera(&camera).await;
+            }
+            (true, false) => {
+                let _ = self.stop_camera(&camera.id).await;
+            }
+            _ => {}
+        }
+        Ok(camera)
+    }
+
+    async fn delete_camera(&self, id: &str) -> Result<(), ApiProblem> {
+        let _ = self.stop_camera(id).await;
+        delete_camera_row(&self.store, id).map_err(store_problem)?;
+        Ok(())
+    }
+
+    async fn start_camera(&self, camera_id: &str) -> CameraStatus {
+        match load_camera(&self.store, camera_id) {
+            Ok(Some(camera)) => self.start_configured_camera(&camera).await,
+            Ok(None) => {
+                let camera = ApiCamera {
+                    id: camera_id.to_owned(),
+                    name: "Local camera".to_owned(),
+                    kind: "local".to_owned(),
+                    device_ref: Some(camera_id.to_owned()),
+                    url_redacted: None,
+                    enabled: true,
+                    mirror: true,
+                    rotation: 0,
+                    active_fps: 30,
+                    idle_fps: 5,
+                    max_hands: 2,
+                    roi: None,
+                    created_at: now_rfc3339(),
+                    updated_at: now_rfc3339(),
+                };
+                self.start_configured_camera(&camera).await
+            }
             Err(err) => CameraStatus {
                 camera_id: camera_id.to_owned(),
                 state: "error".to_owned(),
@@ -1424,7 +1800,7 @@ impl EngineControl for EngineApp {
 
     async fn stop_camera(&self, camera_id: &str) -> CameraStatus {
         let mut capture = self.capture.lock().await;
-        if let Some(capture) = capture.take() {
+        let status = if let Some(capture) = capture.take() {
             capture.stop()
         } else {
             CameraStatus {
@@ -1433,7 +1809,10 @@ impl EngineControl for EngineApp {
                 fps: Some(0.0),
                 error: None,
             }
-        }
+        };
+        tracing::info!(camera_id = %camera_id, "stopped camera");
+        self.publish_camera_status(status.clone()).await;
+        status
     }
 }
 
@@ -2100,10 +2479,31 @@ fn capture_status_parts(status: CaptureStatus) -> (String, Option<String>) {
     }
 }
 
+fn camera_error_status(camera_id: &str, err: &anyhow::Error) -> CameraStatus {
+    let permission_denied = err.chain().any(|cause| {
+        cause
+            .downcast_ref::<flick_core::CaptureError>()
+            .is_some_and(|capture| matches!(capture, flick_core::CaptureError::PermissionDenied(_)))
+    });
+    CameraStatus {
+        camera_id: camera_id.to_owned(),
+        state: if permission_denied {
+            "permission_denied"
+        } else {
+            "error"
+        }
+        .to_owned(),
+        fps: Some(0.0),
+        error: Some(err.to_string()),
+    }
+}
+
 fn permission_status_str(status: CameraPermissionStatus) -> &'static str {
     match status {
+        CameraPermissionStatus::NotDetermined => "not_determined",
+        CameraPermissionStatus::Restricted => "restricted",
+        CameraPermissionStatus::Denied => "denied",
         CameraPermissionStatus::Authorized => "authorized",
-        CameraPermissionStatus::NotAuthorized => "denied",
         CameraPermissionStatus::Unknown => "unknown",
     }
 }
