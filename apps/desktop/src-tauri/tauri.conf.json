@@ -49,6 +49,9 @@
     "shortDescription": "Local-first hand gesture control for Home Assistant",
     "longDescription": "Flick turns camera hand gestures into local Home Assistant service calls.",
     "externalBin": ["binaries/flick-engine"],
+    "resources": {
+      "resources": ""
+    },
     "macOS": {
       "minimumSystemVersion": "13.0",
       "hardenedRuntime": true,

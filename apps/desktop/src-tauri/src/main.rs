@@ -253,10 +253,12 @@ impl EngineSupervisor {
         let data_dir = app.path().app_data_dir()?;
         fs::create_dir_all(&data_dir)?;
         let data_dir_arg = data_dir.to_string_lossy().to_string();
+        let models_dir = sidecar_models_dir(app)?;
         let (mut rx, child) = app
             .shell()
             .sidecar(SIDECAR_NAME)?
             .args(["--sidecar", "--port", "0", "--data-dir", &data_dir_arg])
+            .env("FLICK_MODELS_DIR", models_dir)
             .spawn()?;
         let mut child = Some(child);
         let pid = child
@@ -1150,6 +1152,24 @@ fn generate_token() -> anyhow::Result<String> {
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes).map_err(|error| anyhow::anyhow!(error.to_string()))?;
     Ok(URL_SAFE_NO_PAD.encode(bytes))
+}
+
+fn sidecar_models_dir(app: &AppHandle) -> anyhow::Result<PathBuf> {
+    let resource_models = app.path().resource_dir()?.join("models");
+    if resource_models.join("manifest.toml").exists() {
+        return Ok(resource_models);
+    }
+
+    let repo_models = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("..")
+        .join("models");
+    if repo_models.join("manifest.toml").exists() {
+        return Ok(repo_models);
+    }
+
+    Ok(resource_models)
 }
 
 async fn terminate_child(child: CommandChild) {

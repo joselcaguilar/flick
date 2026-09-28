@@ -188,12 +188,12 @@ pub struct ModelEntry {
 }
 
 impl ModelEntry {
-    /// Whether this entry should be fetched and verified by default.
+    /// Whether this entry is part of the runtime baseline and must verify before use.
     #[must_use]
     pub fn is_selected(&self) -> bool {
         self.conversion_status
             .as_deref()
-            .is_none_or(|status| matches!(status, "selected" | "selected_ota_only"))
+            .is_none_or(|status| matches!(status, "selected" | "selected_derived"))
     }
 }
 
@@ -1183,6 +1183,25 @@ impl HandPipelineImpl {
         &self.ep_choice
     }
 
+    /// Returns actual execution providers selected for loaded model sessions.
+    #[must_use]
+    pub fn ep_summary(&self) -> Vec<(&'static str, EpKind)> {
+        let Some(runtime) = self.runtime.as_ref() else {
+            return Vec::new();
+        };
+        let mut summary = vec![
+            ("palm_detection_full", runtime.palm.ep),
+            ("hand_landmark_full", runtime.landmark.ep),
+        ];
+        if let Some(embedder) = runtime.embedder.as_ref() {
+            summary.push(("gesture_embedder", embedder.ep));
+        }
+        if let Some(classifier) = runtime.classifier.as_ref() {
+            summary.push(("canned_gesture_classifier", classifier.ep));
+        }
+        summary
+    }
+
     fn process_with_runtime(
         &mut self,
         runtime: &mut HandRuntime,
@@ -1488,7 +1507,6 @@ impl HandRuntime {
 
 struct ModelRunner {
     session: Session,
-    #[allow(dead_code)]
     ep: EpKind,
 }
 

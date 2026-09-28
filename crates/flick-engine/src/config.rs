@@ -56,6 +56,8 @@ pub struct CliOverrides {
     pub port: Option<u16>,
     /// Override fake camera source.
     pub fake_camera: Option<PathBuf>,
+    /// Override model directory.
+    pub models_dir: Option<PathBuf>,
     /// Force mock Home Assistant.
     pub mock_ha: Option<bool>,
 }
@@ -69,6 +71,8 @@ pub struct RuntimeConfig {
     pub data_dir: PathBuf,
     /// Path to replay video/directory, if any.
     pub fake_camera: Option<PathBuf>,
+    /// Directory containing `manifest.toml` and `cache/` for vision models, if any.
+    pub models_dir: Option<PathBuf>,
     /// Path to replay landmark JSONL, if any.
     pub fake_landmarks: Option<PathBuf>,
     /// Dev fixture name to replay once at startup.
@@ -137,6 +141,10 @@ pub fn load_with_overrides(overrides: &CliOverrides) -> Result<RuntimeConfig, Co
         .fake_camera
         .clone()
         .or_else(|| env_path("FLICK_FAKE_CAMERA"));
+    let models_dir = overrides
+        .models_dir
+        .clone()
+        .or_else(|| env_path("FLICK_MODELS_DIR"));
     let fake_landmarks = env_path("FLICK_FAKE_LANDMARKS");
     let fake_landmarks_autoplay = env::var("FLICK_FAKE_LANDMARKS_AUTOPLAY")
         .ok()
@@ -153,6 +161,7 @@ pub fn load_with_overrides(overrides: &CliOverrides) -> Result<RuntimeConfig, Co
         bootstrap,
         data_dir,
         fake_camera,
+        models_dir,
         fake_landmarks,
         fake_landmarks_autoplay,
         update_url,

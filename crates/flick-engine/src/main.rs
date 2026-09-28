@@ -18,6 +18,9 @@ struct Cli {
     /// Override the platform data directory.
     #[arg(long, env = "FLICK_DATA_DIR")]
     data_dir: Option<PathBuf>,
+    /// Override the vision model directory.
+    #[arg(long, env = "FLICK_MODELS_DIR")]
+    models_dir: Option<PathBuf>,
     /// Override the local API port.
     #[arg(long, env = "FLICK_PORT")]
     port: Option<u16>,
@@ -48,6 +51,7 @@ async fn main() -> anyhow::Result<()> {
         data_dir: cli.data_dir,
         port: cli.port,
         fake_camera: cli.fake_camera,
+        models_dir: cli.models_dir,
         mock_ha: cli.mock_ha.then_some(true),
     };
     let runtime = config::load_with_overrides(&overrides)?;
@@ -65,6 +69,7 @@ async fn main() -> anyhow::Result<()> {
                 bind = %runtime.bootstrap.engine.bind,
                 port = runtime.bootstrap.engine.port,
                 fake_camera = ?runtime.fake_camera,
+                models_dir = ?runtime.models_dir,
                 fake_landmarks = ?runtime.fake_landmarks,
                 fake_landmarks_autoplay = ?runtime.fake_landmarks_autoplay,
                 mock_ha = runtime.mock_ha,

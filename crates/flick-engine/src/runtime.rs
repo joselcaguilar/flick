@@ -1050,7 +1050,7 @@ impl EngineApp {
         S: FrameSource,
     {
         let dispatcher = self.dispatcher.lock().await.clone();
-        let model_root = model_manifest_path();
+        let model_root = model_manifest_path(&self.runtime);
         let capture = EngineCapture::start(source, dispatcher, model_root.as_deref())?;
         let status = capture.status();
         let mut current = self.capture.lock().await;
@@ -2047,7 +2047,20 @@ fn build_hand_pipeline(model_root: Option<&Path>, mirrored: bool) -> HandPipelin
     match ModelSet::load(model_root)
         .and_then(|models| HandPipelineImpl::new(models, EpChoice::default()))
     {
-        Ok(pipeline) => pipeline.with_mirrored_input(mirrored),
+        Ok(pipeline) => {
+            let ep_summary = pipeline
+                .ep_summary()
+                .into_iter()
+                .map(|(model, ep)| format!("{model}={ep:?}"))
+                .collect::<Vec<_>>()
+                .join(",");
+            tracing::info!(
+                model_root = %model_root.display(),
+                ep_summary,
+                "vision models loaded"
+            );
+            pipeline.with_mirrored_input(mirrored)
+        }
         Err(err) => {
             tracing::warn!(
                 error = %err,
@@ -2059,9 +2072,17 @@ fn build_hand_pipeline(model_root: Option<&Path>, mirrored: bool) -> HandPipelin
     }
 }
 
-fn model_manifest_path() -> Option<PathBuf> {
-    let path = PathBuf::from("models/manifest.toml");
-    path.exists().then_some(path)
+fn model_manifest_path(runtime: &RuntimeConfig) -> Option<PathBuf> {
+    let candidates = [
+        // TODO: insert the active OTA model pack ahead of the bundled baseline once update
+        // activation owns that state.
+        runtime.models_dir.clone(),
+        Some(PathBuf::from("models")),
+    ];
+    candidates
+        .into_iter()
+        .flatten()
+        .find(|path| path.join("manifest.toml").exists() || path.is_file())
 }
 
 fn capture_status_parts(status: CaptureStatus) -> (String, Option<String>) {
