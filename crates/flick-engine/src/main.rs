@@ -66,6 +66,7 @@ async fn main() -> anyhow::Result<()> {
                 port = runtime.bootstrap.engine.port,
                 fake_camera = ?runtime.fake_camera,
                 fake_landmarks = ?runtime.fake_landmarks,
+                fake_landmarks_autoplay = ?runtime.fake_landmarks_autoplay,
                 mock_ha = runtime.mock_ha,
                 update_url = ?runtime.update_url,
                 "starting engine runtime"

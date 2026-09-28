@@ -71,6 +71,8 @@ pub struct RuntimeConfig {
     pub fake_camera: Option<PathBuf>,
     /// Path to replay landmark JSONL, if any.
     pub fake_landmarks: Option<PathBuf>,
+    /// Dev fixture name to replay once at startup.
+    pub fake_landmarks_autoplay: Option<String>,
     /// Development update endpoint, if set.
     pub update_url: Option<String>,
     /// Whether this process is managed as a desktop sidecar.
@@ -136,6 +138,9 @@ pub fn load_with_overrides(overrides: &CliOverrides) -> Result<RuntimeConfig, Co
         .clone()
         .or_else(|| env_path("FLICK_FAKE_CAMERA"));
     let fake_landmarks = env_path("FLICK_FAKE_LANDMARKS");
+    let fake_landmarks_autoplay = env::var("FLICK_FAKE_LANDMARKS_AUTOPLAY")
+        .ok()
+        .filter(|value| !value.is_empty());
     let update_url = env::var("FLICK_UPDATE_URL")
         .ok()
         .filter(|value| !value.is_empty());
@@ -149,6 +154,7 @@ pub fn load_with_overrides(overrides: &CliOverrides) -> Result<RuntimeConfig, Co
         data_dir,
         fake_camera,
         fake_landmarks,
+        fake_landmarks_autoplay,
         update_url,
         sidecar: overrides.sidecar,
         dev: overrides.dev,

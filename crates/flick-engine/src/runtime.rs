@@ -15,7 +15,14 @@ use std::{
 
 use anyhow::Context;
 use async_trait::async_trait;
-use axum::Router;
+use axum::{
+    Json, Router,
+    extract::{Request, State},
+    http::{HeaderMap, StatusCode, header},
+    middleware::{self, Next},
+    response::Response,
+    routing::{get, post},
+};
 use flick_api::{
     ActionDto, ActionOutcomeDto, ActionTargetDto, Anchor as ApiAnchor, ApiConfig, ApiGateways,
     ApiProblem, ApiState, AvailableCamera, CameraFormat, CameraStatus, EngineControl, EngineStatus,
@@ -38,7 +45,7 @@ use flick_core::{
 use flick_gestures::{GestureEngine, GestureEngineConfig};
 use flick_ha::{
     EntityState, HaClient, HaConnectionConfig, HaStatus, RegistrySnapshot, SafetyInput,
-    SafetyValidator,
+    SafetyValidator, ServiceCallRecord,
 };
 use flick_spatial::{
     AnchorGeometry, CameraIntrinsics, DEFAULT_ESTIMATOR_VERSION, PlaceRecord, PlaceStatus,
@@ -48,6 +55,7 @@ use flick_spatial::{
 };
 use flick_store::Store;
 use flick_vision::{EpChoice, HandPipelineImpl, ModelSet};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::{net::TcpListener, sync::Mutex};
@@ -57,6 +65,7 @@ use crate::{
     dispatcher::{
         Dispatcher, HaActionSink, NoopActionSink, owner_fan_anchor, owner_scenario_mappings,
     },
+    fake_landmarks::{ReplayCatalog, ReplayFixture, replay_once},
     targeting_store::{SqliteTargetingStore, anchor_record_to_anchor, anchor_to_record},
 };
 
@@ -87,7 +96,7 @@ pub async fn serve(runtime: RuntimeConfig, token: String) -> anyhow::Result<()> 
         updates: Arc::new(FakeUpdates),
         preview: app.clone(),
     };
-    let state = ApiState::new(api_config, gateways);
+    let state = ApiState::new(api_config.clone(), gateways);
     let events = state.events();
     let dispatcher = Dispatcher::builder(sink)
         .store(store)
@@ -96,6 +105,7 @@ pub async fn serve(runtime: RuntimeConfig, token: String) -> anyhow::Result<()> 
         .anchors(vec![owner_fan_anchor()])
         .build();
     app.set_dispatcher(dispatcher).await;
+    app.configure_fake_landmarks().await;
 
     if runtime.sidecar {
         println!(
@@ -109,14 +119,107 @@ pub async fn serve(runtime: RuntimeConfig, token: String) -> anyhow::Result<()> 
         );
     }
 
-    let app_router: Router = router(state);
+    let mut app_router: Router = router(state);
+    if runtime.dev && !runtime.sidecar {
+        app_router = app_router.merge(dev_router(app.clone(), api_config));
+    }
     if let Some(path) = runtime.fake_camera.as_deref() {
         app.start_file_camera(path).await?;
+    }
+    if let Some(fixture) = runtime.fake_landmarks_autoplay.as_deref() {
+        app.start_replay(fixture).await?;
+    } else if runtime
+        .fake_landmarks
+        .as_ref()
+        .is_some_and(|path| path.is_file())
+    {
+        app.start_replay("").await?;
     }
     axum::serve(listener, app_router)
         .with_graceful_shutdown(shutdown_signal())
         .await
         .context("API server failed")
+}
+
+fn dev_router(app: Arc<EngineApp>, config: ApiConfig) -> Router {
+    Router::new()
+        .route("/api/v1/dev/fixtures", get(dev_fixtures))
+        .route("/api/v1/dev/replay", post(dev_replay))
+        .route("/api/v1/dev/mock-ha/calls", get(dev_mock_ha_calls))
+        .route_layer(middleware::from_fn_with_state(config, require_dev_auth))
+        .with_state(app)
+}
+
+#[derive(Debug, Deserialize)]
+struct DevReplayRequest {
+    fixture: String,
+}
+
+#[derive(Debug, Serialize)]
+struct DevReplayAccepted {
+    fixture: String,
+}
+
+async fn dev_fixtures(
+    State(app): State<Arc<EngineApp>>,
+) -> Result<Json<Vec<ReplayFixture>>, ApiProblem> {
+    app.replay_fixtures().await.map(Json)
+}
+
+async fn dev_replay(
+    State(app): State<Arc<EngineApp>>,
+    Json(request): Json<DevReplayRequest>,
+) -> Result<(StatusCode, Json<DevReplayAccepted>), ApiProblem> {
+    app.start_replay(&request.fixture)
+        .await
+        .map_err(|err| ApiProblem::validation("replay_start_failed", err.to_string()))?;
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(DevReplayAccepted {
+            fixture: request.fixture,
+        }),
+    ))
+}
+
+async fn dev_mock_ha_calls(State(app): State<Arc<EngineApp>>) -> Json<Vec<ServiceCallRecord>> {
+    Json(app.mock_ha_calls().await)
+}
+
+async fn require_dev_auth(
+    State(config): State<ApiConfig>,
+    headers: HeaderMap,
+    request: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    if !dev_host_allowed(&config, &headers)
+        || !dev_origin_allowed(&config, &headers)
+        || !dev_token_allowed(&config, &headers)
+    {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    Ok(next.run(request).await)
+}
+
+fn dev_host_allowed(config: &ApiConfig, headers: &HeaderMap) -> bool {
+    headers
+        .get(header::HOST)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|host| config.allowed_hosts.contains(host))
+}
+
+fn dev_origin_allowed(config: &ApiConfig, headers: &HeaderMap) -> bool {
+    headers
+        .get(header::ORIGIN)
+        .and_then(|value| value.to_str().ok())
+        .is_none_or(|origin| config.allowed_origins.contains(origin))
+}
+
+fn dev_token_allowed(config: &ApiConfig, headers: &HeaderMap) -> bool {
+    let expected = format!("Bearer {}", config.token);
+    headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value == expected)
 }
 
 fn api_config(runtime: &RuntimeConfig, port: u16, token: String) -> ApiConfig {
@@ -133,7 +236,7 @@ fn api_config(runtime: &RuntimeConfig, port: u16, token: String) -> ApiConfig {
 
 async fn start_mock_ha(app: &Arc<EngineApp>) -> anyhow::Result<HaClient> {
     let scenario = bedroom_fan_scenario();
-    let (url, token, _handle) = flick_ha::mock::MockHa::start(scenario).await?;
+    let (url, token, handle) = flick_ha::mock::MockHa::start(scenario).await?;
     let config = HaConnectionConfig::new(url.clone(), token.clone())?;
     let client = HaClient::connect(config).await?;
     let snapshot = client.refresh_registry().await.unwrap_or_default();
@@ -153,6 +256,7 @@ async fn start_mock_ha(app: &Arc<EngineApp>) -> anyhow::Result<HaClient> {
         snapshot,
     )
     .await;
+    app.set_mock_ha_handle(handle).await;
     Ok(client)
 }
 
@@ -191,12 +295,15 @@ struct EngineApp {
     paused: Mutex<bool>,
     dispatcher: Mutex<Option<Dispatcher>>,
     ha_client: Mutex<Option<HaClient>>,
+    mock_ha_handle: Mutex<Option<flick_ha::mock::MockHaHandle>>,
     ha_instance: Mutex<Option<HaInstance>>,
     registry: Mutex<RegistrySnapshot>,
     targeting: SqliteTargetingStore,
     teach_sessions: Mutex<HashMap<String, EngineTeachSession>>,
     realign_sessions: Mutex<HashMap<String, EngineRealignSession>>,
     capture: Mutex<Option<EngineCapture>>,
+    replay_catalog: Mutex<Option<ReplayCatalog>>,
+    replay_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 impl EngineApp {
@@ -208,12 +315,15 @@ impl EngineApp {
             paused: Mutex::new(false),
             dispatcher: Mutex::new(None),
             ha_client: Mutex::new(None),
+            mock_ha_handle: Mutex::new(None),
             ha_instance: Mutex::new(None),
             registry: Mutex::new(RegistrySnapshot::default()),
             targeting: SqliteTargetingStore::new(Arc::clone(&store)),
             teach_sessions: Mutex::new(HashMap::new()),
             realign_sessions: Mutex::new(HashMap::new()),
             capture: Mutex::new(None),
+            replay_catalog: Mutex::new(None),
+            replay_task: Mutex::new(None),
         }
     }
 
@@ -230,6 +340,69 @@ impl EngineApp {
         *self.ha_client.lock().await = Some(client);
         *self.ha_instance.lock().await = instance;
         *self.registry.lock().await = snapshot;
+    }
+
+    async fn set_mock_ha_handle(&self, handle: flick_ha::mock::MockHaHandle) {
+        *self.mock_ha_handle.lock().await = Some(handle);
+    }
+
+    async fn configure_fake_landmarks(&self) {
+        let catalog = self.runtime.fake_landmarks.clone().map(ReplayCatalog::new);
+        *self.replay_catalog.lock().await = catalog;
+    }
+
+    async fn replay_fixtures(&self) -> Result<Vec<ReplayFixture>, ApiProblem> {
+        let catalog = self.replay_catalog.lock().await.clone().ok_or_else(|| {
+            ApiProblem::validation("fake_landmarks_missing", "FLICK_FAKE_LANDMARKS is not set")
+        })?;
+        catalog
+            .fixtures()
+            .map_err(|err| ApiProblem::validation("fixture_list_failed", err.to_string()))
+    }
+
+    async fn start_replay(&self, fixture: &str) -> anyhow::Result<()> {
+        let catalog = self
+            .replay_catalog
+            .lock()
+            .await
+            .clone()
+            .context("FLICK_FAKE_LANDMARKS is not set")?;
+        let (fixture_name, path) = catalog.resolve(fixture)?;
+        let dispatcher = self
+            .dispatcher
+            .lock()
+            .await
+            .clone()
+            .context("dispatcher is not ready")?;
+        let handle = tokio::spawn(async move {
+            match replay_once(fixture_name.clone(), path, dispatcher).await {
+                Ok(stats) => tracing::info!(
+                    fixture = %stats.fixture,
+                    frames = stats.frames,
+                    events = stats.events,
+                    dispatched = stats.dispatched,
+                    "fake landmark replay completed"
+                ),
+                Err(error) => {
+                    tracing::warn!(%error, fixture = %fixture_name, "fake landmark replay failed")
+                }
+            }
+        });
+        let mut task = self.replay_task.lock().await;
+        if let Some(previous) = task.take() {
+            previous.abort();
+        }
+        *task = Some(handle);
+        Ok(())
+    }
+
+    async fn mock_ha_calls(&self) -> Vec<ServiceCallRecord> {
+        let handle = self.mock_ha_handle.lock().await.clone();
+        if let Some(handle) = handle {
+            handle.calls().await
+        } else {
+            Vec::new()
+        }
     }
 
     async fn start_file_camera(&self, path: &Path) -> anyhow::Result<CameraStatus> {

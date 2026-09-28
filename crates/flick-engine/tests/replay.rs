@@ -11,7 +11,11 @@ use flick_core::{
     HandFrame, HandObservation, Handedness, SelectionState, StageTimings, SuppressionReason,
 };
 use flick_engine::{
-    dispatcher::{Dispatcher, DispatcherAnchor, HaActionSink, owner_scenario_mappings_for},
+    dispatcher::{
+        Dispatcher, DispatcherAnchor, HaActionSink, owner_fan_anchor, owner_scenario_mappings,
+        owner_scenario_mappings_for,
+    },
+    fake_landmarks::replay_once,
     targeting_store::{SqliteTargetingStore, anchor_record_to_anchor, anchor_to_record},
 };
 use flick_gestures::{GestureEngine, GestureEngineConfig, read_jsonl_str};
@@ -110,6 +114,34 @@ async fn replay_targeting_fixtures_select_and_dispatch() -> anyhow::Result<()> {
     replay_targeting_fixture("point_fan_circle").await?;
     replay_targeting_fixture("point_fan_stop").await?;
     replay_targeting_fixture("two_anchors_25deg").await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn fake_landmark_replay_owner_fan_circle_dispatches_mock_ha() -> anyhow::Result<()> {
+    let fan = owner_fan_anchor().entity;
+    let (client, mock) = mock_client(&fan).await?;
+    client.refresh_registry().await?;
+    let dispatcher = Dispatcher::builder(Arc::new(HaActionSink::new(client)))
+        .mappings(owner_scenario_mappings())
+        .anchors(vec![owner_fan_anchor()])
+        .build();
+    let stats = replay_once(
+        "landmarks/owner_fan_circle".to_owned(),
+        Path::new(FIXTURES).join("landmarks/owner_fan_circle.jsonl"),
+        dispatcher,
+    )
+    .await?;
+    assert!(stats.frames > 0);
+    assert_calls(
+        &mock,
+        1,
+        "fan",
+        "turn_on",
+        "fan.ventilador_dormitorio",
+        json!({"percentage": 1}),
+    )
+    .await;
     Ok(())
 }
 

@@ -3,6 +3,7 @@
 pub mod bench;
 pub mod config;
 pub mod dispatcher;
+pub mod fake_landmarks;
 pub mod logging;
 pub mod runtime;
 pub mod targeting_store;
