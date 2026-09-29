@@ -27,6 +27,13 @@ function gestureName(gestureId?: string | null) {
     .replace(/\\b\\w/g, (match) => match.toUpperCase());
 }
 
+function pausedUntil(until?: string | null) {
+  const date = until ? new Date(until) : undefined;
+  if (!until || !date) return "Until resumed";
+  if (Number.isNaN(date.getTime())) return `Until ${until}`;
+  return `Until ${date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+}
+
 function upsertActivity(activity: EventStreamState["activity"], item: EventStreamState["activity"][number]) {
   return [item, ...activity.filter((entry) => entry.id !== item.id)].slice(0, 50);
 }
@@ -222,7 +229,7 @@ export function eventReducer(state: EventStreamState, action: EventStreamAction)
           hud: {
             state: "paused",
             title: "Flick paused",
-            detail: message.until ? `Until ${message.until}` : "Until resumed",
+            detail: pausedUntil(message.until),
             updatedAt: message.ts,
           },
         },

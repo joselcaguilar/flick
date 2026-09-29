@@ -39,3 +39,17 @@ url.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 nokhwa-bindings-macos = "0.2.4"
+objc2-foundation = { version = "0.3", default-features = false, features = [
+  "std",
+  "NSAppleEventDescriptor",
+  "NSAppleEventManager",
+  "NSError",
+  "NSString",
+  "objc2-core-services",
+] }
+objc2-service-management = { version = "0.3", default-features = false, features = [
+  "std",
+  "SMAppService",
+  "objc2",
+  "objc2-foundation",
+] }

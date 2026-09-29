@@ -31,7 +31,7 @@ const permissionLabels: Record<string, string> = {
 function cameraTone(state?: string | null) {
   if (state === "running") return "success";
   if (state === "error" || state === "permission_denied") return "danger";
-  if (state === "starting" || state === "reconnecting") return "warning";
+  if (state === "starting" || state === "reconnecting" || state === "paused") return "warning";
   return "neutral";
 }
 

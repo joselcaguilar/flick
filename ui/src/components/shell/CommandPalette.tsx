@@ -7,6 +7,8 @@ import { Button, Kbd } from "../ui";
 interface CommandPaletteProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  paused: boolean;
+  onTogglePause: () => void;
 }
 
 interface CommandItem {
@@ -22,7 +24,7 @@ function optionId(id: string) {
   return `command-option-${id.replace(/[^a-z0-9_-]/gi, "-")}`;
 }
 
-export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
+export function CommandPalette({ open, onOpenChange, paused, onTogglePause }: CommandPaletteProps) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -46,10 +48,12 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       {
         id: "action:pause",
         group: "Actions",
-        label: "Pause for 15 minutes",
-        description: "Stop recognition temporarily from this Mac.",
-        shortcut: "⌥⌘F",
-        run: () => onOpenChange(false),
+        label: paused ? "Resume Flick" : "Pause for 15 minutes",
+        description: paused ? "Turn the camera back on." : "Turn the camera off for 15 minutes.",
+        run: () => {
+          onTogglePause();
+          onOpenChange(false);
+        },
       },
       {
         id: "action:teach",
@@ -74,7 +78,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         },
       },
     ],
-    [navigate, onOpenChange],
+    [navigate, onOpenChange, paused, onTogglePause],
   );
 
   const normalizedQuery = query.trim().toLowerCase();

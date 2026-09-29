@@ -234,7 +234,7 @@ Small pill (360×96, rounded, blurred translucent background; high-contrast opti
 | Confirm needed | 🔒 "Confirm with 👍 within 3 s" + countdown | double "tick" |
 | Dial | Horizontal bar with value (e.g. 64 %) and entity name | subtle ticks every 10 % (optional) |
 | Camera moved | "Camera moved — re-align your devices" (tap opens Re-align) | — |
-| Paused | "Flick paused — until 14:30" (shown for 2 s when pausing) | — |
+| Paused | "Flick paused — until 14:30" (shown for 2 s when pausing). The camera is released while paused; the sidebar reads "Paused · Camera off until 14:30" | — |
 | Update ready | Shown only in the main window and tray, **never in the HUD**: "Restart to update" | — |
 
 - Auto-hide after `feedback.hud.duration_ms` (1.5 s) after the last update. Never takes focus; click-through.

@@ -3,7 +3,7 @@ import { toWsUrl } from "../api/endpoint";
 import { startMockEventStream } from "../mocks/ws";
 import { normalizeWsMessage } from "./normalize";
 import { useEventStore } from "./store";
-import type { WsTopic } from "./types";
+import type { WsServerMessage, WsTopic } from "./types";
 
 export interface EventClient {
   close: () => void;
@@ -23,6 +23,19 @@ const defaultTopics: WsTopic[] = [
 let singleton: EventClient | undefined;
 const extraTopics = new Set<WsTopic>();
 let sendSubscribe: ((topics: WsTopic[]) => void) | undefined;
+const listeners = new Set<(message: WsServerMessage) => void>();
+
+export function onServerMessage(listener: (message: WsServerMessage) => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function deliver(message: WsServerMessage) {
+  useEventStore.getState().ingest(message);
+  for (const listener of listeners) listener(message);
+}
 
 export function subscribeTopics(topics: WsTopic[]) {
   const added = topics.filter((topic) => !extraTopics.has(topic));
@@ -35,7 +48,7 @@ export async function startEventStream(topics: WsTopic[] = defaultTopics): Promi
   const endpoint = await getEndpoint();
 
   if (endpoint.mock) {
-    singleton = startMockEventStream((message) => useEventStore.getState().ingest(message), topics);
+    singleton = startMockEventStream(deliver, topics);
     return singleton;
   }
 
@@ -57,7 +70,7 @@ export async function startEventStream(topics: WsTopic[] = defaultTopics): Promi
     });
 
     ws.addEventListener("message", (event) => {
-      useEventStore.getState().ingest(normalizeWsMessage(JSON.parse(event.data as string)));
+      deliver(normalizeWsMessage(JSON.parse(event.data as string)));
     });
 
     ws.addEventListener("close", () => {

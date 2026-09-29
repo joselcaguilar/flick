@@ -5,6 +5,7 @@ import { retryEngineConnection } from "../../api/client";
 import { usePauseEngine, useResumeEngine, useSettings, useStatus } from "../../api/hooks";
 import { restartEventStream, startEventStream } from "../../events/client";
 import { useEventStore } from "../../events/store";
+import { useStatusSync } from "../../events/useStatusSync";
 import { isMacApp } from "../../platform/tauri";
 import { routes } from "../../routes/routes";
 import { BrandMark } from "../brand/BrandMark";
@@ -27,8 +28,21 @@ function StatusIndicator({ label, value }: { label: string; value: string }) {
   );
 }
 
-function liveStatus(cameraState?: string, paused?: boolean) {
-  if (paused) return { label: "Paused", detail: "Recognition paused", tone: "warning" };
+function clockTime(value?: string | null) {
+  const date = value ? new Date(value) : undefined;
+  if (!date || Number.isNaN(date.getTime())) return undefined;
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function liveStatus(cameraState?: string, paused?: boolean, pausedUntil?: string | null) {
+  if (paused) {
+    const until = clockTime(pausedUntil);
+    return {
+      label: "Paused",
+      detail: until ? `Camera off until ${until}` : "Camera off until you resume",
+      tone: "warning",
+    };
+  }
   if (cameraState === "running" || cameraState === "starting" || cameraState === "reconnecting") {
     return { label: "Watching", detail: "Local camera only", tone: "online" };
   }
@@ -47,6 +61,7 @@ export function AppShell() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const status = useStatus();
+  useStatusSync();
   const settings = useSettings();
   const firstRunChecked = useRef(false);
   const events = useEventStore();
@@ -90,7 +105,7 @@ export function AppShell() {
   const engineValue = status.data?.paused ? "paused" : (status.data?.cameras[0]?.state ?? events.connection);
   const haValue = status.data?.ha.state ?? events.ha.state;
   const engineRecoverable = status.isError || events.connection === "error" || events.connection === "closed";
-  const live = liveStatus(status.data?.cameras[0]?.state, status.data?.paused);
+  const live = liveStatus(status.data?.cameras[0]?.state, status.data?.paused, status.data?.paused_until);
 
   async function retryEngine() {
     setRetryingEngine(true);
@@ -124,7 +139,7 @@ export function AppShell() {
       return;
     }
     await pause.mutateAsync(900);
-    show({ tone: "warning", title: "Flick paused", description: "Recognition is paused for 15 minutes." });
+    show({ tone: "warning", title: "Flick paused", description: "The camera is off for 15 minutes." });
   }
 
   return (
@@ -227,7 +242,12 @@ export function AppShell() {
         </div>
       </Sheet>
 
-      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        paused={Boolean(status.data?.paused)}
+        onTogglePause={() => void togglePause()}
+      />
     </div>
   );
 }

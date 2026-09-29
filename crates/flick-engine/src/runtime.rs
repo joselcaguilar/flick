@@ -27,13 +27,14 @@ use axum::{
 use flick_api::{
     ActionDto, ActionOutcomeDto, ActionTargetDto, Anchor as ApiAnchor, ApiConfig, ApiGateways,
     ApiProblem, ApiState, AvailableCamera, Camera as ApiCamera, CameraCreate, CameraFormat,
-    CameraPatch, CameraStatus, ConfigGateway, EngineControl, EngineStatus, EventHub, FakeUpdates,
-    HaArea, HaConnectRequest, HaDiscovery, HaEntity, HaGateway, HaInstance, HaServiceSchema,
-    HaStatus as ApiHaStatus, LatencyBreakdown, Mapping, PauseRequest, PreviewFrame, PreviewSource,
-    RealignCommitResponse, RealignPointRequest, RealignPointResponse, RealignSession, SettingsMap,
-    SetupSuggestRequest, SetupSuggestion, StageLatency, TargetModeDto, TeachCommitRequest,
-    TeachCommitResponse, TeachGateway, TeachLevelRequest, TeachLevelResponse, TeachRequest,
-    TeachSession as ApiTeachSession, TeachSpotResponse, VerbBinding, WsServerMessage, router,
+    CameraPatch, CameraStatus, ConfigGateway, EmptyEvent, EngineControl, EnginePausedEvent,
+    EngineStatus, EventHub, FakeUpdates, HaArea, HaConnectRequest, HaDiscovery, HaEntity,
+    HaGateway, HaInstance, HaServiceSchema, HaStatus as ApiHaStatus, LatencyBreakdown, Mapping,
+    PauseRequest, PreviewFrame, PreviewSource, RealignCommitResponse, RealignPointRequest,
+    RealignPointResponse, RealignSession, SettingsMap, SetupSuggestRequest, SetupSuggestion,
+    StageLatency, TargetModeDto, TeachCommitRequest, TeachCommitResponse, TeachGateway,
+    TeachLevelRequest, TeachLevelResponse, TeachRequest, TeachSession as ApiTeachSession,
+    TeachSpotResponse, VerbBinding, WsServerMessage, router,
 };
 use flick_capture::{
     CameraPermissionStatus, CaptureHandle, CaptureStatus, FileSource, FileSourceOptions,
@@ -62,7 +63,10 @@ use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
-use tokio::{net::TcpListener, sync::Mutex};
+use tokio::{
+    net::TcpListener,
+    sync::{Mutex, Notify},
+};
 
 use crate::{
     config::RuntimeConfig,
@@ -139,6 +143,7 @@ pub async fn serve(runtime: RuntimeConfig, token: String) -> anyhow::Result<()> 
         .build();
     app.set_dispatcher(dispatcher).await;
     app.configure_fake_landmarks().await;
+    app.spawn_pause_timer();
     app.spawn_camera_autostart(onboarding_completed).await;
 
     if runtime.sidecar {
@@ -158,7 +163,11 @@ pub async fn serve(runtime: RuntimeConfig, token: String) -> anyhow::Result<()> 
         app_router = app_router.merge(dev_router(app.clone(), api_config));
     }
     if let Some(path) = runtime.fake_camera.as_deref() {
-        app.start_file_camera(path).await?;
+        let camera_id = load_cameras(&app.store)?
+            .into_iter()
+            .next()
+            .map_or_else(|| CameraId::new().to_string(), |camera| camera.id);
+        app.start_file_camera(&camera_id, path).await?;
     }
     if let Some(fixture) = runtime.fake_landmarks_autoplay.as_deref() {
         app.start_replay(fixture).await?;
@@ -962,11 +971,20 @@ fn append_owner_anchor_for_dev(runtime: &RuntimeConfig, anchors: &mut Vec<Dispat
     }
 }
 
+/// Pausing releases the camera; resuming reopens the camera that was running.
+#[derive(Debug, Default)]
+struct PauseState {
+    paused: bool,
+    until: Option<(tokio::time::Instant, String)>,
+    camera_id: Option<String>,
+}
+
 struct EngineApp {
     runtime: RuntimeConfig,
     store: Arc<Store>,
     started_at: Instant,
-    paused: Mutex<bool>,
+    pause: Mutex<PauseState>,
+    pause_changed: Notify,
     events: Mutex<Option<EventHub>>,
     dispatcher: Mutex<Option<Dispatcher>>,
     ha_client: Mutex<Option<HaClient>>,
@@ -987,7 +1005,8 @@ impl EngineApp {
             runtime,
             store: Arc::clone(&store),
             started_at: Instant::now(),
-            paused: Mutex::new(false),
+            pause: Mutex::new(PauseState::default()),
+            pause_changed: Notify::new(),
             events: Mutex::new(None),
             dispatcher: Mutex::new(None),
             ha_client: Mutex::new(None),
@@ -1012,7 +1031,7 @@ impl EngineApp {
         dispatcher
             .set_registry(self.registry.lock().await.clone())
             .await;
-        dispatcher.set_paused(*self.paused.lock().await).await;
+        dispatcher.set_paused(self.pause.lock().await.paused).await;
         *self.dispatcher.lock().await = Some(dispatcher);
     }
 
@@ -1160,6 +1179,58 @@ impl EngineApp {
         Ok(())
     }
 
+    fn spawn_pause_timer(self: &Arc<Self>) {
+        let app = Arc::clone(self);
+        tokio::spawn(async move {
+            loop {
+                let deadline = app
+                    .pause
+                    .lock()
+                    .await
+                    .until
+                    .as_ref()
+                    .map(|(deadline, _)| *deadline);
+                match deadline {
+                    Some(deadline) => {
+                        tokio::select! {
+                            () = app.pause_changed.notified() => {}
+                            () = tokio::time::sleep_until(deadline) => {
+                                tracing::info!("pause expired, resuming");
+                                EngineControl::resume(&*app).await;
+                            }
+                        }
+                    }
+                    None => app.pause_changed.notified().await,
+                }
+            }
+        });
+    }
+
+    /// Clears the pause without reopening the camera. Returns the camera that was running.
+    async fn clear_pause(&self) -> Option<String> {
+        let camera_id = {
+            let mut pause = self.pause.lock().await;
+            if !pause.paused {
+                return None;
+            }
+            pause.paused = false;
+            pause.until = None;
+            pause.camera_id.take()
+        };
+        if let Some(dispatcher) = self.dispatcher.lock().await.clone() {
+            dispatcher.set_paused(false).await;
+        }
+        self.pause_changed.notify_one();
+        if let Some(events) = self.events.lock().await.clone() {
+            events.publish(WsServerMessage::EngineResumed {
+                ts: now_rfc3339(),
+                payload: EmptyEvent {},
+            });
+        }
+        tracing::info!("engine resumed");
+        camera_id
+    }
+
     async fn spawn_camera_autostart(self: &Arc<Self>, onboarding_completed: bool) {
         if (self.runtime.dev && !self.runtime.sidecar)
             || self.runtime.fake_camera.is_some()
@@ -1245,9 +1316,16 @@ impl EngineApp {
     }
 
     async fn start_configured_camera(&self, camera: &ApiCamera) -> CameraStatus {
+        {
+            let mut pause = self.pause.lock().await;
+            if pause.paused {
+                pause.camera_id = Some(camera.id.clone());
+                return paused_camera_status(&camera.id);
+            }
+        }
         if let Some(path) = self.runtime.fake_camera.as_deref() {
             return self
-                .finish_camera_start(&camera.id, self.start_file_camera(path).await)
+                .finish_camera_start(&camera.id, self.start_file_camera(&camera.id, path).await)
                 .await;
         }
         if camera.kind != "local" {
@@ -1319,8 +1397,16 @@ impl EngineApp {
         }
     }
 
-    async fn start_file_camera(&self, path: &Path) -> anyhow::Result<CameraStatus> {
-        let source = FileSource::open(FileSourceOptions::fake_camera(path))?;
+    async fn start_file_camera(
+        &self,
+        camera_id: &str,
+        path: &Path,
+    ) -> anyhow::Result<CameraStatus> {
+        let mut options = FileSourceOptions::fake_camera(path);
+        if let Ok(camera_id) = CameraId::from_str(camera_id) {
+            options.camera_id = camera_id;
+        }
+        let source = FileSource::open(options)?;
         self.start_source(source).await
     }
 
@@ -1580,7 +1666,13 @@ impl Drop for EngineCapture {
 #[async_trait]
 impl EngineControl for EngineApp {
     async fn status(&self) -> EngineStatus {
-        let paused = *self.paused.lock().await;
+        let (paused, paused_until) = {
+            let pause = self.pause.lock().await;
+            (
+                pause.paused,
+                pause.until.as_ref().map(|(_, until)| until.clone()),
+            )
+        };
         let _ = self.started_at.elapsed();
         let _ = self.store.db_path();
         let _ = self.dispatcher.lock().await.is_some();
@@ -1602,7 +1694,12 @@ impl EngineControl for EngineApp {
                         .into_iter()
                         .map(|camera| CameraStatus {
                             camera_id: camera.id,
-                            state: if camera.enabled { "idle" } else { "disabled" }.to_owned(),
+                            state: match (camera.enabled, paused) {
+                                (false, _) => "disabled",
+                                (true, true) => "paused",
+                                (true, false) => "idle",
+                            }
+                            .to_owned(),
                             fps: Some(0.0),
                             error: None,
                         })
@@ -1640,7 +1737,7 @@ impl EngineControl for EngineApp {
             .unwrap_or_else(default_stages);
         EngineStatus {
             paused,
-            paused_until: None,
+            paused_until,
             cameras,
             ha: self.ha_status_dto().await,
             stages,
@@ -1648,18 +1745,54 @@ impl EngineControl for EngineApp {
         }
     }
 
-    async fn pause(&self, _request: PauseRequest) -> EngineStatus {
-        *self.paused.lock().await = true;
+    async fn pause(&self, request: PauseRequest) -> EngineStatus {
+        let until = request
+            .duration_s
+            .filter(|seconds| *seconds > 0)
+            .map(|seconds| {
+                let millis = i64::try_from(seconds.saturating_mul(1000)).unwrap_or(i64::MAX);
+                (
+                    tokio::time::Instant::now() + Duration::from_secs(seconds),
+                    rfc3339_from_ms(now_ms().saturating_add(millis)),
+                )
+            });
+        let until_label = until.as_ref().map(|(_, label)| label.clone());
+        // Release the camera so the privacy indicator turns off while paused.
+        let stopped = self.capture.lock().await.take().map(EngineCapture::stop);
+        {
+            let mut pause = self.pause.lock().await;
+            pause.paused = true;
+            pause.until = until;
+            if let Some(stopped) = &stopped {
+                pause.camera_id = Some(stopped.camera_id.clone());
+            }
+        }
         if let Some(dispatcher) = self.dispatcher.lock().await.clone() {
             dispatcher.set_paused(true).await;
         }
+        self.pause_changed.notify_one();
+        if let Some(stopped) = stopped {
+            self.publish_camera_status(paused_camera_status(&stopped.camera_id))
+                .await;
+        }
+        if let Some(events) = self.events.lock().await.clone() {
+            events.publish(WsServerMessage::EnginePaused {
+                ts: now_rfc3339(),
+                payload: EnginePausedEvent {
+                    until: until_label.clone(),
+                },
+            });
+        }
+        tracing::info!(until = ?until_label, "engine paused, camera released");
         EngineControl::status(self).await
     }
 
     async fn resume(&self) -> EngineStatus {
-        *self.paused.lock().await = false;
-        if let Some(dispatcher) = self.dispatcher.lock().await.clone() {
-            dispatcher.set_paused(false).await;
+        if let Some(camera_id) = self.clear_pause().await
+            && let Ok(Some(camera)) = load_camera(&self.store, &camera_id)
+            && camera.enabled
+        {
+            let _ = self.start_configured_camera(&camera).await;
         }
         EngineControl::status(self).await
     }
@@ -1768,6 +1901,8 @@ impl EngineControl for EngineApp {
     }
 
     async fn start_camera(&self, camera_id: &str) -> CameraStatus {
+        // Starting a camera by hand ends a pause.
+        let _ = self.clear_pause().await;
         match load_camera(&self.store, camera_id) {
             Ok(Some(camera)) => self.start_configured_camera(&camera).await,
             Ok(None) => {
@@ -1799,6 +1934,12 @@ impl EngineControl for EngineApp {
     }
 
     async fn stop_camera(&self, camera_id: &str) -> CameraStatus {
+        {
+            let mut pause = self.pause.lock().await;
+            if pause.camera_id.as_deref() == Some(camera_id) {
+                pause.camera_id = None;
+            }
+        }
         let mut capture = self.capture.lock().await;
         let status = if let Some(capture) = capture.take() {
             capture.stop()
@@ -2462,6 +2603,15 @@ fn capture_status_parts(status: CaptureStatus) -> (String, Option<String>) {
         CaptureStatus::Disconnected => ("reconnecting".to_owned(), None),
         CaptureStatus::Stopped => ("stopped".to_owned(), None),
         CaptureStatus::Failed(message) => ("error".to_owned(), Some(message)),
+    }
+}
+
+fn paused_camera_status(camera_id: &str) -> CameraStatus {
+    CameraStatus {
+        camera_id: camera_id.to_owned(),
+        state: "paused".to_owned(),
+        fps: Some(0.0),
+        error: None,
     }
 }
 

@@ -21,6 +21,7 @@ use tauri::{
     menu::{MenuBuilder, MenuItem, SubmenuBuilder},
     tray::TrayIconBuilder,
 };
+#[cfg(not(target_os = "macos"))]
 use tauri_plugin_autostart::ManagerExt as _;
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
@@ -40,7 +41,7 @@ use url::Url;
 const SIDECAR_NAME: &str = "flick-engine";
 const UPDATE_STATE_FILE: &str = "update_state.json";
 const SHELL_PREFS_FILE: &str = "shell_prefs.json";
-/// Passed by the login item so Flick starts without opening its window.
+/// Passed by the Windows and Linux autostart entry so Flick starts without opening its window.
 const HIDDEN_LAUNCH_ARG: &str = "--hidden";
 const BACKOFF_RESET_AFTER: Duration = Duration::from_secs(60);
 
@@ -49,7 +50,6 @@ struct AppState {
     supervisor: Arc<EngineSupervisor>,
     updates: Arc<UpdateManager>,
     hud: Arc<StdMutex<HudConfig>>,
-    paused: Arc<StdMutex<bool>>,
     menu_bar: Arc<AtomicBool>,
 }
 
@@ -115,6 +115,11 @@ struct ReadyLine {
     event: String,
     port: u16,
     version: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct EnginePauseState {
+    paused: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -460,6 +465,55 @@ impl EngineSupervisor {
         }
     }
 
+    async fn set_paused(&self, command: PauseCommand) -> Result<bool, String> {
+        let endpoint = self
+            .endpoint()
+            .await
+            .ok_or_else(|| "engine is not ready".to_owned())?;
+        let command = match command {
+            PauseCommand::Toggle => {
+                let status = self
+                    .client
+                    .get(format!("{}/api/v1/status", endpoint.base_url))
+                    .bearer_auth(&endpoint.token)
+                    .timeout(Duration::from_secs(2))
+                    .send()
+                    .await
+                    .and_then(reqwest::Response::error_for_status)
+                    .map_err(|error| error.to_string())?
+                    .json::<EnginePauseState>()
+                    .await
+                    .map_err(|error| error.to_string())?;
+                if status.paused {
+                    PauseCommand::Resume
+                } else {
+                    PauseCommand::Pause(None)
+                }
+            }
+            command => command,
+        };
+        let request = match command {
+            PauseCommand::Pause(duration_s) => self
+                .client
+                .post(format!("{}/api/v1/engine/pause", endpoint.base_url))
+                .json(&serde_json::json!({ "duration_s": duration_s })),
+            _ => self
+                .client
+                .post(format!("{}/api/v1/engine/resume", endpoint.base_url)),
+        };
+        let status = request
+            .bearer_auth(&endpoint.token)
+            .timeout(Duration::from_secs(5))
+            .send()
+            .await
+            .and_then(reqwest::Response::error_for_status)
+            .map_err(|error| error.to_string())?
+            .json::<EnginePauseState>()
+            .await
+            .map_err(|error| error.to_string())?;
+        Ok(status.paused)
+    }
+
     async fn busy_reason(&self) -> Result<Option<String>, String> {
         let endpoint = self
             .endpoint()
@@ -729,17 +783,10 @@ fn set_app_preferences(
         state.menu_bar.store(menu_bar, Ordering::Relaxed);
         set_menu_bar_visible(&app, menu_bar).map_err(|error| error.to_string())?;
     }
-    if let Some(open_at_login) = patch.open_at_login {
-        let autolaunch = app.autolaunch();
-        let enabled = autolaunch.is_enabled().map_err(|error| error.to_string())?;
-        if open_at_login != enabled {
-            if open_at_login {
-                autolaunch.enable()
-            } else {
-                autolaunch.disable()
-            }
-            .map_err(|error| error.to_string())?;
-        }
+    if let Some(open_at_login) = patch.open_at_login
+        && open_at_login != open_at_login_enabled(&app)?
+    {
+        set_open_at_login(&app, open_at_login)?;
     }
     current_app_preferences(&app, &state)
 }
@@ -747,11 +794,97 @@ fn set_app_preferences(
 fn current_app_preferences(app: &AppHandle, state: &AppState) -> Result<AppPreferences, String> {
     Ok(AppPreferences {
         menu_bar: state.menu_bar.load(Ordering::Relaxed),
-        open_at_login: app
-            .autolaunch()
-            .is_enabled()
-            .map_err(|error| error.to_string())?,
+        open_at_login: open_at_login_enabled(app)?,
     })
+}
+
+#[cfg(target_os = "macos")]
+fn open_at_login_enabled(_app: &AppHandle) -> Result<bool, String> {
+    Ok(login_item::is_enabled())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn open_at_login_enabled(app: &AppHandle) -> Result<bool, String> {
+    app.autolaunch()
+        .is_enabled()
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(target_os = "macos")]
+fn set_open_at_login(_app: &AppHandle, enabled: bool) -> Result<(), String> {
+    login_item::set_enabled(enabled)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn set_open_at_login(app: &AppHandle, enabled: bool) -> Result<(), String> {
+    let autolaunch = app.autolaunch();
+    if enabled {
+        autolaunch.enable()
+    } else {
+        autolaunch.disable()
+    }
+    .map_err(|error| error.to_string())
+}
+
+/// macOS registers Flick.app itself as a login item, so System Settings → General → Login Items
+/// lists it under "Open at Login" with Flick's name and icon. Other platforms use the autostart plugin.
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)] // SMAppService has no safe binding.
+mod login_item {
+    use objc2_foundation::NSAppleEventManager;
+    use objc2_service_management::{SMAppService, SMAppServiceStatus};
+
+    const OPEN_APPLICATION: u32 = u32::from_be_bytes(*b"oapp");
+    const PROP_DATA: u32 = u32::from_be_bytes(*b"prdt");
+    const LAUNCHED_AS_LOGIN_ITEM: u32 = u32::from_be_bytes(*b"lgit");
+
+    pub fn is_enabled() -> bool {
+        // SAFETY: `mainAppService` and `status` have no preconditions.
+        unsafe { SMAppService::mainAppService().status() == SMAppServiceStatus::Enabled }
+    }
+
+    pub fn set_enabled(enabled: bool) -> Result<(), String> {
+        // SAFETY: registering or unregistering the main app has no preconditions.
+        let result = unsafe {
+            let service = SMAppService::mainAppService();
+            if enabled {
+                service.registerAndReturnError()
+            } else {
+                service.unregisterAndReturnError()
+            }
+        };
+        result.map_err(|error| error.localizedDescription().to_string())?;
+        if enabled && !is_enabled() {
+            // SAFETY: opens System Settings; no preconditions.
+            unsafe { SMAppService::openSystemSettingsLoginItems() };
+            return Err(
+                "macOS needs your OK. Turn on Flick in System Settings → General → Login Items."
+                    .to_owned(),
+            );
+        }
+        Ok(())
+    }
+
+    /// True when macOS opened Flick as a login item. Only meaningful while the app is launching.
+    pub fn launched_at_login() -> bool {
+        let Some(event) = NSAppleEventManager::sharedAppleEventManager().currentAppleEvent() else {
+            return false;
+        };
+        event.eventID() == OPEN_APPLICATION
+            && event
+                .paramDescriptorForKeyword(PROP_DATA)
+                .is_some_and(|value| value.enumCodeValue() == LAUNCHED_AS_LOGIN_ITEM)
+    }
+
+    /// Earlier builds wrote a LaunchAgent, which System Settings lists as "flick-desktop" under
+    /// "Allow in the Background". Replace it with the login item, keeping the user's choice.
+    pub fn migrate_launch_agent(app: &tauri::AppHandle) {
+        use tauri_plugin_autostart::ManagerExt as _;
+        let autolaunch = app.autolaunch();
+        if autolaunch.is_enabled().unwrap_or(false) && autolaunch.disable().is_ok() {
+            let _ = set_enabled(true);
+        }
+    }
 }
 
 fn read_shell_prefs(app: &AppHandle) -> ShellPrefs {
@@ -771,6 +904,16 @@ fn write_shell_prefs(app: &AppHandle, prefs: ShellPrefs) -> Result<(), String> {
     fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
     let bytes = serde_json::to_vec_pretty(&prefs).map_err(|error| error.to_string())?;
     fs::write(dir.join(SHELL_PREFS_FILE), bytes).map_err(|error| error.to_string())
+}
+
+/// Login launches start without the window. macOS login items can't pass arguments, so ask
+/// AppKit how Flick was opened; the autostart plugin passes `--hidden` elsewhere.
+fn launched_hidden() -> bool {
+    #[cfg(target_os = "macos")]
+    if login_item::launched_at_login() {
+        return true;
+    }
+    std::env::args().any(|arg| arg == HIDDEN_LAUNCH_ARG)
 }
 
 fn set_menu_bar_visible(app: &AppHandle, visible: bool) -> tauri::Result<()> {
@@ -959,7 +1102,6 @@ fn main() {
                 supervisor: supervisor.clone(),
                 updates: updates.clone(),
                 hud: Arc::new(StdMutex::new(HudConfig::default())),
-                paused: Arc::new(StdMutex::new(false)),
                 menu_bar: menu_bar.clone(),
             });
 
@@ -968,7 +1110,9 @@ fn main() {
             set_menu_bar_visible(app.handle(), prefs.menu_bar)?;
             install_shortcut(app.handle())?;
             install_deep_link_handler(app.handle());
-            if std::env::args().any(|arg| arg == HIDDEN_LAUNCH_ARG) {
+            #[cfg(target_os = "macos")]
+            login_item::migrate_launch_agent(app.handle());
+            if launched_hidden() {
                 app.set_activation_policy(if prefs.menu_bar {
                     ActivationPolicy::Accessory
                 } else {
@@ -1140,8 +1284,10 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
         "settings" => {
             let _ = show_main_window_impl(app, Some("/settings".to_owned()));
         }
-        "pause_15" | "pause_60" | "pause_until" => set_pause(app, true),
-        "resume" => set_pause(app, false),
+        "pause_15" => request_pause(app, PauseCommand::Pause(Some(15 * 60))),
+        "pause_60" => request_pause(app, PauseCommand::Pause(Some(60 * 60))),
+        "pause_until" => request_pause(app, PauseCommand::Pause(None)),
+        "resume" => request_pause(app, PauseCommand::Resume),
         "retry_engine" => {
             let app = app.clone();
             tauri::async_runtime::spawn(async move {
@@ -1180,7 +1326,7 @@ fn install_shortcut(app: &AppHandle) -> Result<(), tauri_plugin_global_shortcut:
     app.global_shortcut()
         .on_shortcut(shortcut, |app, _shortcut, event| {
             if event.state == ShortcutState::Pressed {
-                toggle_pause(app);
+                request_pause(app, PauseCommand::Toggle);
             }
         })
 }
@@ -1324,21 +1470,24 @@ fn macos_camera_status(status: nokhwa_bindings_macos::AVAuthorizationStatus) -> 
     }
 }
 
-fn set_pause(app: &AppHandle, paused: bool) {
-    if let Some(state) = app.try_state::<AppState>()
-        && let Ok(mut value) = state.paused.lock()
-    {
-        *value = paused;
-    }
-    let _ = app.emit("pause-changed", paused);
+#[derive(Debug, Clone, Copy)]
+enum PauseCommand {
+    Pause(Option<u64>),
+    Resume,
+    Toggle,
 }
 
-fn toggle_pause(app: &AppHandle) {
-    let paused = app
-        .try_state::<AppState>()
-        .and_then(|state| state.paused.lock().ok().map(|value| !*value))
-        .unwrap_or(true);
-    set_pause(app, paused);
+/// The engine owns pause state; the tray and shortcut only ask it to change.
+fn request_pause(app: &AppHandle, command: PauseCommand) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let Some(state) = app.try_state::<AppState>() else {
+            return;
+        };
+        if let Err(error) = state.supervisor.set_paused(command).await {
+            tracing::warn!(%error, ?command, "pause request failed");
+        }
+    });
 }
 
 fn template_tray_icon() -> tauri::Result<Image<'static>> {

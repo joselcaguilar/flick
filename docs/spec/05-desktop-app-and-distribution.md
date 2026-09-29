@@ -86,7 +86,8 @@ The HUD window gets only `core:event:default`.
   7. Settings…
   8. **Restart to update (1.3.0)**, shown only when an update is downloaded; otherwise "Check for updates"
   9. Quit Flick (installs a pending update on quit)
-- **Global shortcut** (`tauri-plugin-global-shortcut`): `⌥⌘F` / `Ctrl+Alt+F` toggles pause (configurable).
+- **Global shortcut** (`tauri-plugin-global-shortcut`): `⌥⌘F` / `Ctrl+Alt+F` toggles pause (configurable). A shortcut pause lasts until resumed.
+- **Pause is owned by the engine.** The tray, the shortcut and the command palette all call `POST /api/v1/engine/pause` / `resume`. Pausing releases the camera, so the macOS camera indicator turns off. A timed pause ends by itself and reopens the same camera. Starting a camera manually also ends the pause.
 
 ## 4. Plugins
 
@@ -94,12 +95,14 @@ The HUD window gets only `core:event:default`.
 |---|---|
 | `tauri-plugin-single-instance` | Focus the existing instance; forward deep links |
 | `tauri-plugin-deep-link` | `flick://` scheme: `flick://open/<route>`, `flick://ha/callback` (OAuth fallback, Phase 2), `flick://pack?url=` (import pack, Phase 2) |
-| `tauri-plugin-autostart` | Settings → General → "Open at login" (macOS LaunchAgent, Windows Run key, Linux XDG autostart). Default **off**. Login launches pass `--hidden`, so the window stays closed and Flick starts in the menu bar (or the Dock when menu bar mode is off) |
+| `tauri-plugin-autostart` | Settings → General → "Open at login" on Windows (Run key) and Linux (XDG autostart). Default **off**. Login launches pass `--hidden`, so the window stays closed and Flick starts in the menu bar (or the Dock when menu bar mode is off). On macOS, see "Login item (macOS)" below |
 | `tauri-plugin-updater` | Signed app updates, driven from Rust (`10-…` §4). Minisign key from `tauri signer generate`, kept in Key Vault. Endpoints: primary `https://updates.flick.app/app/{{target}}/{{arch}}/{{current_version}}?channel=<ch>` (Azure Blob + Front Door, placeholder domain), then the GitHub Releases `latest.json` mirror. Channels: `stable`, `beta`, `nightly`. A custom `version_comparator` applies the signed channel index (rollout %, revoked, rollback). Install on quit by default |
 | `tauri-plugin-notification` | System notifications for important errors when the HUD is disabled |
 | `tauri-plugin-global-shortcut` | Pause toggle |
 | `tauri-plugin-window-state` | Main window geometry |
 | `tauri-plugin-opener` | External links |
+
+**Login item (macOS).** Flick registers itself with `SMAppService.mainAppService` (macOS 13+), so it shows up in System Settings → General → Login Items → "Open at Login" with its own name and icon. It does not appear under "Allow in the Background" as a bare binary. macOS asks for no approval, though it may post a "Login Item Added" notice. If registration still needs approval, Flick opens Login Items settings and says so. A login launch is detected from the launch Apple event (`keyAEPropData` = `lgit`) and starts hidden, because SMAppService cannot pass arguments. An older LaunchAgent created by the autostart plugin is migrated on first launch.
 
 ## 5. macOS specifics (MVP platform)
 
