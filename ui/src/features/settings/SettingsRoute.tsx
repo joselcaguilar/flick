@@ -4,9 +4,6 @@ import {
   useAnchors,
   useCameras,
   useCheckUpdates,
-  useHaConnect,
-  useHaDiscover,
-  useHaStatus,
   useInstallUpdate,
   useModels,
   usePatchSettings,
@@ -20,10 +17,10 @@ import { DevicePill } from "../../components/domain";
 import { Badge, Button, Input, Select, Switch } from "../../components/ui";
 import { isTauri } from "../../platform/tauri";
 import { darkThemes, lightThemes, useTheme } from "../../theme";
+import { HaConnectionSection } from "./HaConnectionSection";
+import { extractErrors, type FieldErrors, SettingRow, SettingSection, sectionId } from "./SettingParts";
 import "./styles.css";
 import { useAppPreferences, useSetAppPreferences } from "./useAppPreferences";
-
-type FieldErrors = Record<string, string>;
 
 const themeModeItems = [
   { value: "system", label: "Sync with system" },
@@ -51,8 +48,6 @@ const sectionTitles = [
   "Privacy",
   "About",
 ];
-
-const sectionId = (title: string) => `settings-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
 const sensitivityItems = [
   { value: "low", label: "Low" },
@@ -85,15 +80,6 @@ const dominantEyeItems = [
   { value: "right", label: "Right" },
 ];
 
-function extractErrors(error: unknown) {
-  const problem = (error as { problem?: { detail?: string; errors?: FieldErrors } }).problem;
-  return {
-    detail:
-      problem?.detail ?? (error instanceof Error ? error.message : "Flick could not save that setting."),
-    errors: problem?.errors ?? {},
-  };
-}
-
 function boolValue(settings: SettingsMap, key: string, fallback = false) {
   const value = settings[key];
   return typeof value === "boolean" ? value : fallback;
@@ -109,50 +95,6 @@ function stringValue(settings: SettingsMap, key: string, fallback: string) {
   return typeof value === "string" ? value : fallback;
 }
 
-function SettingSection({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle: string;
-  children: React.ReactNode;
-}) {
-  const id = sectionId(title);
-  return (
-    <section className="settings-section" id={id} aria-labelledby={`${id}-title`}>
-      <div className="settings-section-heading">
-        <h2 id={`${id}-title`}>{title}</h2>
-        <p>{subtitle}</p>
-      </div>
-      <div className="settings-section-body">{children}</div>
-    </section>
-  );
-}
-
-function SettingRow({
-  label,
-  description,
-  error,
-  children,
-}: {
-  label: string;
-  description?: string;
-  error?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="setting-row">
-      <div>
-        <strong>{label}</strong>
-        {description ? <span>{description}</span> : null}
-        {error ? <em role="alert">{error}</em> : null}
-      </div>
-      <div className="setting-control">{children}</div>
-    </div>
-  );
-}
-
 export function SettingsRoute() {
   const settingsQuery = useSettings();
   const patchSettings = usePatchSettings();
@@ -166,9 +108,6 @@ export function SettingsRoute() {
   const anchors = useAnchors(place?.id ?? "");
   const taughtNames = place ? (anchors.data ?? []).map((anchor) => anchor.name) : [];
   const cameras = useCameras();
-  const haStatus = useHaStatus();
-  const haDiscover = useHaDiscover();
-  const haConnect = useHaConnect();
   const theme = useTheme();
   const appPreferences = useAppPreferences();
   const setAppPreferences = useSetAppPreferences();
@@ -176,9 +115,6 @@ export function SettingsRoute() {
   const openAtLogin = appPreferences.data?.open_at_login ?? false;
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [notice, setNotice] = useState<string | null>(null);
-  const [haUrl, setHaUrl] = useState("http://homeassistant.local:8123");
-  const [haToken, setHaToken] = useState("demo-valid-token");
-  const [haError, setHaError] = useState<string | null>(null);
   const settings = settingsQuery.data ?? {};
   const hud = settings["feedback.hud"] ?? { enabled: true, position: "top-center", duration_ms: 1500 };
   const sounds = settings["feedback.sounds"] ?? { enabled: true, volume: 0.6 };
@@ -225,16 +161,6 @@ export function SettingsRoute() {
             ? error.message
             : "Flick could not change that setting.",
       );
-    }
-  }
-
-  async function reconnectHa() {
-    try {
-      setHaError(null);
-      await haConnect.mutateAsync({ base_url: haUrl, token: haToken });
-      setNotice("Home Assistant re-authenticated.");
-    } catch (error) {
-      setHaError(extractErrors(error).detail);
     }
   }
 
@@ -958,65 +884,12 @@ export function SettingsRoute() {
             </a>
           </SettingSection>
 
-          <SettingSection
-            title="Home Assistant connection"
-            subtitle="Direct WebSocket calls only; use a non-admin HA user for Flick."
-          >
-            <div className="ha-status-card">
-              <Badge tone={haStatus.data?.state === "ready" ? "success" : "warning"}>
-                {haStatus.data?.state ?? "unknown"}
-              </Badge>
-              <strong>{haStatus.data?.instance?.name ?? "Home"}</strong>
-              <span>{haStatus.data?.ha_version ?? "2026.9"}</span>
-            </div>
-            <div className="discovered-ha-list">
-              {(haDiscover.data ?? []).map((instance) => (
-                <button key={instance.uuid} type="button" onClick={() => setHaUrl(instance.base_url)}>
-                  {instance.name} · {instance.base_url}
-                </button>
-              ))}
-            </div>
-            <SettingRow
-              label="Instance URL"
-              description="Used for re-authentication."
-              error={fieldErrors["ha.url"]}
-            >
-              <Input
-                aria-label="Instance URL"
-                value={haUrl}
-                onChange={(event) => setHaUrl(event.target.value)}
-              />
-            </SettingRow>
-            <SettingRow
-              label="Long-lived token"
-              description="Stored by the engine keychain backend, not in settings."
-              error={haError ?? undefined}
-            >
-              <Input
-                aria-label="Long-lived token"
-                type="password"
-                value={haToken}
-                onChange={(event) => setHaToken(event.target.value)}
-              />
-            </SettingRow>
-            <div className="settings-action-row">
-              <Button variant="primary" onClick={() => void reconnectHa()} loading={haConnect.isPending}>
-                Re-authenticate
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() =>
-                  void patchOne(
-                    "ha.disconnect_requested_at",
-                    new Date().toISOString(),
-                    "Disconnect requested.",
-                  )
-                }
-              >
-                Disconnect
-              </Button>
-            </div>
-          </SettingSection>
+          <HaConnectionSection
+            onNotice={setNotice}
+            onDisconnect={() =>
+              void patchOne("ha.disconnect_requested_at", new Date().toISOString(), "Disconnect requested.")
+            }
+          />
 
           <SettingSection
             title="Privacy"

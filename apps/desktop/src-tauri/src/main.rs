@@ -514,6 +514,23 @@ impl EngineSupervisor {
         Ok(status.paused)
     }
 
+    async fn report_network(&self, ssid: Option<&str>) -> Result<(), String> {
+        let endpoint = self
+            .endpoint()
+            .await
+            .ok_or_else(|| "engine is not ready".to_owned())?;
+        self.client
+            .put(format!("{}/api/v1/network", endpoint.base_url))
+            .bearer_auth(&endpoint.token)
+            .json(&serde_json::json!({ "ssid": ssid }))
+            .timeout(Duration::from_secs(2))
+            .send()
+            .await
+            .and_then(reqwest::Response::error_for_status)
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
     async fn busy_reason(&self) -> Result<Option<String>, String> {
         let endpoint = self
             .endpoint()
@@ -764,6 +781,38 @@ fn open_camera_privacy_settings(app: AppHandle) -> Result<(), String> {
             "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera",
             None::<String>,
         )
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn location_permission_status(app: AppHandle) -> Result<String, String> {
+    location_permission_status_impl(&app).await
+}
+
+#[tauri::command]
+async fn location_request_access(app: AppHandle) -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    if location_permission_status_impl(&app).await? == "not_determined" {
+        show_main_window_impl(&app, None)?;
+        on_main_thread(&app, wifi::request_access).await?;
+    }
+    location_permission_status_impl(&app).await
+}
+
+#[tauri::command]
+fn open_location_privacy_settings(app: AppHandle) -> Result<(), String> {
+    app.opener()
+        .open_url(
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices",
+            None::<String>,
+        )
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn current_wifi_ssid() -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(read_wifi_ssid)
+        .await
         .map_err(|error| error.to_string())
 }
 
@@ -1085,6 +1134,10 @@ fn main() {
             camera_permission_status,
             camera_request_access,
             open_camera_privacy_settings,
+            location_permission_status,
+            location_request_access,
+            open_location_privacy_settings,
+            current_wifi_ssid,
             app_preferences,
             set_app_preferences,
             app_info,
@@ -1127,6 +1180,7 @@ fn main() {
             }
 
             let handle = app.handle().clone();
+            start_network_watch(supervisor.clone());
             supervisor.start(handle.clone());
             tauri::async_runtime::spawn(async move {
                 run_post_update_health_check(handle, updates).await;
@@ -1468,6 +1522,126 @@ fn macos_camera_status(status: nokhwa_bindings_macos::AVAuthorizationStatus) -> 
         AVAuthorizationStatus::Denied => "denied",
         AVAuthorizationStatus::Authorized => "authorized",
     }
+}
+
+#[cfg(target_os = "macos")]
+async fn location_permission_status_impl(app: &AppHandle) -> Result<String, String> {
+    on_main_thread(app, || wifi::permission_status().to_owned()).await
+}
+
+#[cfg(not(target_os = "macos"))]
+async fn location_permission_status_impl(_app: &AppHandle) -> Result<String, String> {
+    Ok("unsupported".to_owned())
+}
+
+#[cfg(target_os = "macos")]
+async fn on_main_thread<T: Send + 'static>(
+    app: &AppHandle,
+    task: impl FnOnce() -> T + Send + 'static,
+) -> Result<T, String> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    app.run_on_main_thread(move || {
+        let _ = sender.send(task());
+    })
+    .map_err(|error| error.to_string())?;
+    receiver
+        .await
+        .map_err(|_| "main thread task was canceled".to_owned())
+}
+
+#[cfg(target_os = "macos")]
+fn read_wifi_ssid() -> Option<String> {
+    wifi::current_ssid()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn read_wifi_ssid() -> Option<String> {
+    None
+}
+
+/// Wi-Fi network name and the Location permission macOS requires before revealing it.
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)] // CoreLocation and CoreWLAN have no safe bindings.
+mod wifi {
+    use std::cell::RefCell;
+
+    use objc2::rc::Retained;
+    use objc2_core_location::{CLAuthorizationStatus, CLLocationManager};
+    use objc2_core_wlan::CWWiFiClient;
+
+    thread_local! {
+        // CoreLocation wants one long-lived manager on the main thread.
+        static LOCATION: RefCell<Option<Retained<CLLocationManager>>> = const { RefCell::new(None) };
+    }
+
+    fn with_manager<T>(task: impl FnOnce(&CLLocationManager) -> T) -> T {
+        LOCATION.with(|cell| {
+            let mut cell = cell.borrow_mut();
+            // SAFETY: called on the main thread; the manager is retained for the app's lifetime.
+            let manager = cell.get_or_insert_with(|| unsafe { CLLocationManager::new() });
+            task(manager)
+        })
+    }
+
+    /// Main thread only.
+    pub fn permission_status() -> &'static str {
+        // SAFETY: plain property read on a live manager.
+        match with_manager(|manager| unsafe { manager.authorizationStatus() }) {
+            CLAuthorizationStatus::NotDetermined => "not_determined",
+            CLAuthorizationStatus::Restricted => "restricted",
+            CLAuthorizationStatus::Denied => "denied",
+            _ => "authorized",
+        }
+    }
+
+    /// Main thread only. macOS answers asynchronously; callers poll `permission_status`.
+    pub fn request_access() {
+        // SAFETY: the manager stays alive while the system prompt is shown.
+        with_manager(|manager| unsafe { manager.requestWhenInUseAuthorization() });
+    }
+
+    /// None without Location permission or when not on Wi-Fi.
+    pub fn current_ssid() -> Option<String> {
+        // SAFETY: CWWiFiClient is thread-safe and these are read-only queries.
+        let ssid = unsafe {
+            let interface = CWWiFiClient::sharedWiFiClient().interface()?;
+            interface.ssid()?
+        }
+        .to_string();
+        let ssid = ssid.trim();
+        (!ssid.is_empty()).then(|| ssid.to_owned())
+    }
+}
+
+/// Tells the engine which Wi-Fi network this computer is on, so it can choose between the Home
+/// Assistant home and remote URLs. Sends on change, on engine restart, and every 30 seconds.
+fn start_network_watch(supervisor: Arc<EngineSupervisor>) {
+    tauri::async_runtime::spawn(async move {
+        let mut last: Option<(String, Option<String>)> = None;
+        let mut last_sent = Instant::now();
+        let mut ticker = time::interval(Duration::from_secs(5));
+        loop {
+            ticker.tick().await;
+            let Some(endpoint) = supervisor.endpoint().await else {
+                last = None;
+                continue;
+            };
+            let ssid = tauri::async_runtime::spawn_blocking(read_wifi_ssid)
+                .await
+                .unwrap_or(None);
+            let current = (endpoint.base_url, ssid);
+            if last.as_ref() == Some(&current) && last_sent.elapsed() < Duration::from_secs(30) {
+                continue;
+            }
+            match supervisor.report_network(current.1.as_deref()).await {
+                Ok(()) => {
+                    last = Some(current);
+                    last_sent = Instant::now();
+                }
+                Err(error) => tracing::debug!(%error, "network report failed"),
+            }
+        }
+    });
 }
 
 #[derive(Debug, Clone, Copy)]

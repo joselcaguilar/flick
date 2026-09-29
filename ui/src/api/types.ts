@@ -79,6 +79,8 @@ export type SettingsMap = {
 export type SettingsPatch = Partial<SettingsMap>;
 
 export type HaInstance = Schema<"HaInstance">;
+export type HaStatus = Schema<"HaStatus">;
+export type HaConnectionUpdate = Schema<"HaConnectionUpdate">;
 export type HaDiscovery = Schema<"HaDiscovery">;
 export type HaArea = Schema<"HaArea">;
 export type HaEntity = Schema<"HaEntity">;

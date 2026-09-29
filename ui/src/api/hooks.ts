@@ -14,9 +14,11 @@ import type {
   Gesture,
   GesturePackPreview,
   HaArea,
+  HaConnectionUpdate,
   HaDiscovery,
   HaEntity,
   HaInstance,
+  HaStatus,
   Health,
   Mapping,
   ModelPack,
@@ -103,15 +105,24 @@ export function useHaDiscover() {
 export function useHaStatus() {
   return useQuery({
     queryKey: queryKeys.haStatus,
-    queryFn: () =>
-      api.get<{ state: string; ha_version?: string; instance?: HaInstance }>("/api/v1/ha/status"),
+    queryFn: () => api.get<HaStatus>("/api/v1/ha/status"),
   });
 }
 
 export function useHaConnect() {
+  const client = useQueryClient();
   return useMutation({
     mutationFn: (body: { base_url: string; token: string; trust_cert_sha256?: string }) =>
       api.post<HaInstance>("/api/v1/ha/connect", body),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.haStatus }),
+  });
+}
+
+export function useHaUpdate() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (update: HaConnectionUpdate) => api.patch<HaInstance>("/api/v1/ha", update),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.haStatus }),
   });
 }
 

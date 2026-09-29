@@ -49,7 +49,9 @@ pub use protocol::{EntityDelta, parse_compressed_entities};
 pub use registry::{AreaGroup, RegistryCache, RegistryEntity, RegistrySnapshot};
 pub use safety::{SafetyCatalog, SafetyClass, SafetyInput, SafetyValidator};
 pub use secret::{KeyringSecretStore, MemorySecretStore, SecretStore};
-pub use types::{EntityState, HaConnectionConfig, HaEvent, HaStatus, ServiceCallRecord};
+pub use types::{
+    EntityState, HaConnectionConfig, HaEvent, HaRoute, HaStatus, ServiceCallRecord, http_base_url,
+};
 pub use verb::{
     FanLevelPlan, VerbResolution, VerbResolutionError, VerbTarget, next_fan_level,
     previous_fan_level, record_current_fan_level,

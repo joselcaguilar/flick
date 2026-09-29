@@ -25,6 +25,8 @@ import { uiBHandlers } from "./handlers.ui-b";
 
 const api = "*/api/v1";
 let mutableSettings = { ...settings };
+let mutableHaInstance = { ...haInstance };
+let mockNetworkSsid: string | null = "Casa";
 
 function ok(body: unknown) {
   return HttpResponse.json(body as Parameters<typeof HttpResponse.json>[0]);
@@ -62,8 +64,39 @@ export const handlers = [
     return ok(mutableSettings);
   }),
   http.get(`${api}/ha/discover`, () => ok(haDiscovery)),
-  http.post(`${api}/ha/connect`, () => ok(haInstance)),
-  http.get(`${api}/ha/status`, () => ok({ state: "ready", ha_version: "2026.9", instance: haInstance })),
+  http.post(`${api}/ha/connect`, () => ok(mutableHaInstance)),
+  http.get(`${api}/ha/status`, () =>
+    ok({
+      state: "ready",
+      ha_version: "2026.9",
+      instance: mutableHaInstance,
+      connection:
+        mockNetworkSsid && mutableHaInstance.trusted_ssids?.includes(mockNetworkSsid) ? "home" : "remote",
+      active_url:
+        mockNetworkSsid && mutableHaInstance.trusted_ssids?.includes(mockNetworkSsid)
+          ? (mutableHaInstance.internal_url ?? mutableHaInstance.base_url)
+          : mutableHaInstance.base_url,
+      network_ssid: mockNetworkSsid,
+    }),
+  ),
+  http.patch(`${api}/ha`, async ({ request }) => {
+    const body = (await request.json()) as {
+      base_url?: string | null;
+      internal_url?: string | null;
+      trusted_ssids?: string[] | null;
+    };
+    mutableHaInstance = {
+      ...mutableHaInstance,
+      ...(body.base_url ? { base_url: body.base_url } : {}),
+      ...(body.internal_url != null ? { internal_url: body.internal_url.trim() || null } : {}),
+      ...(body.trusted_ssids ? { trusted_ssids: body.trusted_ssids } : {}),
+    };
+    return ok(mutableHaInstance);
+  }),
+  http.put(`${api}/network`, async ({ request }) => {
+    mockNetworkSsid = ((await request.json()) as { ssid?: string | null }).ssid ?? null;
+    return noContent();
+  }),
   http.delete(`${api}/ha`, () => noContent()),
   http.get(`${api}/ha/areas`, () => ok(haAreas)),
   http.get(`${api}/ha/entities`, ({ request }) => {

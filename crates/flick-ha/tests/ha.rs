@@ -531,3 +531,20 @@ async fn wss_url_does_not_crash_client_task() {
         "client task died: {err}"
     );
 }
+
+#[tokio::test]
+async fn unreachable_home_url_falls_back_to_remote() {
+    let (url, token, _handle) = MockHa::start(MockScenario::default()).await.unwrap();
+    let (_network_tx, network_rx) = tokio::sync::watch::channel(Some("Home".to_owned()));
+    let mut config = HaConnectionConfig::new(url, token)
+        .unwrap()
+        .with_internal_url(Some("http://127.0.0.1:1"))
+        .unwrap();
+    config.trusted_ssids = vec!["Home".to_owned()];
+    config.network = Some(network_rx);
+    let client = HaClient::connect(config).await.unwrap();
+    wait_for_status(&client, |status| matches!(status, HaStatus::Ready { .. })).await;
+    let route = client.route().borrow().clone().unwrap();
+    assert!(!route.internal);
+    assert!(route.url.starts_with("http://"));
+}

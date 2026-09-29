@@ -698,6 +698,31 @@
         "responses": {
           "204": {}
         }
+      },
+      "patch": {
+        "tags": [],
+        "operationId": "ha_update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HaConnectionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HaInstance"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/ha/areas": {
@@ -1104,6 +1129,25 @@
         ],
         "responses": {
           "202": {}
+        }
+      }
+    },
+    "/api/v1/network": {
+      "put": {
+        "tags": [],
+        "operationId": "put_network",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NetworkReport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {}
         }
       }
     },
@@ -3202,6 +3246,36 @@
           }
         }
       },
+      "HaConnectionUpdate": {
+        "type": "object",
+        "description": "Change to how Flick reaches Home Assistant. Omitted fields are kept.",
+        "properties": {
+          "base_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Remote URL, used anywhere."
+          },
+          "internal_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Home URL. An empty string clears it."
+          },
+          "trusted_ssids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Wi-Fi networks on which the Home URL is used."
+          }
+        }
+      },
       "HaDiscovery": {
         "type": "object",
         "description": "Discovered Home Assistant instance.",
@@ -3365,6 +3439,13 @@
             "type": "string",
             "description": "ULID."
           },
+          "internal_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Home URL, preferred on trusted Wi-Fi networks or when found on the LAN."
+          },
           "is_default": {
             "type": "boolean",
             "description": "Default instance flag."
@@ -3372,6 +3453,13 @@
           "name": {
             "type": "string",
             "description": "Display name."
+          },
+          "trusted_ssids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Wi-Fi networks on which the Home URL is used."
           },
           "updated_at": {
             "type": "string",
@@ -3404,6 +3492,20 @@
           "state"
         ],
         "properties": {
+          "active_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "HTTP URL currently in use."
+          },
+          "connection": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Active route: home or remote."
+          },
           "ha_version": {
             "type": [
               "string",
@@ -3421,6 +3523,20 @@
                 "type": "null"
               }
             ]
+          },
+          "last_error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why the last connection attempt failed, while reconnecting."
+          },
+          "network_ssid": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Wi-Fi network reported by the desktop shell, when known."
           },
           "state": {
             "type": "string",
@@ -4072,6 +4188,19 @@
               }
             },
             "description": "Normalized trajectory for glyphs."
+          }
+        }
+      },
+      "NetworkReport": {
+        "type": "object",
+        "description": "Current network as seen by the desktop shell.",
+        "properties": {
+          "ssid": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Wi-Fi SSID, or null when unknown or not on Wi-Fi."
           }
         }
       },

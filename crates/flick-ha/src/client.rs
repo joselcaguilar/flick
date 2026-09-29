@@ -20,7 +20,7 @@ use crate::{
     error::{error_outcome, stale_outcome, timeout_outcome},
     protocol::{context_id, parse_compressed_entities, result_error},
     registry::{RegistryCache, RegistrySnapshot, build_snapshot},
-    types::{EntityState, HaConnectionConfig, HaEvent, HaStatus},
+    types::{EntityState, HaConnectionConfig, HaEvent, HaRoute, HaStatus, http_base_url},
     verb::{VerbResolution, VerbResolutionError, VerbTarget, resolve_verb},
 };
 
@@ -31,6 +31,7 @@ type Ws = WebSocketStream<MaybeTlsStream<TcpStream>>;
 pub struct HaClient {
     tx: mpsc::Sender<Command>,
     status_rx: watch::Receiver<HaStatus>,
+    route_rx: watch::Receiver<Option<HaRoute>>,
     events_tx: broadcast::Sender<HaEvent>,
     registry: Arc<RwLock<RegistryCache>>,
 }
@@ -40,12 +41,18 @@ impl HaClient {
     pub async fn connect(config: HaConnectionConfig) -> Result<Self, HaError> {
         let (tx, rx) = mpsc::channel(128);
         let (status_tx, status_rx) = watch::channel(HaStatus::Disconnected);
+        let (route_tx, route_rx) = watch::channel(None);
         let (events_tx, _) = broadcast::channel(256);
         let registry = Arc::new(RwLock::new(RegistryCache::default()));
         let actor_registry = Arc::clone(&registry);
         let actor_events = events_tx.clone();
         let actor = tokio::spawn(async move {
-            run_actor(config, rx, status_tx, actor_events, actor_registry).await;
+            let channels = ActorChannels {
+                status_tx,
+                route_tx,
+                events_tx: actor_events,
+            };
+            run_actor(config, rx, channels, actor_registry).await;
         });
         tokio::spawn(async move {
             if let Err(err) = actor.await
@@ -57,6 +64,7 @@ impl HaClient {
         Ok(Self {
             tx,
             status_rx,
+            route_rx,
             events_tx,
             registry,
         })
@@ -66,6 +74,13 @@ impl HaClient {
     #[must_use]
     pub fn status(&self) -> watch::Receiver<HaStatus> {
         self.status_rx.clone()
+    }
+
+    /// Returns a watch receiver for the URL currently in use (`None` while
+    /// disconnected).
+    #[must_use]
+    pub fn route(&self) -> watch::Receiver<Option<HaRoute>> {
+        self.route_rx.clone()
     }
 
     /// Waits until the initial authentication attempt reaches `ready` or
@@ -257,13 +272,24 @@ struct SessionState {
     entity_states: HashMap<String, EntityState>,
 }
 
+struct ActorChannels {
+    status_tx: watch::Sender<HaStatus>,
+    route_tx: watch::Sender<Option<HaRoute>>,
+    events_tx: broadcast::Sender<HaEvent>,
+}
+
 async fn run_actor(
     config: HaConnectionConfig,
     mut rx: mpsc::Receiver<Command>,
-    status_tx: watch::Sender<HaStatus>,
-    events_tx: broadcast::Sender<HaEvent>,
+    channels: ActorChannels,
     registry: Arc<RwLock<RegistryCache>>,
 ) {
+    let ActorChannels {
+        status_tx,
+        route_tx,
+        events_tx,
+    } = channels;
+    let mut network = config.network.clone();
     let mut attempt = 0_u32;
     let mut queued_calls = VecDeque::new();
     let mut subscriptions = HashMap::new();
@@ -271,9 +297,11 @@ async fn run_actor(
     loop {
         set_status(&status_tx, &events_tx, HaStatus::Connecting);
         let last_error: Option<String>;
-        match establish(&config).await {
-            Ok((ws, ha_version, next_id)) => {
+        match establish_any(&config).await {
+            Ok((ws, ha_version, next_id, route)) => {
                 attempt = 0;
+                let internal = route.internal;
+                route_tx.send_replace(Some(route));
                 set_status(
                     &status_tx,
                     &events_tx,
@@ -290,7 +318,11 @@ async fn run_actor(
                 let disconnected = run_connected(
                     ws,
                     &config,
-                    &mut rx,
+                    Connection {
+                        rx: &mut rx,
+                        network: &mut network,
+                        internal,
+                    },
                     &events_tx,
                     &registry,
                     &mut queued_calls,
@@ -298,12 +330,18 @@ async fn run_actor(
                 )
                 .await;
                 subscriptions = state.subscriptions;
-                last_error = Some("Connection to Home Assistant was lost".to_owned());
+                route_tx.send_replace(None);
                 fail_pending(&mut state.pending, HaError::Disconnected);
                 set_status(&status_tx, &events_tx, HaStatus::Disconnected);
-                if matches!(disconnected, DisconnectReason::Shutdown) {
-                    break;
+                match disconnected {
+                    DisconnectReason::Shutdown => break,
+                    DisconnectReason::Reroute => {
+                        tracing::info!("network changed; reconnecting to home assistant");
+                        continue;
+                    }
+                    DisconnectReason::Socket => {}
                 }
+                last_error = Some("Connection to Home Assistant was lost".to_owned());
             }
             Err(HaError::AuthInvalid(message)) => {
                 set_status(&status_tx, &events_tx, HaStatus::AuthFailed { message });
@@ -311,7 +349,6 @@ async fn run_actor(
                 break;
             }
             Err(err) => {
-                tracing::warn!(url = %config.url, error = %err, "home assistant connect failed");
                 last_error = Some(describe_connect_error(&err));
                 set_status(&status_tx, &events_tx, HaStatus::Disconnected);
             }
@@ -339,6 +376,7 @@ async fn run_actor(
                     };
                     handle_disconnected_command(command, &mut queued_calls, &mut subscriptions, config.stale_action);
                 }
+                () = network_changed(&mut network) => break,
             }
             drop_stale(&mut queued_calls, config.stale_action);
         }
@@ -371,14 +409,126 @@ fn describe_connect_error(err: &HaError) -> String {
     reason.to_owned()
 }
 
-async fn establish(config: &HaConnectionConfig) -> Result<(Ws, String, u64), HaError> {
-    let connector = if config.url.starts_with("wss://") {
-        Connector::Rustls(crate::tls::client_config(config.cert_sha256.as_deref())?)
+/// LAN attempts give up quickly so an unreachable Home URL doesn't delay the
+/// Remote URL fallback.
+const INTERNAL_CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
+const MDNS_HOME_CHECK: Duration = Duration::from_millis(1500);
+
+/// Tries the Home URL (when Flick believes it's home) and then the Remote URL.
+async fn establish_any(config: &HaConnectionConfig) -> Result<(Ws, String, u64, HaRoute), HaError> {
+    let mut last_err = None;
+    for (url, internal) in candidate_urls(config).await {
+        let (connect_timeout, pin) = if internal {
+            (config.request_timeout.min(INTERNAL_CONNECT_TIMEOUT), None)
+        } else {
+            (config.request_timeout, config.cert_sha256.as_deref())
+        };
+        match establish(config, &url, connect_timeout, pin).await {
+            Ok((ws, ha_version, next_id)) => {
+                let route = HaRoute {
+                    url: http_base_url(&url),
+                    internal,
+                };
+                tracing::info!(url = %route.url, internal, "connected to home assistant");
+                return Ok((ws, ha_version, next_id, route));
+            }
+            Err(err @ HaError::AuthInvalid(_)) => return Err(err),
+            Err(err) => {
+                tracing::warn!(url = %http_base_url(&url), internal, error = %err, "home assistant connect failed");
+                last_err = Some(err);
+            }
+        }
+    }
+    Err(last_err.unwrap_or(HaError::Disconnected))
+}
+
+/// Ordered `(url, internal)` pairs to try on the next connection attempt.
+async fn candidate_urls(config: &HaConnectionConfig) -> Vec<(String, bool)> {
+    let external = (config.url.clone(), false);
+    let Some(internal) = config
+        .internal_url
+        .clone()
+        .filter(|internal| *internal != config.url)
+    else {
+        return vec![external];
+    };
+    let ssid = current_ssid(config.network.as_ref());
+    let home = match ssid_is_home(config, ssid.as_deref()) {
+        Some(home) => home,
+        None => home_on_mdns(config, &internal).await,
+    };
+    if home {
+        vec![(internal, true), external]
+    } else {
+        vec![external]
+    }
+}
+
+fn current_ssid(network: Option<&watch::Receiver<Option<String>>>) -> Option<String> {
+    network.and_then(|rx| rx.borrow().clone())
+}
+
+/// `Some(home)` when the current Wi-Fi decides it; `None` when the SSID is
+/// unknown or no home networks are configured.
+fn ssid_is_home(config: &HaConnectionConfig, ssid: Option<&str>) -> Option<bool> {
+    let ssid = ssid?.trim();
+    if config.trusted_ssids.is_empty() || ssid.is_empty() {
+        return None;
+    }
+    Some(
+        config
+            .trusted_ssids
+            .iter()
+            .any(|trusted| trusted.trim() == ssid),
+    )
+}
+
+/// Confirms this HA instance is advertising itself on the local network, so
+/// the token is never sent to the Home URL on an unknown network.
+async fn home_on_mdns(config: &HaConnectionConfig, internal: &str) -> bool {
+    let Ok(instances) = crate::discovery::discover_instances(MDNS_HOME_CHECK).await else {
+        return false;
+    };
+    let internal_host = url::Url::parse(internal)
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_ascii_lowercase));
+    instances.iter().any(|instance| match &config.ha_uuid {
+        Some(uuid) => instance.uuid.as_deref() == Some(uuid.as_str()),
+        None => {
+            let host = url::Url::parse(&instance.base_url)
+                .ok()
+                .and_then(|url| url.host_str().map(str::to_ascii_lowercase));
+            host.is_some() && host == internal_host
+        }
+    })
+}
+
+/// Resolves when the reported Wi-Fi network changes; never resolves when the
+/// host doesn't report one.
+async fn network_changed(network: &mut Option<watch::Receiver<Option<String>>>) {
+    let closed = match network.as_mut() {
+        Some(rx) => rx.changed().await.is_err(),
+        None => true,
+    };
+    if closed {
+        *network = None;
+        std::future::pending::<()>().await;
+    }
+}
+
+async fn establish(
+    config: &HaConnectionConfig,
+    url: &str,
+    connect_timeout: Duration,
+    pin: Option<&str>,
+) -> Result<(Ws, String, u64), HaError> {
+    let connector = if url.starts_with("wss://") {
+        Connector::Rustls(crate::tls::client_config(pin)?)
     } else {
         Connector::Plain
     };
-    let connect = connect_async_tls_with_config(&config.url, None, false, Some(connector));
-    let (mut ws, _) = tokio::time::timeout(config.request_timeout, connect)
+    let connect = connect_async_tls_with_config(url, None, false, Some(connector));
+    let (mut ws, _) = tokio::time::timeout(connect_timeout, connect)
         .await
         .map_err(|_| HaError::WebSocket("connection timed out".to_owned()))?
         .map_err(|err| HaError::WebSocket(err.to_string()))?;
@@ -429,17 +579,30 @@ async fn establish(config: &HaConnectionConfig) -> Result<(Ws, String, u64), HaE
 enum DisconnectReason {
     Socket,
     Shutdown,
+    /// The Wi-Fi network changed and a different URL should be used.
+    Reroute,
+}
+
+struct Connection<'a> {
+    rx: &'a mut mpsc::Receiver<Command>,
+    network: &'a mut Option<watch::Receiver<Option<String>>>,
+    internal: bool,
 }
 
 async fn run_connected(
     mut ws: Ws,
     config: &HaConnectionConfig,
-    rx: &mut mpsc::Receiver<Command>,
+    connection: Connection<'_>,
     events_tx: &broadcast::Sender<HaEvent>,
     _registry: &Arc<RwLock<RegistryCache>>,
     queued_calls: &mut VecDeque<QueuedCall>,
     state: &mut SessionState,
 ) -> DisconnectReason {
+    let Connection {
+        rx,
+        network,
+        internal,
+    } = connection;
     resubscribe_all(&mut ws, config, state).await;
     subscribe_registry_invalidations(&mut ws, config, state).await;
     flush_queued_calls(&mut ws, config, queued_calls, state).await;
@@ -486,6 +649,14 @@ async fn run_connected(
             _ = timeout_check.tick() => {
                 if expire_pending(&mut state.pending).contains(&ExpiredKind::Ping) {
                     return DisconnectReason::Socket;
+                }
+            }
+            () = network_changed(network) => {
+                let ssid = current_ssid(network.as_ref());
+                if config.internal_url.is_some()
+                    && ssid_is_home(config, ssid.as_deref()).is_some_and(|home| home != internal)
+                {
+                    return DisconnectReason::Reroute;
                 }
             }
             else => return DisconnectReason::Shutdown,

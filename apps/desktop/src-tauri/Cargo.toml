@@ -39,6 +39,16 @@ url.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 nokhwa-bindings-macos = "0.2.4"
+objc2 = "0.6"
+objc2-core-location = { version = "0.3", default-features = false, features = [
+  "std",
+  "CLLocationManager",
+] }
+objc2-core-wlan = { version = "0.3", default-features = false, features = [
+  "std",
+  "CWWiFiClient",
+  "CWInterface",
+] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
   "std",
   "NSAppleEventDescriptor",

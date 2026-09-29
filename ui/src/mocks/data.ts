@@ -99,7 +99,9 @@ export const haDiscovery: HaDiscovery[] = [
 export const haInstance: HaInstance = {
   id: "01K5Y8W2D7E5W4EXAMPLEHA",
   name: "Home",
-  base_url: "http://homeassistant.local:8123",
+  base_url: "https://home.example.com",
+  internal_url: "http://homeassistant.local:8123",
+  trusted_ssids: ["Casa"],
   ha_uuid: "ha-home-demo",
   ha_version: "2026.9",
   auth_kind: "long_lived_token",

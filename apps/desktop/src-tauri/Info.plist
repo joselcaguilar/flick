@@ -6,6 +6,10 @@
   <string>Flick uses the camera to recognize your hand gestures. Video never leaves this Mac.</string>
   <key>NSCameraUseContinuityCameraDeviceType</key>
   <true/>
+  <key>NSLocationUsageDescription</key>
+  <string>Flick reads your Wi-Fi network name to use your Home Assistant home URL when you're home. Your location is never stored or shared.</string>
+  <key>NSLocationWhenInUseUsageDescription</key>
+  <string>Flick reads your Wi-Fi network name to use your Home Assistant home URL when you're home. Your location is never stored or shared.</string>
   <key>NSLocalNetworkUsageDescription</key>
   <string>Flick connects to Home Assistant and your cameras on your local network.</string>
   <key>NSBonjourServices</key>

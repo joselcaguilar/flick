@@ -1979,6 +1979,9 @@ dependencies = [
  "getrandom 0.3.4",
  "hex",
  "nokhwa-bindings-macos",
+ "objc2",
+ "objc2-core-location",
+ "objc2-core-wlan",
  "objc2-foundation",
  "objc2-service-management",
  "reqwest",
@@ -4341,6 +4344,16 @@ dependencies = [
  "objc2",
  "objc2-core-foundation",
  "objc2-core-graphics",
+]
+
+[[package]]
+name = "objc2-core-wlan"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c71e34919aba0d701380d911702455038a8a3587467fe0141d6a71501e7ffe48"
+dependencies = [
+ "objc2",
+ "objc2-foundation",
 ]
 
 [[package]]

@@ -43,3 +43,26 @@ export async function cameraRequestAccess() {
 export async function openCameraPrivacySettings() {
   await invokeTauri<void>("open_camera_privacy_settings");
 }
+
+export type LocationPermission = CameraPermission | "unsupported";
+
+function normalizeLocationPermission(value: unknown): LocationPermission {
+  return value === "unsupported" ? "unsupported" : normalizeCameraPermission(value);
+}
+
+// macOS only reveals the Wi-Fi name to apps with Location access.
+export async function locationPermissionStatus() {
+  return normalizeLocationPermission(await invokeTauri<unknown>("location_permission_status"));
+}
+
+export async function locationRequestAccess() {
+  return normalizeLocationPermission(await invokeTauri<unknown>("location_request_access"));
+}
+
+export async function openLocationPrivacySettings() {
+  await invokeTauri<void>("open_location_privacy_settings");
+}
+
+export async function currentWifiSsid() {
+  return invokeTauri<string | null>("current_wifi_ssid");
+}

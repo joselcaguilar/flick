@@ -105,7 +105,7 @@ pub struct HaConnectRequest {
 }
 
 /// Persisted Home Assistant instance.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 pub struct HaInstance {
     /// ULID.
     pub id: String,
@@ -125,10 +125,16 @@ pub struct HaInstance {
     pub created_at: String,
     /// Update time.
     pub updated_at: String,
+    /// Home URL, preferred on trusted Wi-Fi networks or when found on the LAN.
+    #[serde(default)]
+    pub internal_url: Option<String>,
+    /// Wi-Fi networks on which the Home URL is used.
+    #[serde(default)]
+    pub trusted_ssids: Vec<String>,
 }
 
 /// Home Assistant status response.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 pub struct HaStatus {
     /// disconnected, connecting, ready or auth_failed.
     pub state: String,
@@ -136,6 +142,40 @@ pub struct HaStatus {
     pub ha_version: Option<String>,
     /// Connected instance.
     pub instance: Option<HaInstance>,
+    /// Why the last connection attempt failed, while reconnecting.
+    #[serde(default)]
+    pub last_error: Option<String>,
+    /// Active route: home or remote.
+    #[serde(default)]
+    pub connection: Option<String>,
+    /// HTTP URL currently in use.
+    #[serde(default)]
+    pub active_url: Option<String>,
+    /// Wi-Fi network reported by the desktop shell, when known.
+    #[serde(default)]
+    pub network_ssid: Option<String>,
+}
+
+/// Change to how Flick reaches Home Assistant. Omitted fields are kept.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+pub struct HaConnectionUpdate {
+    /// Remote URL, used anywhere.
+    #[serde(default)]
+    pub base_url: Option<String>,
+    /// Home URL. An empty string clears it.
+    #[serde(default)]
+    pub internal_url: Option<String>,
+    /// Wi-Fi networks on which the Home URL is used.
+    #[serde(default)]
+    pub trusted_ssids: Option<Vec<String>>,
+}
+
+/// Current network as seen by the desktop shell.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+pub struct NetworkReport {
+    /// Wi-Fi SSID, or null when unknown or not on Wi-Fi.
+    #[serde(default)]
+    pub ssid: Option<String>,
 }
 
 /// Home Assistant area picker item.
@@ -1066,7 +1106,10 @@ pub enum WsServerMessage {
     Hello { ts: String, payload: HelloEvent },
     /// Engine status.
     #[serde(rename = "engine.status", alias = "engine_status")]
-    EngineStatus { ts: String, payload: EngineStatus },
+    EngineStatus {
+        ts: String,
+        payload: Box<EngineStatus>,
+    },
     /// Camera status.
     #[serde(rename = "camera.status", alias = "camera_status")]
     CameraStatus { ts: String, payload: CameraStatus },

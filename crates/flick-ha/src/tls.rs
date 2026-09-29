@@ -41,10 +41,7 @@ fn tls_error(err: TlsError) -> HaError {
 }
 
 fn normalize_fingerprint(value: &str) -> Option<[u8; 32]> {
-    let hex: String = value
-        .chars()
-        .filter(|c| c.is_ascii_hexdigit())
-        .collect();
+    let hex: String = value.chars().filter(|c| c.is_ascii_hexdigit()).collect();
     hex::decode(hex).ok()?.try_into().ok()
 }
 

@@ -28,13 +28,13 @@ use flick_api::{
     ActionDto, ActionOutcomeDto, ActionTargetDto, Anchor as ApiAnchor, ApiConfig, ApiGateways,
     ApiProblem, ApiState, AvailableCamera, Camera as ApiCamera, CameraCreate, CameraFormat,
     CameraPatch, CameraStatus, ConfigGateway, EmptyEvent, EngineControl, EnginePausedEvent,
-    EngineStatus, EventHub, FakeUpdates, HaArea, HaConnectRequest, HaDiscovery, HaEntity,
-    HaGateway, HaInstance, HaServiceSchema, HaStatus as ApiHaStatus, LatencyBreakdown, Mapping,
-    PauseRequest, PreviewFrame, PreviewSource, RealignCommitResponse, RealignPointRequest,
-    RealignPointResponse, RealignSession, SettingsMap, SetupSuggestRequest, SetupSuggestion,
-    StageLatency, TargetModeDto, TeachCommitRequest, TeachCommitResponse, TeachGateway,
-    TeachLevelRequest, TeachLevelResponse, TeachRequest, TeachSession as ApiTeachSession,
-    TeachSpotResponse, VerbBinding, WsServerMessage, router,
+    EngineStatus, EventHub, FakeUpdates, HaArea, HaConnectRequest, HaConnectionUpdate, HaDiscovery,
+    HaEntity, HaGateway, HaInstance, HaServiceSchema, HaStatus as ApiHaStatus, LatencyBreakdown,
+    Mapping, NetworkReport, PauseRequest, PreviewFrame, PreviewSource, RealignCommitResponse,
+    RealignPointRequest, RealignPointResponse, RealignSession, SettingsMap, SetupSuggestRequest,
+    SetupSuggestion, StageLatency, TargetModeDto, TeachCommitRequest, TeachCommitResponse,
+    TeachGateway, TeachLevelRequest, TeachLevelResponse, TeachRequest,
+    TeachSession as ApiTeachSession, TeachSpotResponse, VerbBinding, WsServerMessage, router,
 };
 use flick_capture::{
     CameraPermissionStatus, CaptureHandle, CaptureStatus, FileSource, FileSourceOptions, FrameTap,
@@ -65,7 +65,7 @@ use serde_json::json;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::{
     net::TcpListener,
-    sync::{Mutex, Notify},
+    sync::{Mutex, Notify, watch},
 };
 
 use crate::{
@@ -91,7 +91,8 @@ pub async fn serve(runtime: RuntimeConfig, token: String) -> anyhow::Result<()> 
     api_config.protect_health = runtime.sidecar;
 
     let store = Arc::new(Store::open(&runtime.data_dir)?);
-    let app = Arc::new(EngineApp::new(runtime.clone(), Arc::clone(&store)));
+    let app =
+        Arc::new_cyclic(|weak| EngineApp::new(runtime.clone(), Arc::clone(&store), weak.clone()));
     if runtime.mock_ha {
         start_mock_ha(&app).await?;
     } else {
@@ -295,6 +296,7 @@ async fn start_mock_ha(app: &Arc<EngineApp>) -> anyhow::Result<HaClient> {
             is_default: true,
             created_at: now_rfc3339(),
             updated_at: now_rfc3339(),
+            ..HaInstance::default()
         }),
         snapshot,
     )
@@ -771,17 +773,25 @@ async fn wait_ha_ready(client: &HaClient) -> anyhow::Result<String> {
         .context("Couldn't reach Home Assistant: the server didn't respond in time")?
 }
 
-fn load_default_ha_instance(store: &Store) -> anyhow::Result<Option<(HaInstance, String)>> {
+struct SavedHaInstance {
+    instance: HaInstance,
+    keychain_ref: String,
+    cert_sha256: Option<String>,
+}
+
+fn load_default_ha_instance(store: &Store) -> anyhow::Result<Option<SavedHaInstance>> {
     let conn = store.connection();
     conn.query_row(
         "SELECT id, name, base_url, ha_uuid, auth_kind, keychain_ref, ha_version, is_default, \
-         created_at, updated_at FROM ha_instances ORDER BY is_default DESC, updated_at DESC LIMIT 1",
+         created_at, updated_at, cert_sha256, internal_url, trusted_ssids FROM ha_instances \
+         ORDER BY is_default DESC, updated_at DESC LIMIT 1",
         [],
         |row| {
             let created_at: i64 = row.get(8)?;
             let updated_at: i64 = row.get(9)?;
-            Ok((
-                HaInstance {
+            let trusted_ssids: Option<String> = row.get(12)?;
+            Ok(SavedHaInstance {
+                instance: HaInstance {
                     id: row.get(0)?,
                     name: row.get(1)?,
                     base_url: row.get(2)?,
@@ -791,9 +801,14 @@ fn load_default_ha_instance(store: &Store) -> anyhow::Result<Option<(HaInstance,
                     is_default: row.get::<_, i64>(7)? != 0,
                     created_at: rfc3339_from_ms(created_at),
                     updated_at: rfc3339_from_ms(updated_at),
+                    internal_url: row.get(11)?,
+                    trusted_ssids: trusted_ssids
+                        .and_then(|raw| serde_json::from_str(&raw).ok())
+                        .unwrap_or_default(),
                 },
-                row.get(5)?,
-            ))
+                keychain_ref: row.get(5)?,
+                cert_sha256: row.get(10)?,
+            })
         },
     )
     .optional()
@@ -807,15 +822,19 @@ fn persist_ha_instance(
     cert_sha256: Option<&str>,
 ) -> anyhow::Result<()> {
     let now = now_ms();
+    let trusted_ssids = serde_json::to_string(&instance.trusted_ssids)?;
     let conn = store.connection();
     conn.execute("UPDATE ha_instances SET is_default = 0", [])?;
     conn.execute(
         "INSERT INTO ha_instances \
-         (id, name, base_url, ha_uuid, auth_kind, keychain_ref, cert_sha256, ha_version, is_default, created_at, updated_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1, ?9, ?10) \
+         (id, name, base_url, ha_uuid, auth_kind, keychain_ref, cert_sha256, ha_version, is_default, \
+         created_at, updated_at, internal_url, trusted_ssids) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1, ?9, ?10, ?11, ?12) \
          ON CONFLICT(id) DO UPDATE SET name = excluded.name, base_url = excluded.base_url, \
          ha_uuid = excluded.ha_uuid, auth_kind = excluded.auth_kind, keychain_ref = excluded.keychain_ref, \
-         cert_sha256 = excluded.cert_sha256, ha_version = excluded.ha_version, is_default = 1, updated_at = excluded.updated_at",
+         cert_sha256 = excluded.cert_sha256, ha_version = excluded.ha_version, is_default = 1, \
+         updated_at = excluded.updated_at, internal_url = excluded.internal_url, \
+         trusted_ssids = excluded.trusted_ssids",
         params![
             instance.id,
             instance.name,
@@ -827,9 +846,49 @@ fn persist_ha_instance(
             instance.ha_version,
             now,
             now,
+            instance.internal_url,
+            trusted_ssids,
         ],
     )?;
     Ok(())
+}
+
+/// Applies a Connection settings change. A blank Home URL clears it.
+fn apply_ha_update(
+    instance: &mut HaInstance,
+    update: HaConnectionUpdate,
+) -> Result<(), ApiProblem> {
+    if let Some(base_url) = update.base_url {
+        let base_url = base_url.trim();
+        if base_url.is_empty() {
+            return Err(ApiProblem::validation(
+                "ha_invalid_url",
+                "The Remote URL can't be empty",
+            ));
+        }
+        instance.base_url = base_url.trim_end_matches('/').to_owned();
+    }
+    if let Some(internal_url) = update.internal_url {
+        let internal_url = internal_url.trim();
+        instance.internal_url =
+            (!internal_url.is_empty()).then(|| internal_url.trim_end_matches('/').to_owned());
+    }
+    if let Some(ssids) = update.trusted_ssids {
+        instance.trusted_ssids = normalize_ssids(ssids);
+    }
+    Ok(())
+}
+
+/// Trims, drops blanks, and de-duplicates SSIDs while keeping their order.
+fn normalize_ssids(ssids: Vec<String>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for ssid in ssids {
+        let ssid = ssid.trim();
+        if !ssid.is_empty() && !out.iter().any(|seen| seen == ssid) {
+            out.push(ssid.to_owned());
+        }
+    }
+    out
 }
 
 fn persist_settings(store: &Store, settings: &SettingsMap) -> anyhow::Result<()> {
@@ -1008,10 +1067,15 @@ struct EngineApp {
     capture: Mutex<Option<EngineCapture>>,
     replay_catalog: Mutex<Option<ReplayCatalog>>,
     replay_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    /// Wi-Fi SSID reported by the desktop shell; drives Home/Remote routing.
+    network_tx: watch::Sender<Option<String>>,
+    /// Bumped whenever the HA client is replaced, so stale sync tasks stop.
+    ha_generation: std::sync::atomic::AtomicU64,
+    weak_self: std::sync::Weak<EngineApp>,
 }
 
 impl EngineApp {
-    fn new(runtime: RuntimeConfig, store: Arc<Store>) -> Self {
+    fn new(runtime: RuntimeConfig, store: Arc<Store>, weak_self: std::sync::Weak<Self>) -> Self {
         Self {
             runtime,
             store: Arc::clone(&store),
@@ -1030,6 +1094,9 @@ impl EngineApp {
             capture: Mutex::new(None),
             replay_catalog: Mutex::new(None),
             replay_task: Mutex::new(None),
+            network_tx: watch::channel(None).0,
+            ha_generation: std::sync::atomic::AtomicU64::new(0),
+            weak_self,
         }
     }
 
@@ -1064,9 +1131,58 @@ impl EngineApp {
                 .await;
             dispatcher.set_registry(snapshot.clone()).await;
         }
+        let generation = self
+            .ha_generation
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            + 1;
+        let status = client.status();
         *self.ha_client.lock().await = Some(client);
         *self.ha_instance.lock().await = instance;
         *self.registry.lock().await = snapshot;
+        self.spawn_ha_registry_sync(generation, status);
+    }
+
+    /// Refreshes the entity registry each time the client (re)connects after
+    /// being down, e.g. after starting offline or switching Home/Remote URLs.
+    /// Holds only the status receiver so the client actor can still shut down.
+    fn spawn_ha_registry_sync(&self, generation: u64, mut status: watch::Receiver<HaStatus>) {
+        let weak = self.weak_self.clone();
+        tokio::spawn(async move {
+            let mut was_ready = matches!(*status.borrow_and_update(), HaStatus::Ready { .. });
+            while status.changed().await.is_ok() {
+                let ready = matches!(*status.borrow_and_update(), HaStatus::Ready { .. });
+                let reconnected = ready && !was_ready;
+                was_ready = ready;
+                if !reconnected {
+                    continue;
+                }
+                let Some(app) = weak.upgrade() else { return };
+                if app.ha_generation.load(std::sync::atomic::Ordering::SeqCst) != generation {
+                    return;
+                }
+                let Some(client) = app.ha_client.lock().await.clone() else {
+                    return;
+                };
+                match client.refresh_registry().await {
+                    Ok(snapshot) => {
+                        if app.ha_generation.load(std::sync::atomic::Ordering::SeqCst) != generation
+                        {
+                            return;
+                        }
+                        if let Some(dispatcher) = app.dispatcher.lock().await.clone() {
+                            dispatcher.set_registry(snapshot.clone()).await;
+                        }
+                        *app.registry.lock().await = snapshot;
+                        if let Err(err) = app.reload_dispatcher_anchors_from_store().await {
+                            tracing::warn!(error = ?err, "failed to reload anchors after HA reconnect");
+                        }
+                    }
+                    Err(err) => {
+                        tracing::warn!(error = %err, "failed to refresh HA registry after reconnect")
+                    }
+                }
+            }
+        });
     }
 
     async fn set_mock_ha_handle(&self, handle: flick_ha::mock::MockHaHandle) {
@@ -1134,11 +1250,14 @@ impl EngineApp {
 
     async fn restore_ha_connection(&self) {
         match load_default_ha_instance(&self.store) {
-            Ok(Some((instance, keychain_ref))) => {
+            Ok(Some(saved)) => {
                 let secrets = KeyringSecretStore::new();
-                match secrets.get(&keychain_ref) {
+                match secrets.get(&saved.keychain_ref) {
                     Ok(Some(token)) => {
-                        if let Err(err) = self.connect_saved_ha(instance, token).await {
+                        if let Err(err) = self
+                            .connect_saved_ha(saved.instance, token, saved.cert_sha256)
+                            .await
+                        {
                             tracing::warn!(error = %err, "failed to restore Home Assistant connection");
                         }
                     }
@@ -1153,11 +1272,47 @@ impl EngineApp {
         }
     }
 
-    async fn connect_saved_ha(&self, instance: HaInstance, token: String) -> anyhow::Result<()> {
-        let config = HaConnectionConfig::new(instance.base_url.clone(), token)?;
+    /// Builds the client config for a saved instance, including Home/Remote
+    /// routing inputs.
+    fn ha_config(
+        &self,
+        instance: &HaInstance,
+        token: String,
+        cert_sha256: Option<String>,
+    ) -> Result<HaConnectionConfig, flick_ha::HaError> {
+        let mut config = HaConnectionConfig::new(instance.base_url.clone(), token)?
+            .with_internal_url(instance.internal_url.as_deref())?;
+        config.cert_sha256 = cert_sha256;
+        config.trusted_ssids = instance.trusted_ssids.clone();
+        config.ha_uuid = instance.ha_uuid.clone();
+        config.network = Some(self.network_tx.subscribe());
+        Ok(config)
+    }
+
+    /// Connects a saved instance. If Home Assistant is unreachable right now
+    /// the client is still kept so it retries in the background and the UI
+    /// can show why; the registry syncs once it connects.
+    async fn connect_saved_ha(
+        &self,
+        instance: HaInstance,
+        token: String,
+        cert_sha256: Option<String>,
+    ) -> anyhow::Result<()> {
+        let config = self.ha_config(&instance, token, cert_sha256)?;
         let client = HaClient::connect(config).await?;
-        wait_ha_ready(&client).await?;
-        let snapshot = client.refresh_registry().await?;
+        let ready = wait_ha_ready(&client).await;
+        if let Err(err) = &ready
+            && matches!(*client.status().borrow(), HaStatus::AuthFailed { .. })
+        {
+            anyhow::bail!("{err:#}");
+        }
+        let snapshot = match ready {
+            Ok(_) => client.refresh_registry().await.unwrap_or_default(),
+            Err(err) => {
+                tracing::warn!(error = %format!("{err:#}"), "Home Assistant not reachable yet; retrying in background");
+                self.registry.lock().await.clone()
+            }
+        };
         self.set_ha_client(client, Some(instance), snapshot).await;
         Ok(())
     }
@@ -1473,35 +1628,36 @@ impl EngineApp {
     async fn ha_status_dto(&self) -> ApiHaStatus {
         let client = self.ha_client.lock().await.clone();
         let instance = self.ha_instance.lock().await.clone();
+        let network_ssid = self.network_tx.borrow().clone();
         let Some(client) = client else {
             return ApiHaStatus {
                 state: "disconnected".to_owned(),
-                ha_version: None,
                 instance,
+                network_ssid,
+                ..ApiHaStatus::default()
             };
         };
         let status = client.status().borrow().clone();
-        match status {
-            HaStatus::Disconnected => ApiHaStatus {
-                state: "disconnected".to_owned(),
-                ha_version: None,
-                instance,
-            },
-            HaStatus::Connecting | HaStatus::Reconnecting { .. } => ApiHaStatus {
-                state: "connecting".to_owned(),
-                ha_version: None,
-                instance,
-            },
-            HaStatus::Ready { ha_version } => ApiHaStatus {
-                state: "ready".to_owned(),
-                ha_version,
-                instance,
-            },
-            HaStatus::AuthFailed { .. } => ApiHaStatus {
-                state: "auth_failed".to_owned(),
-                ha_version: None,
-                instance,
-            },
+        let route = client.route().borrow().clone();
+        let (state, ha_version, last_error) = match status {
+            HaStatus::Disconnected => ("disconnected", None, None),
+            HaStatus::Connecting => ("connecting", None, None),
+            HaStatus::Reconnecting { last_error, .. } => ("connecting", None, last_error),
+            HaStatus::Ready { ha_version } => ("ready", ha_version, None),
+            HaStatus::AuthFailed { message } => ("auth_failed", None, Some(message)),
+        };
+        let ready = state == "ready";
+        ApiHaStatus {
+            state: state.to_owned(),
+            ha_version,
+            instance,
+            last_error,
+            connection: route
+                .as_ref()
+                .filter(|_| ready)
+                .map(|route| if route.internal { "home" } else { "remote" }.to_owned()),
+            active_url: route.filter(|_| ready).map(|route| route.url),
+            network_ssid,
         }
     }
 }
@@ -2339,6 +2495,7 @@ impl HaGateway for EngineApp {
                 is_default: true,
                 created_at: now_rfc3339(),
                 updated_at: now_rfc3339(),
+                ..HaInstance::default()
             });
             return Ok(instance);
         }
@@ -2369,6 +2526,15 @@ impl HaGateway for EngineApp {
             .clone()
             .unwrap_or_else(|| flick_core::HaInstanceId::new().to_string());
         let keychain_ref = format!("ha:{instance_id}");
+        let previous = if self.runtime.mock_ha {
+            None
+        } else {
+            load_default_ha_instance(&self.store)
+                .ok()
+                .flatten()
+                .filter(|saved| saved.instance.id == instance_id)
+                .map(|saved| saved.instance)
+        };
         if !self.runtime.mock_ha {
             KeyringSecretStore::new()
                 .set(&keychain_ref, &token)
@@ -2392,6 +2558,12 @@ impl HaGateway for EngineApp {
             is_default: true,
             created_at: now_rfc3339(),
             updated_at: now_rfc3339(),
+            internal_url: previous
+                .as_ref()
+                .and_then(|saved| saved.internal_url.clone()),
+            trusted_ssids: previous
+                .map(|saved| saved.trusted_ssids)
+                .unwrap_or_default(),
         };
         if !self.runtime.mock_ha {
             persist_ha_instance(
@@ -2411,7 +2583,70 @@ impl HaGateway for EngineApp {
         self.ha_status_dto().await
     }
 
+    async fn update(&self, update: HaConnectionUpdate) -> Result<HaInstance, ApiProblem> {
+        let current = self.ha_instance.lock().await.clone();
+        let is_mock = self.runtime.mock_ha
+            || current
+                .as_ref()
+                .is_some_and(|instance| instance.base_url == "mock://home");
+        if is_mock {
+            let mut instance = current.ok_or_else(|| {
+                ApiProblem::validation("ha_not_connected", "Connect Home Assistant first")
+            })?;
+            apply_ha_update(&mut instance, update)?;
+            *self.ha_instance.lock().await = Some(instance.clone());
+            return Ok(instance);
+        }
+        let saved = load_default_ha_instance(&self.store)
+            .map_err(|err| ApiProblem::validation("ha_store_failed", err.to_string()))?
+            .ok_or_else(|| {
+                ApiProblem::validation("ha_not_connected", "Connect Home Assistant first")
+            })?;
+        let token = KeyringSecretStore::new()
+            .get(&saved.keychain_ref)
+            .map_err(|err| ApiProblem::validation("ha_keychain_failed", err.to_string()))?
+            .ok_or_else(|| {
+                ApiProblem::validation(
+                    "ha_token_missing",
+                    "The saved access token is missing. Reconnect Home Assistant.",
+                )
+            })?;
+        let mut instance = saved.instance;
+        apply_ha_update(&mut instance, update)?;
+        self.ha_config(&instance, token.clone(), saved.cert_sha256.clone())
+            .map_err(|err| ApiProblem::validation("ha_invalid_url", err.to_string()))?;
+        instance.updated_at = now_rfc3339();
+        persist_ha_instance(
+            &self.store,
+            &instance,
+            &saved.keychain_ref,
+            saved.cert_sha256.as_deref(),
+        )
+        .map_err(|err| ApiProblem::validation("ha_store_failed", err.to_string()))?;
+        self.connect_saved_ha(instance.clone(), token, saved.cert_sha256)
+            .await
+            .map_err(|err| ApiProblem::validation("ha_connect_failed", format!("{err:#}")))?;
+        Ok(instance)
+    }
+
+    async fn set_network(&self, report: NetworkReport) {
+        let ssid = report
+            .ssid
+            .map(|ssid| ssid.trim().to_owned())
+            .filter(|ssid| !ssid.is_empty());
+        self.network_tx.send_if_modified(|current| {
+            if *current == ssid {
+                false
+            } else {
+                *current = ssid;
+                true
+            }
+        });
+    }
+
     async fn delete(&self) -> Result<(), ApiProblem> {
+        self.ha_generation
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         *self.ha_client.lock().await = None;
         *self.ha_instance.lock().await = None;
         *self.registry.lock().await = RegistrySnapshot::default();

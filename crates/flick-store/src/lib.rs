@@ -23,7 +23,10 @@ pub type Result<T> = std::result::Result<T, StoreError>;
 /// Embedded forward-only migrations.
 #[must_use]
 pub fn migrations() -> Migrations<'static> {
-    Migrations::new(vec![M::up(include_str!("../migrations/0001_init.sql"))])
+    Migrations::new(vec![
+        M::up(include_str!("../migrations/0001_init.sql")),
+        M::up(include_str!("../migrations/0002_ha_urls.sql")),
+    ])
 }
 
 /// SQLite-backed Flick store.

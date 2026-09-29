@@ -401,7 +401,7 @@ export interface paths {
         delete: operations["ha_delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        patch: operations["ha_update"];
         trace?: never;
     };
     "/api/v1/ha/areas": {
@@ -622,6 +622,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["install_model"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/network": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["put_network"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1569,6 +1585,15 @@ export interface components {
             /** @description Optional pinned certificate SHA-256. */
             trust_cert_sha256?: string | null;
         };
+        /** @description Change to how Flick reaches Home Assistant. Omitted fields are kept. */
+        HaConnectionUpdate: {
+            /** @description Remote URL, used anywhere. */
+            base_url?: string | null;
+            /** @description Home URL. An empty string clears it. */
+            internal_url?: string | null;
+            /** @description Wi-Fi networks on which the Home URL is used. */
+            trusted_ssids?: string[] | null;
+        };
         /** @description Discovered Home Assistant instance. */
         HaDiscovery: {
             /** @description Base URL. */
@@ -1627,10 +1652,14 @@ export interface components {
             ha_version?: string | null;
             /** @description ULID. */
             id: string;
+            /** @description Home URL, preferred on trusted Wi-Fi networks or when found on the LAN. */
+            internal_url?: string | null;
             /** @description Default instance flag. */
             is_default: boolean;
             /** @description Display name. */
             name: string;
+            /** @description Wi-Fi networks on which the Home URL is used. */
+            trusted_ssids?: string[];
             /** @description Update time. */
             updated_at: string;
         };
@@ -1643,9 +1672,17 @@ export interface components {
         };
         /** @description Home Assistant status response. */
         HaStatus: {
+            /** @description HTTP URL currently in use. */
+            active_url?: string | null;
+            /** @description Active route: home or remote. */
+            connection?: string | null;
             /** @description HA version. */
             ha_version?: string | null;
             instance?: components["schemas"]["HaInstance"] | null;
+            /** @description Why the last connection attempt failed, while reconnecting. */
+            last_error?: string | null;
+            /** @description Wi-Fi network reported by the desktop shell, when known. */
+            network_ssid?: string | null;
             /** @description disconnected, connecting, ready or auth_failed. */
             state: string;
         };
@@ -1902,6 +1939,11 @@ export interface components {
             take_index: number;
             /** @description Normalized trajectory for glyphs. */
             trajectory: number[][];
+        };
+        /** @description Current network as seen by the desktop shell. */
+        NetworkReport: {
+            /** @description Wi-Fi SSID, or null when unknown or not on Wi-Fi. */
+            ssid?: string | null;
         };
         /** @description Gesture pack export request. */
         PackExportRequest: {
@@ -3221,6 +3263,29 @@ export interface operations {
             };
         };
     };
+    ha_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HaConnectionUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HaInstance"];
+                };
+            };
+        };
+    };
     ha_areas: {
         parameters: {
             query?: never;
@@ -3568,6 +3633,27 @@ export interface operations {
         requestBody?: never;
         responses: {
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    put_network: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NetworkReport"];
+            };
+        };
+        responses: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };

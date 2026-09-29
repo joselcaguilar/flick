@@ -134,7 +134,7 @@ fn additive_future_schema_opens_without_rollback() -> Result<(), Box<dyn std::er
         let conn = Connection::open(&db_path)?;
         configure_connection(&conn)?;
         conn.execute("CREATE TABLE additive_future (id INTEGER PRIMARY KEY)", [])?;
-        conn.pragma_update(None, "user_version", 2i64)?;
+        conn.pragma_update(None, "user_version", 3i64)?;
     }
 
     let reopened = Store::open_path(&db_path)?;

@@ -258,7 +258,8 @@ pub fn router(state: ApiState) -> Router {
         .route("/api/v1/ha/discover", get(ha_discover))
         .route("/api/v1/ha/connect", post(ha_connect))
         .route("/api/v1/ha/status", get(ha_status))
-        .route("/api/v1/ha", delete(ha_delete))
+        .route("/api/v1/ha", delete(ha_delete).patch(ha_update))
+        .route("/api/v1/network", put(put_network))
         .route("/api/v1/ha/areas", get(ha_areas))
         .route("/api/v1/ha/entities", get(ha_entities))
         .route("/api/v1/ha/services", get(ha_services))
@@ -509,6 +510,10 @@ pub trait HaGateway: Send + Sync + 'static {
     async fn status(&self) -> HaStatus;
     /// Deletes HA credentials.
     async fn delete(&self) -> Result<(), ApiProblem>;
+    /// Changes the Remote/Home URLs and trusted networks, then reconnects.
+    async fn update(&self, update: HaConnectionUpdate) -> Result<HaInstance, ApiProblem>;
+    /// Records the current Wi-Fi network so the client can pick Home or Remote.
+    async fn set_network(&self, report: NetworkReport);
     /// Area picker.
     async fn areas(&self) -> Vec<HaArea>;
     /// Entity picker.
@@ -653,8 +658,7 @@ impl EngineControl for FakeEngine {
             cameras: vec![],
             ha: HaStatus {
                 state: "disconnected".to_owned(),
-                ha_version: None,
-                instance: None,
+                ..HaStatus::default()
             },
             stages: vec![],
             camera_permission: Some("authorized".to_owned()),
@@ -780,6 +784,7 @@ impl HaGateway for FakeHa {
             is_default: true,
             created_at: now_rfc3339(),
             updated_at: now_rfc3339(),
+            ..HaInstance::default()
         };
         *self.instance.lock().unwrap_or_else(|err| err.into_inner()) = Some(instance.clone());
         Ok(instance)
@@ -799,7 +804,10 @@ impl HaGateway for FakeHa {
             }
             .to_owned(),
             ha_version: instance.as_ref().and_then(|item| item.ha_version.clone()),
+            connection: instance.as_ref().map(|_| "remote".to_owned()),
+            active_url: instance.as_ref().map(|item| item.base_url.clone()),
             instance,
+            ..HaStatus::default()
         }
     }
 
@@ -807,6 +815,25 @@ impl HaGateway for FakeHa {
         *self.instance.lock().unwrap_or_else(|err| err.into_inner()) = None;
         Ok(())
     }
+
+    async fn update(&self, update: HaConnectionUpdate) -> Result<HaInstance, ApiProblem> {
+        let mut guard = self.instance.lock().unwrap_or_else(|err| err.into_inner());
+        let instance = guard.as_mut().ok_or_else(|| {
+            ApiProblem::validation("ha_not_configured", "Home Assistant is not configured")
+        })?;
+        if let Some(base_url) = update.base_url {
+            instance.base_url = base_url;
+        }
+        if let Some(internal_url) = update.internal_url {
+            instance.internal_url = Some(internal_url).filter(|url| !url.trim().is_empty());
+        }
+        if let Some(trusted_ssids) = update.trusted_ssids {
+            instance.trusted_ssids = trusted_ssids;
+        }
+        Ok(instance.clone())
+    }
+
+    async fn set_network(&self, _report: NetworkReport) {}
 
     async fn areas(&self) -> Vec<HaArea> {
         vec![HaArea {
@@ -1333,6 +1360,23 @@ async fn ha_status(State(state): State<Arc<ApiState>>) -> Json<HaStatus> {
 #[utoipa::path(delete, path = "/api/v1/ha", responses((status = 204)))]
 async fn ha_delete(State(state): State<Arc<ApiState>>) -> Result<StatusCode, ApiProblem> {
     state.ha.delete().await.map(|()| no_content())
+}
+
+#[utoipa::path(patch, path = "/api/v1/ha", request_body = HaConnectionUpdate, responses((status = 200, body = HaInstance)))]
+async fn ha_update(
+    State(state): State<Arc<ApiState>>,
+    Json(update): Json<HaConnectionUpdate>,
+) -> Result<Json<HaInstance>, ApiProblem> {
+    state.ha.update(update).await.map(json_response)
+}
+
+#[utoipa::path(put, path = "/api/v1/network", request_body = NetworkReport, responses((status = 204)))]
+async fn put_network(
+    State(state): State<Arc<ApiState>>,
+    Json(report): Json<NetworkReport>,
+) -> StatusCode {
+    state.ha.set_network(report).await;
+    no_content()
 }
 
 #[utoipa::path(get, path = "/api/v1/ha/areas", responses((status = 200, body = [HaArea])))]
@@ -2367,7 +2411,7 @@ pub fn openapi_json_pretty() -> Result<String, serde_json::Error> {
     info(title = "Flick Local API", version = "0.1.0", description = "Local-first HTTP and WebSocket API for Flick."),
     paths(
         health, openapi_json, status, pause_engine, resume_engine, get_settings, patch_settings,
-        ha_discover, ha_connect, ha_status, ha_delete, ha_areas, ha_entities, ha_services, ha_call,
+        ha_discover, ha_connect, ha_status, ha_delete, ha_update, put_network, ha_areas, ha_entities, ha_services, ha_call,
         cameras_available, list_cameras, create_camera, patch_camera, delete_camera, start_camera,
         stop_camera, preview_ticket, list_gestures, create_gesture, patch_gesture, delete_gesture,
         capture_gesture, motion_takes, patch_gesture_type, cancel_capture, gesture_samples,
@@ -2381,7 +2425,7 @@ pub fn openapi_json_pretty() -> Result<String, serde_json::Error> {
     ),
     components(schemas(
         ProblemJson, HealthResponse, EngineStatus, PauseRequest, StageLatency, HaDiscovery,
-        HaConnectRequest, HaInstance, HaStatus, HaArea, HaEntity, HaServiceSchema, ActionDto,
+        HaConnectRequest, HaInstance, HaStatus, HaConnectionUpdate, NetworkReport, HaArea, HaEntity, HaServiceSchema, ActionDto,
         ActionTargetDto, ActionOutcomeDto, LatencyBreakdown, CameraFormat, AvailableCamera,
         CameraCreate, CameraPatch, Camera, CameraStatus, PreviewTicket, GestureCreate,
         GesturePatch, Gesture, CaptureRequest, CaptureSession, MotionTake, GestureTypePatch,

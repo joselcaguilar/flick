@@ -4,6 +4,7 @@ use std::{fmt, time::Duration};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use tokio::sync::watch;
 use url::Url;
 
 use crate::HaError;
@@ -37,7 +38,18 @@ pub struct HaConnectionConfig {
     /// Maximum reconnect backoff.
     pub reconnect_max: Duration,
     /// Optional SHA-256 certificate fingerprint pin for self-signed HA.
+    /// Applies to [`Self::url`] only.
     pub cert_sha256: Option<String>,
+    /// Optional LAN WebSocket URL ("Home URL"), tried first when Flick is on
+    /// the home network. [`Self::url`] is the remote URL.
+    pub internal_url: Option<String>,
+    /// Wi-Fi networks that count as home. When the current SSID is unknown or
+    /// this list is empty, home is confirmed via mDNS instead.
+    pub trusted_ssids: Vec<String>,
+    /// HA instance UUID, used to recognise this instance over mDNS.
+    pub ha_uuid: Option<String>,
+    /// Current Wi-Fi SSID reported by the host (`None` when unknown).
+    pub network: Option<watch::Receiver<Option<String>>>,
 }
 
 impl HaConnectionConfig {
@@ -54,7 +66,20 @@ impl HaConnectionConfig {
             reconnect_initial: Duration::from_millis(500),
             reconnect_max: Duration::from_secs(30),
             cert_sha256: None,
+            internal_url: None,
+            trusted_ssids: Vec::new(),
+            ha_uuid: None,
+            network: None,
         })
+    }
+
+    /// Sets the LAN ("Home") URL; `None` or blank clears it.
+    pub fn with_internal_url(mut self, raw: Option<&str>) -> Result<Self, HaError> {
+        self.internal_url = match raw.map(str::trim).filter(|raw| !raw.is_empty()) {
+            Some(raw) => Some(websocket_url(raw)?),
+            None => None,
+        };
+        Ok(self)
     }
 }
 
@@ -73,7 +98,10 @@ impl fmt::Debug for HaConnectionConfig {
                 "cert_sha256",
                 &self.cert_sha256.as_ref().map(|_| "<sha256>"),
             )
-            .finish()
+            .field("internal_url", &self.internal_url)
+            .field("trusted_ssids", &self.trusted_ssids)
+            .field("ha_uuid", &self.ha_uuid)
+            .finish_non_exhaustive()
     }
 }
 
@@ -94,6 +122,34 @@ pub fn websocket_url(raw: &str) -> Result<String, HaError> {
         url.set_path("/api/websocket");
     }
     Ok(url.to_string())
+}
+
+/// Converts a WebSocket API URL back to the HA base URL users recognise.
+#[must_use]
+pub fn http_base_url(raw: &str) -> String {
+    let Ok(mut url) = Url::parse(raw) else {
+        return raw.to_owned();
+    };
+    let scheme = match url.scheme() {
+        "ws" => "http",
+        "wss" => "https",
+        other => other,
+    }
+    .to_owned();
+    let _ = url.set_scheme(&scheme);
+    if url.path() == "/api/websocket" {
+        url.set_path("");
+    }
+    url.to_string().trim_end_matches('/').to_owned()
+}
+
+/// Which Home Assistant URL the client is currently connected through.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HaRoute {
+    /// HA base URL (`http(s)://host:port`).
+    pub url: String,
+    /// `true` for the Home (LAN) URL, `false` for the Remote URL.
+    pub internal: bool,
 }
 
 /// Connection lifecycle state surfaced to the API and UI.
