@@ -22,10 +22,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     convert::Infallible,
     net::SocketAddr,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicU64, Ordering},
-    },
+    sync::{Arc, Mutex},
     time::{Duration, Instant, SystemTime},
 };
 
@@ -41,7 +38,6 @@ use axum::{
 };
 use bytes::Bytes;
 use futures::{SinkExt, Stream, StreamExt, stream};
-use image::{ColorType, codecs::jpeg::JpegEncoder, imageops::FilterType};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 use subtle::ConstantTimeEq;
@@ -1072,10 +1068,17 @@ impl UpdatesGateway for FakeUpdates {
     }
 }
 
-/// Fake preview source returning a generated RGB gradient.
-#[derive(Default)]
+/// Fake preview source returning a generated RGB gradient at ~30 fps.
 pub struct FakePreview {
-    seq: AtomicU64,
+    started: Instant,
+}
+
+impl Default for FakePreview {
+    fn default() -> Self {
+        Self {
+            started: Instant::now(),
+        }
+    }
 }
 
 #[async_trait]
@@ -1094,7 +1097,7 @@ impl PreviewSource for FakePreview {
         Some(PreviewFrame {
             width,
             height,
-            seq: self.seq.fetch_add(1, Ordering::Relaxed),
+            seq: (self.started.elapsed().as_millis() / 33) as u64,
             rgb: rgb.into(),
         })
     }
@@ -2251,21 +2254,35 @@ fn mjpeg_stream(
     )
 }
 
-/// Preview poll interval; new frames are only encoded when the capture seq advances.
-const PREVIEW_POLL: Duration = Duration::from_millis(15);
+/// Preview poll interval. Short relative to a 30 fps capture period so a new frame is picked
+/// up within a few ms instead of beating against the camera cadence; the seq check keeps
+/// each capture frame encoded once.
+const PREVIEW_POLL: Duration = Duration::from_millis(4);
+const PREVIEW_MAX_WIDTH: u32 = 640;
 
 fn encode_mjpeg_chunk(frame: PreviewFrame) -> Option<Bytes> {
-    let (width, height, rgb) = if frame.width > 640 {
-        let image = image::RgbImage::from_raw(frame.width, frame.height, frame.rgb.to_vec())?;
-        let new_height = (u64::from(frame.height) * 640 / u64::from(frame.width)) as u32;
-        let resized = image::imageops::resize(&image, 640, new_height.max(1), FilterType::Nearest);
-        (resized.width(), resized.height(), resized.into_raw())
+    let expected = (frame.width as usize) * (frame.height as usize) * 3;
+    if frame.width == 0 || frame.height == 0 || frame.rgb.len() < expected {
+        return None;
+    }
+    let (width, height, rgb) = if frame.width > PREVIEW_MAX_WIDTH {
+        let (w, h, rgb) = downscale_rgb(&frame);
+        (w, h, std::borrow::Cow::Owned(rgb))
     } else {
-        (frame.width, frame.height, frame.rgb.to_vec())
+        (
+            frame.width,
+            frame.height,
+            std::borrow::Cow::Borrowed(&frame.rgb[..expected]),
+        )
     };
-    let mut jpeg = Vec::new();
-    JpegEncoder::new_with_quality(&mut jpeg, 75)
-        .encode(&rgb, width, height, ColorType::Rgb8.into())
+    let mut jpeg = Vec::with_capacity(64 * 1024);
+    jpeg_encoder::Encoder::new(&mut jpeg, 75)
+        .encode(
+            &rgb,
+            u16::try_from(width).ok()?,
+            u16::try_from(height).ok()?,
+            jpeg_encoder::ColorType::Rgb,
+        )
         .ok()?;
     let header = format!(
         "--flick\r\nContent-Type: image/jpeg\r\nContent-Length: {}\r\n\r\n",
@@ -2275,6 +2292,22 @@ fn encode_mjpeg_chunk(frame: PreviewFrame) -> Option<Bytes> {
     bytes.extend_from_slice(&jpeg);
     bytes.extend_from_slice(b"\r\n");
     Some(Bytes::from(bytes))
+}
+
+/// Integer-stride nearest downscale to at most [`PREVIEW_MAX_WIDTH`], read straight from the
+/// shared frame so the full-resolution buffer is never copied.
+fn downscale_rgb(frame: &PreviewFrame) -> (u32, u32, Vec<u8>) {
+    let step = frame.width.div_ceil(PREVIEW_MAX_WIDTH) as usize;
+    let (src_w, src_h) = (frame.width as usize, frame.height as usize);
+    let (dst_w, dst_h) = (src_w.div_ceil(step), src_h.div_ceil(step));
+    let mut out = Vec::with_capacity(dst_w * dst_h * 3);
+    for y in (0..src_h).step_by(step) {
+        let row = &frame.rgb[y * src_w * 3..(y + 1) * src_w * 3];
+        for px in row.as_chunks::<3>().0.iter().step_by(step) {
+            out.extend_from_slice(px);
+        }
+    }
+    (dst_w as u32, dst_h as u32, out)
 }
 
 fn builtin_gestures() -> Vec<Gesture> {
@@ -2401,5 +2434,30 @@ mod tests {
             Err(broadcast::error::RecvError::Lagged(_)) => {}
             other => panic!("expected lagged receiver, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn mjpeg_chunk_downscales_720p_to_valid_640_jpeg() {
+        let frame = PreviewFrame {
+            width: 1280,
+            height: 720,
+            seq: 0,
+            rgb: vec![128u8; 1280 * 720 * 3].into(),
+        };
+        let chunk = encode_mjpeg_chunk(frame).expect("chunk");
+        let body_start = chunk
+            .windows(4)
+            .position(|w| w == b"\r\n\r\n")
+            .expect("header")
+            + 4;
+        let jpeg = &chunk[body_start..chunk.len() - 2];
+        assert_eq!(&jpeg[..2], &[0xFF, 0xD8]);
+        let sof = jpeg
+            .windows(2)
+            .position(|w| w == [0xFF, 0xC0])
+            .expect("SOF0");
+        let height = u16::from_be_bytes([jpeg[sof + 5], jpeg[sof + 6]]);
+        let width = u16::from_be_bytes([jpeg[sof + 7], jpeg[sof + 8]]);
+        assert_eq!((width, height), (640, 360));
     }
 }

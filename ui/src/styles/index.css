@@ -462,17 +462,12 @@ code {
   color: var(--flick-stage-text);
 }
 
-.preview-canvas img,
 .preview-canvas canvas,
 .preview-placeholder {
   position: absolute;
   inset: 0;
   inline-size: 100%;
   block-size: 100%;
-}
-
-.preview-canvas img {
-  object-fit: contain;
 }
 
 .preview-canvas canvas {

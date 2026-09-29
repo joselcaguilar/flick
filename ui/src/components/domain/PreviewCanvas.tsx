@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 import type { HandObservationEvent } from "../../events/types";
 
 export interface LetterboxInput {
@@ -31,6 +31,177 @@ export function createLetterboxMapper(input: LetterboxInput): LetterboxMapper {
     height,
     map: ([x, y]) => [offsetX + x * width, offsetY + y * height],
   };
+}
+
+const MJPEG_HEADER_LIMIT = 1024;
+const headerDecoder = new TextDecoder();
+
+/**
+ * Incremental parser for the engine's `multipart/x-mixed-replace; boundary=flick` stream.
+ * Each part carries a Content-Length, so frames are sliced by length rather than by
+ * scanning JPEG bytes for the boundary.
+ */
+export class MjpegPartParser {
+  private buffer = new Uint8Array(256 * 1024);
+  private length = 0;
+
+  push(chunk: Uint8Array): Uint8Array<ArrayBuffer>[] {
+    this.reserve(chunk.length);
+    this.buffer.set(chunk, this.length);
+    this.length += chunk.length;
+    const frames: Uint8Array<ArrayBuffer>[] = [];
+    for (;;) {
+      const headerEnd = this.findHeaderEnd();
+      if (headerEnd < 0) {
+        // Drop garbage that can never form a header so the buffer cannot grow unbounded.
+        if (this.length > MJPEG_HEADER_LIMIT) this.consume(this.length - 3);
+        break;
+      }
+      const bodyStart = headerEnd + 4;
+      const header = headerDecoder.decode(this.buffer.subarray(0, headerEnd));
+      const size = Number(/content-length:\s*(\d+)/i.exec(header)?.[1] ?? Number.NaN);
+      if (!Number.isFinite(size)) {
+        this.consume(bodyStart);
+        continue;
+      }
+      if (this.length < bodyStart + size) break;
+      frames.push(this.buffer.slice(bodyStart, bodyStart + size));
+      this.consume(bodyStart + size);
+    }
+    return frames;
+  }
+
+  private findHeaderEnd(): number {
+    const limit = Math.min(this.length, MJPEG_HEADER_LIMIT);
+    for (let i = 0; i + 3 < limit; i += 1) {
+      if (
+        this.buffer[i] === 13 &&
+        this.buffer[i + 1] === 10 &&
+        this.buffer[i + 2] === 13 &&
+        this.buffer[i + 3] === 10
+      ) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  private reserve(extra: number) {
+    if (this.length + extra <= this.buffer.length) return;
+    const next = new Uint8Array(Math.max(this.buffer.length * 2, this.length + extra));
+    next.set(this.buffer.subarray(0, this.length));
+    this.buffer = next;
+  }
+
+  private consume(count: number) {
+    this.buffer.copyWithin(0, count, this.length);
+    this.length -= count;
+  }
+}
+
+/**
+ * Streams MJPEG over fetch and paints the newest decoded frame on a canvas once per
+ * display refresh. WebKit's native `<img>` multipart rendering paces frames unevenly,
+ * which read as preview lag even with the engine delivering a steady 30 fps.
+ */
+function useMjpegCanvas(src: string | undefined, canvasRef: RefObject<HTMLCanvasElement | null>) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!src || !canvas) return;
+    const controller = new AbortController();
+    let disposed = false;
+    let latest: ImageBitmap | null = null;
+    let pending: Uint8Array<ArrayBuffer> | null = null;
+    let decoding = false;
+    let raf = 0;
+
+    const paint = () => {
+      raf = 0;
+      const ctx = canvas.getContext("2d");
+      if (!latest || !ctx) return;
+      const dpr = window.devicePixelRatio || 1;
+      const width = Math.round(canvas.clientWidth * dpr);
+      const height = Math.round(canvas.clientHeight * dpr);
+      if (width === 0 || height === 0) return;
+      if (canvas.width !== width) canvas.width = width;
+      if (canvas.height !== height) canvas.height = height;
+      const mapper = createLetterboxMapper({
+        sourceWidth: latest.width,
+        sourceHeight: latest.height,
+        boxWidth: width,
+        boxHeight: height,
+      });
+      ctx.clearRect(0, 0, width, height);
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(latest, mapper.offsetX, mapper.offsetY, mapper.width, mapper.height);
+    };
+    const schedulePaint = () => {
+      if (!raf && !disposed) raf = requestAnimationFrame(paint);
+    };
+
+    const decode = async () => {
+      if (decoding) return;
+      decoding = true;
+      while (pending && !disposed) {
+        const jpeg = pending;
+        pending = null;
+        try {
+          const bitmap = await createImageBitmap(new Blob([jpeg], { type: "image/jpeg" }));
+          if (disposed) {
+            bitmap.close();
+            break;
+          }
+          latest?.close();
+          latest = bitmap;
+          schedulePaint();
+        } catch {
+          // A truncated frame is skipped; the next one replaces it within ~33 ms.
+        }
+      }
+      decoding = false;
+    };
+
+    const read = async () => {
+      try {
+        const response = await fetch(src, { signal: controller.signal, cache: "no-store" });
+        if (!response.ok || !response.body) throw new Error(`preview ${response.status}`);
+        const reader = response.body.getReader();
+        const parser = new MjpegPartParser();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) return;
+          const frames = parser.push(value);
+          const newest = frames.at(-1);
+          if (newest) {
+            // Only the newest frame matters; older ones would only add latency.
+            pending = newest;
+            void decode();
+          }
+        }
+      } catch {
+        if (!controller.signal.aborted) setFailedSrc(src);
+      }
+    };
+
+    const resize = new ResizeObserver(schedulePaint);
+    resize.observe(canvas);
+    // Deferred so React StrictMode's mount/unmount probe does not burn the single-use ticket.
+    const start = window.setTimeout(() => void read(), 0);
+
+    return () => {
+      disposed = true;
+      window.clearTimeout(start);
+      controller.abort();
+      resize.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+      latest?.close();
+      latest = null;
+    };
+  }, [src, canvasRef]);
+
+  return Boolean(src) && failedSrc !== src;
 }
 
 function drawHand(ctx: CanvasRenderingContext2D, mapper: LetterboxMapper, hand: HandObservationEvent) {
@@ -79,8 +250,10 @@ export function PreviewCanvas({
   sourceHeight?: number;
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLCanvasElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const hasVideo = useMjpegCanvas(src, videoRef);
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -127,8 +300,9 @@ export function PreviewCanvas({
   }, [hands, ray, size.height, size.width, sourceHeight, sourceWidth]);
 
   return (
-    <div ref={frameRef} className="preview-canvas" data-has-video={src ? "true" : "false"}>
-      {src ? <img src={src} alt={alt} /> : <div className="preview-placeholder">{alt}</div>}
+    <div ref={frameRef} className="preview-canvas" data-has-video={hasVideo ? "true" : "false"}>
+      {src ? <canvas ref={videoRef} className="preview-video" role="img" aria-label={alt} /> : null}
+      {hasVideo ? null : <div className="preview-placeholder">{alt}</div>}
       <canvas ref={canvasRef} aria-label="Hand skeleton overlay" />
     </div>
   );
