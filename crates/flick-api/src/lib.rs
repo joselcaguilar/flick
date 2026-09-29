@@ -2174,7 +2174,7 @@ fn event_allowed(
     topics.contains(&topic)
 }
 
-#[utoipa::path(get, path = "/stream/{camera_id}.mjpg", params(("ticket" = String, Query)), responses((status = 200, description = "multipart/x-mixed-replace MJPEG stream"), (status = 401, body = ProblemJson)))]
+#[utoipa::path(get, path = "/stream/{camera_id}.mjpg", params(("ticket" = String, Query), ("framing" = Option<String>, Query, description = "`raw` serves the same multipart bytes as application/octet-stream")), responses((status = 200, description = "multipart/x-mixed-replace MJPEG stream"), (status = 401, body = ProblemJson)))]
 async fn stream_mjpeg(
     State(state): State<Arc<ApiState>>,
     Path(camera_path): Path<String>,
@@ -2216,12 +2216,17 @@ async fn stream_mjpeg(
         }
         ticket.used = true;
     }
+    // WKWebView's fetch() rejects multipart/x-mixed-replace bodies, so the desktop UI asks
+    // for the identical byte stream under a neutral content type and parses parts itself.
+    let content_type = if query.get("framing").is_some_and(|framing| framing == "raw") {
+        "application/octet-stream"
+    } else {
+        "multipart/x-mixed-replace; boundary=flick"
+    };
     let stream = mjpeg_stream(camera_id, state.preview.clone());
     Ok(Response::builder()
-        .header(
-            header::CONTENT_TYPE,
-            "multipart/x-mixed-replace; boundary=flick",
-        )
+        .header(header::CONTENT_TYPE, content_type)
+        .header(header::CACHE_CONTROL, "no-store")
         .body(Body::from_stream(stream))
         .unwrap_or_else(|_| Response::new(Body::empty())))
 }

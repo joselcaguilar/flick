@@ -409,7 +409,7 @@ CREATE TABLE update_state (              -- small key/value table owned by flick
 | `PATCH /cameras/{id}` / `DELETE /cameras/{id}` | | |
 | `POST /cameras/{id}/start` / `stop` | → `CameraStatus` | |
 | `POST /cameras/test-rtsp` | `{url, trust_self_signed}` → `{ok, width, height, codec, latency_ms, error?}` | Phase 2 |
-| `POST /cameras/{id}/preview-ticket` | → `{url: "/stream/{id}.mjpg?ticket=…", expires_at}` | one-time ticket, 60 s |
+| `POST /cameras/{id}/preview-ticket` | → `{url: "/stream/{id}.mjpg?ticket=…", expires_at}` | one-time ticket, 60 s. The stream is `multipart/x-mixed-replace`; append `&framing=raw` to get the same bytes as `application/octet-stream` (needed by WKWebView `fetch`) |
 | `GET /gestures` | → `Gesture[]` with `{sample_count, accuracy?, distinctiveness?}` | |
 | `POST /gestures` | `{name, kind?:"static"|"motion", hands_required?, hand_constraint, icon?}` → `Gesture` | creates `custom.<ulid>` (static) or `motion.<ulid>`. If `kind` is omitted, the type is auto-detected from the first capture (`02-…` §4.4) and the id is assigned then |
 | `PATCH /gestures/{id}` / `DELETE /gestures/{id}` | | built-ins: only `enabled`, `threshold` |

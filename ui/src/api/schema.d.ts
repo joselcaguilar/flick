@@ -4089,6 +4089,8 @@ export interface operations {
         parameters: {
             query: {
                 ticket: string;
+                /** @description `raw` serves the same multipart bytes as application/octet-stream */
+                framing?: string;
             };
             header?: never;
             path: {

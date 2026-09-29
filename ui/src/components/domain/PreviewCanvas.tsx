@@ -165,7 +165,11 @@ function useMjpegCanvas(src: string | undefined, canvasRef: RefObject<HTMLCanvas
 
     const read = async () => {
       try {
-        const response = await fetch(src, { signal: controller.signal, cache: "no-store" });
+        // WKWebView's fetch() rejects multipart/x-mixed-replace bodies outright, so ask the
+        // engine for the same bytes as application/octet-stream and split parts here.
+        const url = new URL(src);
+        url.searchParams.set("framing", "raw");
+        const response = await fetch(url, { signal: controller.signal, cache: "no-store" });
         if (!response.ok || !response.body) throw new Error(`preview ${response.status}`);
         const reader = response.body.getReader();
         const parser = new MjpegPartParser();

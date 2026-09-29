@@ -1714,6 +1714,15 @@
             }
           },
           {
+            "name": "framing",
+            "in": "query",
+            "description": "`raw` serves the same multipart bytes as application/octet-stream",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "camera_id",
             "in": "path",
             "required": true,
