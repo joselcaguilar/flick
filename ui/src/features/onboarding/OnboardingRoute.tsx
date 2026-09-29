@@ -1,6 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
-  useCameraPreviewTicket,
   useCamerasAvailable,
   useHaConnect,
   useHaDiscover,
@@ -143,7 +142,6 @@ export function OnboardingRoute() {
   const cameraFailed = liveState === "error" || liveState === "permission_denied" || Boolean(liveError);
   const cameraStarting = cameraStarted && !cameraRunning && !cameraFailed;
   const cameraCopy = cameraStateCopy(cameraPermission, cameraRunning);
-  const preview = useCameraPreviewTicket(cameraId, cameraRunning);
   const liveHands = useLiveHands(cameraId);
   const handTracked = cameraRunning && Boolean(liveHands?.hands.length);
   const cameraInlineError = cameraFailed
@@ -358,7 +356,7 @@ export function OnboardingRoute() {
               <div>
                 <PreviewCanvas
                   alt={`${currentCamera?.name ?? "Camera"} preview with a tracked hand`}
-                  src={cameraRunning ? preview.data?.src || undefined : undefined}
+                  cameraId={cameraRunning ? cameraId : undefined}
                   hands={cameraRunning ? liveHands?.hands : []}
                   ray={cameraRunning ? liveHands?.ray : null}
                 />

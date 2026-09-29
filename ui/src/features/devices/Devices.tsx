@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   useAnchors,
-  useCameraPreviewTicket,
   useCancelTeach,
   useCommitTeach,
   useHaEntities,
@@ -116,7 +115,6 @@ function levelLabel(action: Action) {
 function TeachPreview({ title, detail, sessionId }: { title: string; detail: string; sessionId?: string }) {
   const activeCamera = useActiveCamera();
   const hands = useLiveHands(activeCamera.id);
-  const preview = useCameraPreviewTicket(activeCamera.id, activeCamera.running);
   const teach = useEventStore((state) => state.teach);
   const progress = teach?.session_id === sessionId ? teach : undefined;
   const confidence = progress?.confidence ?? 0.82;
@@ -130,7 +128,7 @@ function TeachPreview({ title, detail, sessionId }: { title: string; detail: str
         <Badge tone={progress?.phase === "error" ? "danger" : "success"}>{progress?.hint ?? detail}</Badge>
       </div>
       <PreviewCanvas
-        src={preview.data?.src || undefined}
+        cameraId={activeCamera.running ? activeCamera.id : undefined}
         alt="Live camera preview with pointing ray"
         hands={hands?.hands}
         ray={hands?.ray}

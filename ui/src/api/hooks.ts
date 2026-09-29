@@ -44,7 +44,6 @@ export const queryKeys = {
   haEntities: (params = "") => ["ha", "entities", params] as const,
   haServices: (domain = "") => ["ha", "services", domain] as const,
   cameras: ["cameras"] as const,
-  cameraPreview: (id = "") => ["cameras", id, "preview-ticket"] as const,
   camerasAvailable: ["cameras", "available"] as const,
   gestures: ["gestures"] as const,
   gestureMotionTakes: (id: string) => ["gestures", id, "motion-takes"] as const,
@@ -195,23 +194,17 @@ export function useStopCamera() {
   });
 }
 
-export function useCameraPreviewTicket(cameraId?: string, enabled = true) {
-  return useQuery({
-    queryKey: queryKeys.cameraPreview(cameraId),
-    enabled: Boolean(cameraId && enabled),
-    staleTime: 45_000,
-    queryFn: async () => {
-      if (!cameraId) throw new Error("camera id required");
-      const [ticket, endpoint] = await Promise.all([
-        api.post<Omit<PreviewTicket, "src">>(`/api/v1/cameras/${cameraId}/preview-ticket`),
-        getEndpoint(),
-      ]);
-      return {
-        ...ticket,
-        src: endpoint.mock ? "" : new URL(ticket.url, `${endpoint.baseUrl}/`).toString(),
-      };
-    },
-  });
+/**
+ * Mints a stream URL for one preview connection. Tickets are single-use on the engine, so
+ * this must run per connection and never be cached — a reused URL is rejected with 401.
+ * Resolves to null in mock mode, where there is no stream to show.
+ */
+export async function requestPreviewUrl(cameraId: string): Promise<string | null> {
+  const [ticket, endpoint] = await Promise.all([
+    api.post<PreviewTicket>(`/api/v1/cameras/${cameraId}/preview-ticket`),
+    getEndpoint(),
+  ]);
+  return endpoint.mock ? null : new URL(ticket.url, `${endpoint.baseUrl}/`).toString();
 }
 
 export function useGestures() {

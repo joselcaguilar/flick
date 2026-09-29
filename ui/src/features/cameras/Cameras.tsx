@@ -1,12 +1,5 @@
 import { useState } from "react";
-import {
-  useCameraPreviewTicket,
-  useCameras,
-  useCamerasAvailable,
-  useStartCamera,
-  useStatus,
-  useStopCamera,
-} from "../../api/hooks";
+import { useCameras, useCamerasAvailable, useStartCamera, useStatus, useStopCamera } from "../../api/hooks";
 import type { Camera, CameraAvailable, CameraStatus } from "../../api/types";
 import { PreviewCanvas } from "../../components/domain";
 import { Badge, Button, GlassPanel, ListRow, Skeleton, useToast } from "../../components/ui";
@@ -119,7 +112,6 @@ export function CamerasRoute() {
   const activeCamera = cameras.data?.[0];
   const activeLive = useCameraLive(activeCamera?.id ?? status.data?.cameras[0]?.camera_id);
   const running = activeLive?.state === "running";
-  const preview = useCameraPreviewTicket(activeCamera?.id ?? activeLive?.camera_id, running);
   const hands = useLiveHands(activeLive?.camera_id ?? activeCamera?.id);
   const setup = useCameraSetup();
   const blocked = permission === "denied" || permission === "restricted";
@@ -214,7 +206,7 @@ export function CamerasRoute() {
             </div>
           ) : (
             <PreviewCanvas
-              src={running ? preview.data?.src : undefined}
+              cameraId={running ? (activeCamera?.id ?? activeLive?.camera_id) : undefined}
               alt={running ? "Live camera preview" : "Start a camera to show live preview"}
               hands={running ? hands?.hands : []}
               ray={running ? hands?.ray : undefined}

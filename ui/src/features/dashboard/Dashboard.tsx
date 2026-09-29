@@ -1,12 +1,5 @@
 import { Link } from "react-router-dom";
-import {
-  useActivity,
-  useCameraPreviewTicket,
-  useCameras,
-  useInstallUpdate,
-  useStatus,
-  useUpdates,
-} from "../../api/hooks";
+import { useActivity, useCameras, useInstallUpdate, useStatus, useUpdates } from "../../api/hooks";
 import { ConfidenceMeter, DevicePill, PreviewCanvas } from "../../components/domain";
 import { Badge, Button, GlassPanel, Kbd, ListRow, Skeleton } from "../../components/ui";
 import { useEventStore } from "../../events/store";
@@ -56,7 +49,6 @@ export function DashboardRoute() {
   const active = useActiveCamera();
   const camera = useCameraLive(active.id);
   const running = camera?.state === "running";
-  const preview = useCameraPreviewTicket(active.id, running);
   const liveHands = useLiveHands(active.id);
   const engine = status.data;
   const cameraName =
@@ -109,14 +101,8 @@ export function DashboardRoute() {
               </div>
               <div className="dashboard-stage">
                 <PreviewCanvas
-                  src={running ? preview.data?.src : undefined}
-                  alt={
-                    !running
-                      ? "Camera is off"
-                      : preview.data?.src
-                        ? "Live camera preview with hand tracking"
-                        : "Connecting to the camera…"
-                  }
+                  cameraId={running ? active.id : undefined}
+                  alt={running ? "Live camera preview with hand tracking" : "Camera is off"}
                   hands={running ? liveHands?.hands : []}
                   ray={running ? liveHands?.ray : undefined}
                 />
