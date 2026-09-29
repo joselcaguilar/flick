@@ -7,7 +7,12 @@ const here = dirname(fileURLToPath(import.meta.url));
 const appDir = join(here, '..');
 const repoRoot = join(appDir, '..', '..');
 const srcTauri = join(appDir, 'src-tauri');
-const release = process.argv.includes('--release') || process.env.TAURI_ENV_DEBUG !== 'true';
+// Local debug bundles still ship an optimized engine: an unoptimized engine cannot keep up with
+// camera-rate decode, inference, and preview encoding.
+const release =
+  process.argv.includes('--release') ||
+  process.env.FLICK_SIDECAR_RELEASE === '1' ||
+  process.env.TAURI_ENV_DEBUG !== 'true';
 
 function run(command, args, options = {}) {
   execFileSync(command, args, { cwd: repoRoot, stdio: 'inherit', ...options });

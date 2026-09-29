@@ -37,12 +37,12 @@ use flick_api::{
     TeachSpotResponse, VerbBinding, WsServerMessage, router,
 };
 use flick_capture::{
-    CameraPermissionStatus, CaptureHandle, CaptureStatus, FileSource, FileSourceOptions,
+    CameraPermissionStatus, CaptureHandle, CaptureStatus, FileSource, FileSourceOptions, FrameTap,
     LatestFrameSlot, LocalCameraOptions, LocalCameraSource, camera_permission_status,
-    spawn_capture,
+    spawn_capture_with_tap,
 };
 use flick_core::{
-    Action, ActionOutcome, ActionStatus, ActionTarget, AnchorId, CameraId, DialProperty, Frame,
+    Action, ActionOutcome, ActionStatus, ActionTarget, AnchorId, CameraId, DialProperty,
     FrameSource, GestureId, HandFrame, HandPipeline, MappingId, PlaceId, SourceInfo, SourceKind,
     StoreError, Verb,
 };
@@ -1513,7 +1513,7 @@ struct EngineCapture {
     worker_stop: Arc<AtomicBool>,
     worker: Option<thread::JoinHandle<()>>,
     dispatch_task: Option<tokio::task::JoinHandle<()>>,
-    latest_frame: Arc<std::sync::Mutex<Option<Frame>>>,
+    preview: FrameTap,
     latest_hands: Arc<std::sync::Mutex<Option<HandFrame>>>,
     last_error: Arc<std::sync::Mutex<Option<String>>>,
 }
@@ -1529,9 +1529,9 @@ impl EngineCapture {
     {
         let source_info = source.info().clone();
         let slot = LatestFrameSlot::new();
-        let handle = spawn_capture(source, slot.clone());
+        let preview = FrameTap::default();
+        let handle = spawn_capture_with_tap(source, slot.clone(), Some(preview.clone()));
         let worker_stop = Arc::new(AtomicBool::new(false));
-        let latest_frame = Arc::new(std::sync::Mutex::new(None));
         let latest_hands = Arc::new(std::sync::Mutex::new(None));
         let last_error = Arc::new(std::sync::Mutex::new(None));
         let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -1544,7 +1544,6 @@ impl EngineCapture {
         });
         let worker = {
             let worker_stop = Arc::clone(&worker_stop);
-            let latest_frame = Arc::clone(&latest_frame);
             let latest_hands = Arc::clone(&latest_hands);
             let last_error = Arc::clone(&last_error);
             let source_info = source_info.clone();
@@ -1562,9 +1561,6 @@ impl EngineCapture {
                         let Some(frame) = slot.wait_latest(Duration::from_millis(100)) else {
                             continue;
                         };
-                        if let Ok(mut latest) = latest_frame.lock() {
-                            *latest = Some(frame.clone());
-                        }
                         match pipeline.process(&frame) {
                             Ok(hands) => {
                                 let selection = selector.update(&hands, None);
@@ -1594,7 +1590,7 @@ impl EngineCapture {
             worker_stop,
             worker: Some(worker),
             dispatch_task,
-            latest_frame,
+            preview,
             latest_hands,
             last_error,
         })
@@ -1617,14 +1613,15 @@ impl EngineCapture {
     }
 
     fn latest_preview(&self) -> Option<PreviewFrame> {
-        let frame = self.latest_frame.lock().ok()?.clone()?;
+        let frame = self.preview.latest()?;
         if frame.format != flick_core::PixelFormat::Rgb8 {
             return None;
         }
         Some(PreviewFrame {
             width: frame.width,
             height: frame.height,
-            rgb: frame.data.to_vec(),
+            seq: frame.seq,
+            rgb: frame.data,
         })
     }
 

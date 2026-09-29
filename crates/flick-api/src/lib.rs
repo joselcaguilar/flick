@@ -22,7 +22,10 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     convert::Infallible,
     net::SocketAddr,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
     time::{Duration, Instant, SystemTime},
 };
 
@@ -136,7 +139,7 @@ impl ApiGateways {
             ha: Arc::new(FakeHa::default()),
             teach: Arc::new(FakeTeach),
             updates: Arc::new(FakeUpdates),
-            preview: Arc::new(FakePreview),
+            preview: Arc::new(FakePreview::default()),
             config: Arc::new(FakeConfig),
         }
     }
@@ -600,14 +603,16 @@ pub struct PreviewFrame {
     pub width: u32,
     /// Height.
     pub height: u32,
-    /// RGB bytes.
-    pub rgb: Vec<u8>,
+    /// Capture sequence number; unchanged when no new frame arrived.
+    pub seq: u64,
+    /// RGB bytes, shared with the capture thread without copying.
+    pub rgb: Arc<[u8]>,
 }
 
 /// Preview source supplied by the capture/engine lane.
 #[async_trait]
 pub trait PreviewSource: Send + Sync + 'static {
-    /// Returns the next raw preview frame. Called only while a viewer is connected.
+    /// Returns the newest raw preview frame. Called only while a viewer is connected.
     async fn next_frame(&self, camera_id: &str) -> Option<PreviewFrame>;
 }
 
@@ -1069,7 +1074,9 @@ impl UpdatesGateway for FakeUpdates {
 
 /// Fake preview source returning a generated RGB gradient.
 #[derive(Default)]
-pub struct FakePreview;
+pub struct FakePreview {
+    seq: AtomicU64,
+}
 
 #[async_trait]
 impl PreviewSource for FakePreview {
@@ -1084,7 +1091,12 @@ impl PreviewSource for FakePreview {
                 rgb.push(96);
             }
         }
-        Some(PreviewFrame { width, height, rgb })
+        Some(PreviewFrame {
+            width,
+            height,
+            seq: self.seq.fetch_add(1, Ordering::Relaxed),
+            rgb: rgb.into(),
+        })
     }
 }
 
@@ -2215,28 +2227,41 @@ fn mjpeg_stream(
     camera_id: String,
     preview: Arc<dyn PreviewSource>,
 ) -> impl Stream<Item = Result<Bytes, Infallible>> {
-    stream::unfold((camera_id, preview), |(camera_id, preview)| async move {
-        loop {
-            tokio::time::sleep(Duration::from_millis(66)).await;
-            if let Some(chunk) = preview
-                .next_frame(&camera_id)
-                .await
-                .and_then(encode_mjpeg_chunk)
-            {
-                return Some((Ok(chunk), (camera_id, preview)));
+    stream::unfold(
+        (camera_id, preview, None::<u64>),
+        |(camera_id, preview, mut last_seq)| async move {
+            loop {
+                tokio::time::sleep(PREVIEW_POLL).await;
+                let Some(frame) = preview.next_frame(&camera_id).await else {
+                    continue;
+                };
+                if last_seq == Some(frame.seq) {
+                    continue;
+                }
+                last_seq = Some(frame.seq);
+                let chunk = tokio::task::spawn_blocking(move || encode_mjpeg_chunk(frame))
+                    .await
+                    .ok()
+                    .flatten();
+                if let Some(chunk) = chunk {
+                    return Some((Ok(chunk), (camera_id, preview, last_seq)));
+                }
             }
-        }
-    })
+        },
+    )
 }
+
+/// Preview poll interval; new frames are only encoded when the capture seq advances.
+const PREVIEW_POLL: Duration = Duration::from_millis(15);
 
 fn encode_mjpeg_chunk(frame: PreviewFrame) -> Option<Bytes> {
     let (width, height, rgb) = if frame.width > 640 {
-        let image = image::RgbImage::from_raw(frame.width, frame.height, frame.rgb)?;
+        let image = image::RgbImage::from_raw(frame.width, frame.height, frame.rgb.to_vec())?;
         let new_height = (u64::from(frame.height) * 640 / u64::from(frame.width)) as u32;
-        let resized = image::imageops::resize(&image, 640, new_height.max(1), FilterType::Triangle);
+        let resized = image::imageops::resize(&image, 640, new_height.max(1), FilterType::Nearest);
         (resized.width(), resized.height(), resized.into_raw())
     } else {
-        (frame.width, frame.height, frame.rgb)
+        (frame.width, frame.height, frame.rgb.to_vec())
     };
     let mut jpeg = Vec::new();
     JpegEncoder::new_with_quality(&mut jpeg, 75)

@@ -91,6 +91,8 @@ HUD overlay (separate window)
 - **Live preview** (collapsible): MJPEG stream + canvas overlay with the hand skeleton, track IDs, current top gesture + confidence ring.
   - When pointing, the overlay also shows the pointing ray and the hovered or selected device label.
   - The overlay is drawn from `hands:<camera_id>` and `target.*` WS events (15 Hz), not burned into the video.
+  - The preview video runs at the camera's rate, independent of inference. The capture thread publishes each frame to a single-slot tap. The MJPEG handler sends only new frames (sequence dedup), downscales to 640 px wide, and encodes JPEG off the async runtime. A slow inference pass never delays the video.
+  - Camera held by another app (Teams, FaceTime, Zoom): the Cameras page and onboarding show "Camera is in use by another app. Close that app or pick another camera, then start it again." Flick never forces the device lock.
 - **Update banner** (only when relevant): "Flick 1.3 is ready — restart to update" or "Hand model improved (v3)", with a link to the changelog.
 - **Recent activity** (last 10) with status icons, and a link to Activity.
 - **Quick actions:** Pause 15 min · Add mapping · Record gesture.

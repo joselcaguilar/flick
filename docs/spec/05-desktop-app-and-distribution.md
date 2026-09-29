@@ -20,6 +20,7 @@ flowchart LR
 ```
 
 - The **engine is a Tauri sidecar** (`bundle.externalBin: ["binaries/flick-engine"]`, built per target triple).
+  - Every bundle ships a **release** engine, including the local debug bundle (`pnpm bundle:local` sets `FLICK_SIDECAR_RELEASE=1`). A debug engine is too slow for real-time capture and inference.
 - **Startup handshake:**
   1. The shell generates a 256-bit random token.
   2. It spawns `flick-engine --sidecar --port 0 --data-dir <app data>` and writes the token as the **first stdin line** (never in argv/env).

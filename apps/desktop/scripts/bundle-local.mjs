@@ -28,7 +28,9 @@ if (process.platform !== 'darwin') {
 }
 
 run('pnpm', ['--dir', uiDir, 'build']);
-run('pnpm', ['tauri', 'build', '--debug', '--bundles', 'app']);
+run('pnpm', ['tauri', 'build', '--debug', '--bundles', 'app'], {
+  env: { ...process.env, FLICK_SIDECAR_RELEASE: '1' },
+});
 
 requirePath(bundle, 'Flick.app bundle');
 requirePath(entitlements, 'macOS entitlements');

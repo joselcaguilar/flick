@@ -3,6 +3,8 @@
 //! The public entry point is [`spawn_capture`]: it runs a [`FrameSource`] on a
 //! dedicated OS thread and overwrites a [`LatestFrameSlot`]. Consumers always
 //! take the newest frame; there is intentionally no queue in this crate.
+//! [`spawn_capture_with_tap`] additionally publishes every frame to a
+//! [`FrameTap`] so previews run at camera rate, not inference rate.
 
 use std::{
     fs,
@@ -14,7 +16,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
     thread::{self, JoinHandle},
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use crossbeam_channel::{Receiver, Sender, bounded};
@@ -233,9 +235,38 @@ impl Drop for CaptureHandle {
     }
 }
 
+/// Newest captured frame, overwritten at camera rate and never consumed.
+#[derive(Debug, Clone, Default)]
+pub struct FrameTap(Arc<Mutex<Option<Frame>>>);
+
+impl FrameTap {
+    /// Returns the most recently captured frame, if any.
+    #[must_use]
+    pub fn latest(&self) -> Option<Frame> {
+        self.0.lock().clone()
+    }
+
+    fn publish(&self, frame: Frame) {
+        *self.0.lock() = Some(frame);
+    }
+}
+
 /// Runs `source` on a dedicated capture thread and writes to `slot`.
 #[must_use]
 pub fn spawn_capture<S>(source: S, slot: LatestFrameSlot) -> CaptureHandle
+where
+    S: FrameSource,
+{
+    spawn_capture_with_tap(source, slot, None)
+}
+
+/// Like [`spawn_capture`], also publishing every frame to `tap`.
+#[must_use]
+pub fn spawn_capture_with_tap<S>(
+    source: S,
+    slot: LatestFrameSlot,
+    tap: Option<FrameTap>,
+) -> CaptureHandle
 where
     S: FrameSource,
 {
@@ -244,7 +275,7 @@ where
     let worker_status = Arc::clone(&status);
     let join = thread::Builder::new()
         .name(format!("flick-capture-{}", source.info().id))
-        .spawn(move || capture_loop(source, slot, commands_rx, worker_status))
+        .spawn(move || capture_loop(source, slot, tap, commands_rx, worker_status))
         .ok();
 
     CaptureHandle {
@@ -257,6 +288,7 @@ where
 fn capture_loop<S>(
     mut source: S,
     slot: LatestFrameSlot,
+    tap: Option<FrameTap>,
     commands: Receiver<CaptureCommand>,
     status: Arc<Mutex<CaptureStatus>>,
 ) where
@@ -280,6 +312,9 @@ fn capture_loop<S>(
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| source.next_frame())) {
             Ok(Ok(frame)) => {
                 *status.lock() = CaptureStatus::Running;
+                if let Some(tap) = &tap {
+                    tap.publish(frame.clone());
+                }
                 slot.store(frame);
             }
             Ok(Err(CaptureError::Disconnected)) => {
@@ -403,7 +438,13 @@ impl FrameSource for LocalCameraSource {
     }
 
     fn next_frame(&mut self) -> Result<Frame, CaptureError> {
-        let buffer = self.camera.frame().map_err(map_nokhwa_error)?;
+        // nokhwa hands back the oldest queued buffer and drops the rest, so a
+        // buffer that queued while we decoded the previous one is already
+        // stale; the next call then blocks for a genuinely fresh buffer.
+        let mut buffer = self.camera.frame().map_err(map_nokhwa_error)?;
+        if is_stale(buffer.capture_timestamp(), self.info.fps) {
+            buffer = self.camera.frame().map_err(map_nokhwa_error)?;
+        }
         let resolution = buffer.resolution();
         let source_format = buffer.source_frame_format();
         if !self.logged_first_frame {
@@ -439,7 +480,7 @@ impl FrameSource for LocalCameraSource {
             width: self.info.width,
             height: self.info.height,
             format: PixelFormat::Rgb8,
-            data: Arc::<[u8]>::from(self.rgb.clone()),
+            data: Arc::from(self.rgb.as_slice()),
         };
         self.seq = self.seq.saturating_add(1);
         Ok(frame)
@@ -493,6 +534,7 @@ fn open_camera(index: &CameraIndex, options: &LocalCameraOptions) -> Result<Came
                 info!(%format, "selected local camera format");
                 return Ok(camera);
             }
+            Err(err) if is_camera_in_use(&err) => return Err(map_nokhwa_error(err)),
             Err(err) => {
                 debug!(%format, error = %err, "camera rejected format");
                 last_error = Some(err);
@@ -597,7 +639,30 @@ pub struct LocalCameraDevice {
     pub name: String,
 }
 
+/// Older than 1.5 frame periods means at least one newer buffer was dropped.
+fn is_stale(captured: Option<Duration>, fps: u32) -> bool {
+    let Some(captured) = captured else {
+        return false;
+    };
+    let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) else {
+        return false;
+    };
+    let period = Duration::from_secs(1) / fps.max(1);
+    now.saturating_sub(captured) > period + period / 2
+}
+
+const CAMERA_IN_USE: &str =
+    "Camera is in use by another app. Close that app or pick another camera, then start it again.";
+
+fn is_camera_in_use(err: &nokhwa::NokhwaError) -> bool {
+    let lower = err.to_string().to_ascii_lowercase();
+    lower.contains("in use") || lower.contains("busy")
+}
+
 fn map_nokhwa_error(err: nokhwa::NokhwaError) -> CaptureError {
+    if is_camera_in_use(&err) {
+        return CaptureError::Unavailable(CAMERA_IN_USE.to_owned());
+    }
     let message = err.to_string();
     let lower = message.to_ascii_lowercase();
     if lower.contains("permission") || lower.contains("authoriz") || lower.contains("denied") {
@@ -1080,6 +1145,28 @@ mod tests {
         assert_eq!(latest.seq, 4);
         assert!(slot.take_latest().is_none());
         assert_eq!(slot.total_dropped(), 4);
+    }
+
+    #[test]
+    fn stale_buffers_are_older_than_one_and_a_half_frame_periods() {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock after epoch");
+        assert!(!is_stale(Some(now), 30));
+        assert!(is_stale(Some(now - Duration::from_millis(100)), 30));
+        assert!(!is_stale(None, 30));
+    }
+
+    #[test]
+    fn camera_in_use_errors_map_to_a_clear_message() {
+        let err = nokhwa::NokhwaError::InitializeError {
+            backend: nokhwa::utils::ApiBackend::AVFoundation,
+            error: "Already in use".to_owned(),
+        };
+        assert!(matches!(
+            map_nokhwa_error(err),
+            CaptureError::Unavailable(message) if message == CAMERA_IN_USE
+        ));
     }
 
     #[test]
