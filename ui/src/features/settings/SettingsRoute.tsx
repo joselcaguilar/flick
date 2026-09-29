@@ -18,8 +18,10 @@ import {
 import type { DarkThemeId, LightThemeId, SettingsMap, SettingsPatch, ThemeMode } from "../../api/types";
 import { DevicePill } from "../../components/domain";
 import { Badge, Button, Input, Select, Switch } from "../../components/ui";
+import { isTauri } from "../../platform/tauri";
 import { darkThemes, lightThemes, useTheme } from "../../theme";
 import "./styles.css";
+import { useAppPreferences, useSetAppPreferences } from "./useAppPreferences";
 
 type FieldErrors = Record<string, string>;
 
@@ -29,7 +31,14 @@ const themeModeItems = [
   { value: "dark", label: "Dark" },
 ];
 
+// App behavior lives in the desktop shell; plain browser builds have nothing to control.
+const showGeneral = isTauri() || import.meta.env.VITE_MOCK === "1" || import.meta.env.DEV;
+const onMac = typeof navigator !== "undefined" && navigator.platform.toLowerCase().includes("mac");
+const trayPlace = onMac ? "menu bar" : "system tray";
+const dockPlace = onMac ? "Dock" : "taskbar";
+
 const sectionTitles = [
+  ...(showGeneral ? ["General"] : []),
   "Appearance",
   "Camera",
   "Recognition sensitivity",
@@ -161,6 +170,10 @@ export function SettingsRoute() {
   const haDiscover = useHaDiscover();
   const haConnect = useHaConnect();
   const theme = useTheme();
+  const appPreferences = useAppPreferences();
+  const setAppPreferences = useSetAppPreferences();
+  const menuBar = appPreferences.data?.menu_bar ?? true;
+  const openAtLogin = appPreferences.data?.open_at_login ?? false;
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [notice, setNotice] = useState<string | null>(null);
   const [haUrl, setHaUrl] = useState("http://homeassistant.local:8123");
@@ -199,6 +212,22 @@ export function SettingsRoute() {
     await patch({ [key]: value } as SettingsPatch, success ?? `Saved ${key}`);
   }
 
+  async function patchApp(patch: { menu_bar?: boolean; open_at_login?: boolean }, success: string) {
+    try {
+      await setAppPreferences.mutateAsync(patch);
+      setNotice(success);
+    } catch (error) {
+      // Shell commands reject with a plain string.
+      setNotice(
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "Flick could not change that setting.",
+      );
+    }
+  }
+
   async function reconnectHa() {
     try {
       setHaError(null);
@@ -233,6 +262,49 @@ export function SettingsRoute() {
           ))}
         </nav>
         <div className="settings-sections">
+          {showGeneral ? (
+            <SettingSection title="General" subtitle="How Flick runs on this computer.">
+              <SettingRow
+                label={`Keep in ${trayPlace}`}
+                description={
+                  menuBar
+                    ? `Closing the window leaves Flick watching from the ${trayPlace}, out of your ${dockPlace}.`
+                    : `Closing the window leaves Flick watching from the ${dockPlace}. The ${trayPlace} icon is hidden.`
+                }
+              >
+                <Switch
+                  checked={menuBar}
+                  disabled={appPreferences.isLoading}
+                  onCheckedChange={(checked) =>
+                    void patchApp(
+                      { menu_bar: checked },
+                      checked
+                        ? `Flick will stay in the ${trayPlace}.`
+                        : `Flick will stay in the ${dockPlace}.`,
+                    )
+                  }
+                  aria-label={`Keep in ${trayPlace}`}
+                />
+              </SettingRow>
+              <SettingRow
+                label="Open at login"
+                description={`Start Flick when you log in, without opening this window. It waits in the ${menuBar ? trayPlace : dockPlace}.`}
+              >
+                <Switch
+                  checked={openAtLogin}
+                  disabled={appPreferences.isLoading}
+                  onCheckedChange={(checked) =>
+                    void patchApp(
+                      { open_at_login: checked },
+                      checked ? "Flick will open when you log in." : "Flick won't open at login.",
+                    )
+                  }
+                  aria-label="Open at login"
+                />
+              </SettingRow>
+            </SettingSection>
+          ) : null}
+
           <SettingSection
             title="Appearance"
             subtitle="The same six themes as GitHub. Flick can follow your system's light and dark setting."

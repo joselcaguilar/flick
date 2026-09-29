@@ -5,7 +5,10 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::Command as OsCommand,
-    sync::{Arc, Mutex as StdMutex},
+    sync::{
+        Arc, Mutex as StdMutex,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -18,6 +21,7 @@ use tauri::{
     menu::{MenuBuilder, MenuItem, SubmenuBuilder},
     tray::TrayIconBuilder,
 };
+use tauri_plugin_autostart::ManagerExt as _;
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_opener::OpenerExt;
@@ -26,6 +30,7 @@ use tauri_plugin_shell::{
     process::{CommandChild, CommandEvent},
 };
 use tauri_plugin_updater::UpdaterExt;
+use tauri_plugin_window_state::StateFlags;
 use tokio::{
     sync::{Mutex as AsyncMutex, Notify},
     time,
@@ -34,6 +39,9 @@ use url::Url;
 
 const SIDECAR_NAME: &str = "flick-engine";
 const UPDATE_STATE_FILE: &str = "update_state.json";
+const SHELL_PREFS_FILE: &str = "shell_prefs.json";
+/// Passed by the login item so Flick starts without opening its window.
+const HIDDEN_LAUNCH_ARG: &str = "--hidden";
 const BACKOFF_RESET_AFTER: Duration = Duration::from_secs(60);
 
 #[derive(Clone)]
@@ -42,6 +50,31 @@ struct AppState {
     updates: Arc<UpdateManager>,
     hud: Arc<StdMutex<HudConfig>>,
     paused: Arc<StdMutex<bool>>,
+    menu_bar: Arc<AtomicBool>,
+}
+
+/// Shell-only preferences, read before the webview loads.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+struct ShellPrefs {
+    menu_bar: bool,
+}
+
+impl Default for ShellPrefs {
+    fn default() -> Self {
+        Self { menu_bar: true }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct AppPreferences {
+    menu_bar: bool,
+    open_at_login: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppPreferencesPatch {
+    menu_bar: Option<bool>,
+    open_at_login: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -681,6 +714,73 @@ fn open_camera_privacy_settings(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn app_preferences(app: AppHandle, state: State<'_, AppState>) -> Result<AppPreferences, String> {
+    current_app_preferences(&app, &state)
+}
+
+#[tauri::command]
+fn set_app_preferences(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    patch: AppPreferencesPatch,
+) -> Result<AppPreferences, String> {
+    if let Some(menu_bar) = patch.menu_bar {
+        write_shell_prefs(&app, ShellPrefs { menu_bar })?;
+        state.menu_bar.store(menu_bar, Ordering::Relaxed);
+        set_menu_bar_visible(&app, menu_bar).map_err(|error| error.to_string())?;
+    }
+    if let Some(open_at_login) = patch.open_at_login {
+        let autolaunch = app.autolaunch();
+        let enabled = autolaunch.is_enabled().map_err(|error| error.to_string())?;
+        if open_at_login != enabled {
+            if open_at_login {
+                autolaunch.enable()
+            } else {
+                autolaunch.disable()
+            }
+            .map_err(|error| error.to_string())?;
+        }
+    }
+    current_app_preferences(&app, &state)
+}
+
+fn current_app_preferences(app: &AppHandle, state: &AppState) -> Result<AppPreferences, String> {
+    Ok(AppPreferences {
+        menu_bar: state.menu_bar.load(Ordering::Relaxed),
+        open_at_login: app
+            .autolaunch()
+            .is_enabled()
+            .map_err(|error| error.to_string())?,
+    })
+}
+
+fn read_shell_prefs(app: &AppHandle) -> ShellPrefs {
+    app.path()
+        .app_data_dir()
+        .ok()
+        .and_then(|dir| fs::read(dir.join(SHELL_PREFS_FILE)).ok())
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or_default()
+}
+
+fn write_shell_prefs(app: &AppHandle, prefs: ShellPrefs) -> Result<(), String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
+    let bytes = serde_json::to_vec_pretty(&prefs).map_err(|error| error.to_string())?;
+    fs::write(dir.join(SHELL_PREFS_FILE), bytes).map_err(|error| error.to_string())
+}
+
+fn set_menu_bar_visible(app: &AppHandle, visible: bool) -> tauri::Result<()> {
+    if let Some(tray) = app.tray_by_id("main") {
+        tray.set_visible(visible)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn app_info(app: AppHandle) -> AppInfo {
     AppInfo {
         version: app.package_info().version.to_string(),
@@ -813,10 +913,14 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(StateFlags::all() & !StateFlags::VISIBLE)
+                .build(),
+        )
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            None,
+            Some(vec![HIDDEN_LAUNCH_ARG]),
         ))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(
@@ -838,6 +942,8 @@ fn main() {
             camera_permission_status,
             camera_request_access,
             open_camera_privacy_settings,
+            app_preferences,
+            set_app_preferences,
             app_info,
             app_update_status,
             app_update_check,
@@ -847,18 +953,34 @@ fn main() {
         .setup(move |app| {
             let supervisor = Arc::new(EngineSupervisor::new());
             let updates = Arc::new(UpdateManager::new());
+            let prefs = read_shell_prefs(app.handle());
+            let menu_bar = Arc::new(AtomicBool::new(prefs.menu_bar));
             app.manage(AppState {
                 supervisor: supervisor.clone(),
                 updates: updates.clone(),
                 hud: Arc::new(StdMutex::new(HudConfig::default())),
                 paused: Arc::new(StdMutex::new(false)),
+                menu_bar: menu_bar.clone(),
             });
 
-            configure_windows(app.handle())?;
+            configure_windows(app.handle(), menu_bar)?;
             install_tray(app.handle())?;
+            set_menu_bar_visible(app.handle(), prefs.menu_bar)?;
             install_shortcut(app.handle())?;
             install_deep_link_handler(app.handle());
-            app.set_activation_policy(ActivationPolicy::Regular);
+            if std::env::args().any(|arg| arg == HIDDEN_LAUNCH_ARG) {
+                app.set_activation_policy(if prefs.menu_bar {
+                    ActivationPolicy::Accessory
+                } else {
+                    ActivationPolicy::Regular
+                });
+            } else {
+                app.set_activation_policy(ActivationPolicy::Regular);
+                if let Some(main) = app.get_webview_window("main") {
+                    main.show()?;
+                    main.set_focus()?;
+                }
+            }
 
             let handle = app.handle().clone();
             supervisor.start(handle.clone());
@@ -877,12 +999,21 @@ fn main() {
         }
     };
 
-    app.run(|app, event| {
-        if let RunEvent::ExitRequested { .. } = event
-            && let Some(state) = app.try_state::<AppState>()
-        {
-            tauri::async_runtime::block_on(state.supervisor.shutdown());
+    app.run(|app, event| match event {
+        RunEvent::ExitRequested { .. } => {
+            if let Some(state) = app.try_state::<AppState>() {
+                tauri::async_runtime::block_on(state.supervisor.shutdown());
+            }
         }
+        // Clicking the Dock icon reopens the window when Flick lives in the Dock.
+        #[cfg(target_os = "macos")]
+        RunEvent::Reopen {
+            has_visible_windows: false,
+            ..
+        } => {
+            let _ = show_main_window_impl(app, None);
+        }
+        _ => {}
     });
 }
 
@@ -920,7 +1051,7 @@ impl AppUpdatePolicy {
     }
 }
 
-fn configure_windows(app: &AppHandle) -> tauri::Result<()> {
+fn configure_windows(app: &AppHandle, menu_bar: Arc<AtomicBool>) -> tauri::Result<()> {
     if let Some(main) = app.get_webview_window("main") {
         let handle = app.clone();
         let main_for_event = main.clone();
@@ -928,7 +1059,9 @@ fn configure_windows(app: &AppHandle) -> tauri::Result<()> {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
                 let _ = main_for_event.hide();
-                let _ = handle.set_activation_policy(ActivationPolicy::Accessory);
+                if menu_bar.load(Ordering::Relaxed) {
+                    let _ = handle.set_activation_policy(ActivationPolicy::Accessory);
+                }
             }
         });
     }

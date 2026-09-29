@@ -10,6 +10,8 @@ commands.allow = [
   "camera_permission_status",
   "camera_request_access",
   "open_camera_privacy_settings",
+  "app_preferences",
+  "set_app_preferences",
   "app_info",
   "app_update_status",
   "app_update_check",

@@ -77,7 +77,7 @@ HUD overlay (separate window)
 | 4 | **Your first flick** | "Try it" | Suggested mapping: 👍 Thumbs up → toggle a light. The entity picker is filtered to `light.*`, grouped by area; the most likely light is preselected (area with the most lights). The user does 👍; the HUD shows the result live; success earcon + subtle confetti (off when Reduce Motion is on) |
 | 5 | **Point at a device** (optional) | "Teach a device" / "Later" | "Point at something in this room — like the ceiling fan — and Flick will remember it." Runs the Teach flow (§6b) for one device. It ends with a real "point + ↻" test |
 | 6 | **Stay in control** | "Finish" | Short explainer cards: pause from the menu bar / `⌥⌘F`; optional arm mode toggle; "sensitive devices (locks, alarms, garage) are blocked unless you allow them" |
-| 7 | Done | — | "Flick is watching from the menu bar". The main window closes to the tray. Autostart is on (the toggle is shown) |
+| 7 | Done | — | "Flick is watching from the menu bar". The main window closes to the menu bar. "Open at login" is off by default and lives in Settings → General |
 
 - Each step is skippable except Camera. Skipping HA gives a "Demo mode": gestures show in the HUD without sending actions.
 - Telemetry: none. Onboarding completion is stored locally (`onboarding.completed`).
@@ -262,7 +262,7 @@ Small pill (360×96, rounded, blurred translucent background; high-contrast opti
 
 | Section | Controls |
 |---|---|
-| General | Start at login; language (i18n: English first, via `i18next`); theme |
+| General | Keep in menu bar (default on); open at login (default off); language (i18n: English first, via `i18next`) |
 | Detection | Sensitivity preset (Low / Normal / High); advanced: vote N-of-M, min hand size; battery saver; arm mode (gesture, hold, window); pause gesture; two-hand "stop" axis (any / vertical / horizontal) |
 | Pointing | Enable pointing (on when ≥ 1 device is taught); aim tolerance (10°, 5–15°); dwell (500 ms); selection window (4 s); show ray in the preview; places per camera + "Re-align now" |
 | Safety | Allow sensitive devices (off); confirmation gesture; quiet hours |

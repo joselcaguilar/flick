@@ -16,10 +16,20 @@ function normalizeCameraPermission(value: unknown): CameraPermission {
   return cameraPermissions.has(value as CameraPermission) ? (value as CameraPermission) : "not_determined";
 }
 
-async function invokeTauri<T>(command: string) {
+async function invokeTauri<T>(command: string, args?: Record<string, unknown>) {
   if (!isTauri()) throw new Error("This action is available in the Flick desktop app.");
   const { invoke } = await import("@tauri-apps/api/core");
-  return invoke<T>(command);
+  return invoke<T>(command, args);
+}
+
+export type AppPreferences = { menu_bar: boolean; open_at_login: boolean };
+
+export async function getAppPreferences() {
+  return invokeTauri<AppPreferences>("app_preferences");
+}
+
+export async function setAppPreferences(patch: Partial<AppPreferences>) {
+  return invokeTauri<AppPreferences>("set_app_preferences", { patch });
 }
 
 export async function cameraPermissionStatus() {

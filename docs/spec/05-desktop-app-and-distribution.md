@@ -59,6 +59,10 @@ The HUD window gets only `core:event:default`.
 - Transparent windows on macOS need `app.macOSPrivateApi: true`. This is acceptable because distribution is outside the Mac App Store.
 - **macOS activation policy:** `Accessory` (menu-bar only, no Dock icon) while only the HUD/tray is active.
   Switch to `Regular` when the main window opens, and back when it closes.
+- **Menu bar mode** (Settings → General → "Keep in menu bar", default **on**, stored in `shell_prefs.json` in the app config dir).
+  On: closing `main` hides it and switches to `Accessory`, and the tray icon stays visible. Off: the tray icon is hidden, closing `main` keeps the Dock icon, and clicking the Dock icon reopens the window (`RunEvent::Reopen`). The yellow minimize button always minimizes to the Dock, per the Apple HIG.
+- **Tray icon:** a single monochrome template image (`icon_as_template(true)`), so macOS tints it for light, dark and highlighted menu bars. No colour.
+- **Window dragging:** the sidebar inset and the toolbar use `data-tauri-drag-region`, which needs `core:window:allow-start-dragging` in the `main` capability.
 
 ## 3. Tray / menu bar
 
@@ -90,7 +94,7 @@ The HUD window gets only `core:event:default`.
 |---|---|
 | `tauri-plugin-single-instance` | Focus the existing instance; forward deep links |
 | `tauri-plugin-deep-link` | `flick://` scheme: `flick://open/<route>`, `flick://ha/callback` (OAuth fallback, Phase 2), `flick://pack?url=` (import pack, Phase 2) |
-| `tauri-plugin-autostart` | "Start Flick at login" (macOS LaunchAgent, Windows Run key, Linux XDG autostart). Default **on** after onboarding |
+| `tauri-plugin-autostart` | Settings → General → "Open at login" (macOS LaunchAgent, Windows Run key, Linux XDG autostart). Default **off**. Login launches pass `--hidden`, so the window stays closed and Flick starts in the menu bar (or the Dock when menu bar mode is off) |
 | `tauri-plugin-updater` | Signed app updates, driven from Rust (`10-…` §4). Minisign key from `tauri signer generate`, kept in Key Vault. Endpoints: primary `https://updates.flick.app/app/{{target}}/{{arch}}/{{current_version}}?channel=<ch>` (Azure Blob + Front Door, placeholder domain), then the GitHub Releases `latest.json` mirror. Channels: `stable`, `beta`, `nightly`. A custom `version_comparator` applies the signed channel index (rollout %, revoked, rollback). Install on quit by default |
 | `tauri-plugin-notification` | System notifications for important errors when the HUD is disabled |
 | `tauri-plugin-global-shortcut` | Pause toggle |
