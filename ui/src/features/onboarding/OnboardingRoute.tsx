@@ -10,7 +10,7 @@ import {
 } from "../../api/hooks";
 import { ConfidenceMeter, DevicePill, GestureGlyph, PreviewCanvas } from "../../components/domain";
 import { Badge, Button, GlassPanel, Input, ListRow, Select } from "../../components/ui";
-import { useCameraLive, useLiveHands } from "../../events/useLiveHands";
+import { useActiveCamera, useCameraLive, useLiveHands } from "../../events/useLiveHands";
 import {
   type CameraPermission,
   cameraPermissionStatus,
@@ -133,15 +133,18 @@ export function OnboardingRoute() {
   const activeIndex = steps.findIndex((item) => item.id === step);
   const selectedLight = lightEntities.data?.[0];
   const cameraBusy = cameraSetup.busy;
-  const liveCamera = useCameraLive(startedCameraId);
+  const activeCamera = useActiveCamera();
+  // The engine may already have started the saved camera on launch; follow it instead of showing "not started".
+  const cameraId = startedCameraId ?? (activeCamera.running ? activeCamera.id : undefined);
+  const liveCamera = useCameraLive(cameraId);
   const liveState = liveCamera?.state;
   const liveError = liveCamera?.error;
   const cameraRunning = liveState === "running";
   const cameraFailed = liveState === "error" || liveState === "permission_denied" || Boolean(liveError);
   const cameraStarting = cameraStarted && !cameraRunning && !cameraFailed;
   const cameraCopy = cameraStateCopy(cameraPermission, cameraRunning);
-  const preview = useCameraPreviewTicket(startedCameraId, cameraRunning);
-  const liveHands = useLiveHands(startedCameraId);
+  const preview = useCameraPreviewTicket(cameraId, cameraRunning);
+  const liveHands = useLiveHands(cameraId);
   const handTracked = cameraRunning && Boolean(liveHands?.hands.length);
   const cameraInlineError = cameraFailed
     ? `The camera couldn't start: ${liveError ?? "Check the camera connection and try again."}`
