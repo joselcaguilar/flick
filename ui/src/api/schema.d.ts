@@ -436,6 +436,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ha/client-certificate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ha_client_certificate"];
+        put: operations["put_ha_client_certificate"];
+        post?: never;
+        delete: operations["delete_ha_client_certificate"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ha/connect": {
         parameters: {
             query?: never;
@@ -1575,6 +1591,28 @@ export interface components {
             floor_id?: string | null;
             /** @description Name. */
             name: string;
+        };
+        /** @description Client certificate presented when a server requires mutual TLS (mTLS). */
+        HaClientCertificate: {
+            /** @description Whether the certificate has expired. */
+            expired?: boolean;
+            /** @description Whether a certificate is installed. */
+            installed: boolean;
+            /** @description Issuer common name. */
+            issuer?: string | null;
+            /** @description Expiry time (RFC 3339). */
+            not_after?: string | null;
+            /** @description SHA-256 fingerprint, colon-separated hex. */
+            sha256?: string | null;
+            /** @description Subject common name. */
+            subject?: string | null;
+        };
+        /** @description Client certificate import. */
+        HaClientCertificateUpload: {
+            /** @description Base64 file contents: a `.p12`/`.pfx` bundle, or PEM certificate(s) plus private key. */
+            data: string;
+            /** @description Password for a `.p12`/`.pfx` bundle. */
+            password?: string | null;
         };
         /** @description Request to connect Home Assistant. */
         HaConnectRequest: {
@@ -3333,6 +3371,73 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ProblemJson"];
                 };
+            };
+        };
+    };
+    ha_client_certificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HaClientCertificate"];
+                };
+            };
+        };
+    };
+    put_ha_client_certificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HaClientCertificateUpload"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HaClientCertificate"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemJson"];
+                };
+            };
+        };
+    };
+    delete_ha_client_certificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

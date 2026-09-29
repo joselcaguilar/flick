@@ -3,7 +3,8 @@
 //! Uses an explicit `ring` provider (the process may link several rustls
 //! providers, which breaks auto-detection) and the OS trust store, matching
 //! how the Home Assistant Companion apps validate certificates. An optional
-//! SHA-256 leaf pin accepts a self-signed certificate the user approved.
+//! SHA-256 leaf pin accepts a self-signed certificate the user approved, and an
+//! optional client identity answers servers that require mutual TLS.
 
 use std::sync::Arc;
 
@@ -16,10 +17,13 @@ use rustls::{
 use rustls_platform_verifier::Verifier;
 use sha2::{Digest, Sha256};
 
-use crate::HaError;
+use crate::{ClientIdentity, HaError};
 
 /// Builds the rustls client config used for `wss://` URLs.
-pub fn client_config(cert_sha256: Option<&str>) -> Result<Arc<ClientConfig>, HaError> {
+pub fn client_config(
+    cert_sha256: Option<&str>,
+    identity: Option<&ClientIdentity>,
+) -> Result<Arc<ClientConfig>, HaError> {
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let platform = Verifier::new(provider.clone()).map_err(tls_error)?;
     let verifier = PinningVerifier {
@@ -27,12 +31,17 @@ pub fn client_config(cert_sha256: Option<&str>) -> Result<Arc<ClientConfig>, HaE
         algorithms: provider.signature_verification_algorithms,
         platform,
     };
-    let config = ClientConfig::builder_with_provider(provider)
+    let builder = ClientConfig::builder_with_provider(provider)
         .with_safe_default_protocol_versions()
         .map_err(tls_error)?
         .dangerous()
-        .with_custom_certificate_verifier(Arc::new(verifier))
-        .with_no_client_auth();
+        .with_custom_certificate_verifier(Arc::new(verifier));
+    let config = match identity {
+        Some(identity) => builder
+            .with_client_auth_cert(identity.chain(), identity.key())
+            .map_err(tls_error)?,
+        None => builder.with_no_client_auth(),
+    };
     Ok(Arc::new(config))
 }
 
@@ -99,7 +108,12 @@ mod tests {
 
     #[test]
     fn builds_config_and_parses_pins() {
-        assert!(client_config(None).is_ok());
+        assert!(client_config(None, None).is_ok());
+        let identity = ClientIdentity::import(
+            include_bytes!("../tests/fixtures/mtls/client.p12"),
+            Some("flick"),
+        );
+        assert!(identity.is_ok_and(|id| client_config(None, Some(&id)).is_ok()));
         let pin = "AB:".repeat(31) + "AB";
         assert_eq!(normalize_fingerprint(&pin), Some([0xab; 32]));
         assert_eq!(normalize_fingerprint("abcd"), None);

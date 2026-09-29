@@ -135,6 +135,27 @@ stateDiagram-v2
   - **Spike required:** confirm HA's client_id validation accepts loopback IP client_ids. If not, use `http://localhost:<port>/`.
 - Multiple HA instances: data model supports it; UI supports **one default instance** in MVP.
 
+### 5.3 Client certificate (mTLS)
+- **Why:** a reverse proxy such as Cloudflare Access/mTLS can require a client certificate on the Remote URL.
+  `wss://` opens with the same TLS handshake and HTTP upgrade as HTTPS, so the proxy rejects the connection before the WebSocket exists.
+  A plain `http://` Home URL never needs a certificate.
+- **Import:** Settings → Home Assistant connection → *Client certificate*. Two input formats:
+  - A PKCS#12 bundle (`.p12`/`.pfx`) plus its password. Modern and legacy (RC2/3DES) encryption are both accepted.
+  - PEM files containing the certificate (and optional chain) plus an unencrypted private key.
+  The engine checks that the key matches the leaf certificate before saving it.
+- **API:** `GET|PUT|DELETE /api/v1/ha/client-certificate`. The PUT body is base64 data plus an optional password.
+  Responses expose only the metadata: subject CN, issuer CN, `not_after`, SHA-256 fingerprint, and `expired`.
+  Errors are `422` with one of these codes: `ha_cert_password`, `ha_cert_invalid`, `ha_cert_unsupported`, or `ha_cert_mismatch`.
+- **Storage:** the identity is normalized to PEM (chain + key) and stored in the **OS keychain**:
+  service `app.flick.desktop`, account `ha:client-certificate`.
+  Nothing is written to `settings.json`. Deleting the HA connection keeps the certificate; *Remove* deletes it.
+- **Use:** rustls `with_client_auth_cert`. The certificate is offered **only when the server requests it** during the handshake,
+  so it is harmless on the Home URL. Certificate pinning still applies only to external `https` URLs.
+  Importing, replacing or removing the certificate reconnects HA in the background.
+- **Errors:** TLS alerts (such as `certificate_required`, `bad_certificate` or `unknown_ca`) surface as "the server requires a client certificate (mTLS) it accepts".
+  A `400`/`401`/`403` on upgrade suggests a missing client certificate. A redirect points to a proxy sign-in page (for example, Cloudflare Access) rather than to HA.
+  The UI flags certificates that are expired or expire within 30 days.
+
 ## 6. Mapping → action resolution
 
 A mapping's action (full schema in `06-…`):

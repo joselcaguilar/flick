@@ -28,13 +28,14 @@ use flick_api::{
     ActionDto, ActionOutcomeDto, ActionTargetDto, Anchor as ApiAnchor, ApiConfig, ApiGateways,
     ApiProblem, ApiState, AvailableCamera, Camera as ApiCamera, CameraCreate, CameraFormat,
     CameraPatch, CameraStatus, ConfigGateway, EmptyEvent, EngineControl, EnginePausedEvent,
-    EngineStatus, EventHub, FakeUpdates, HaArea, HaConnectRequest, HaConnectionUpdate, HaDiscovery,
-    HaEntity, HaGateway, HaInstance, HaServiceSchema, HaStatus as ApiHaStatus, LatencyBreakdown,
-    Mapping, NetworkReport, PauseRequest, PreviewFrame, PreviewSource, RealignCommitResponse,
-    RealignPointRequest, RealignPointResponse, RealignSession, SettingsMap, SetupSuggestRequest,
-    SetupSuggestion, StageLatency, TargetModeDto, TeachCommitRequest, TeachCommitResponse,
-    TeachGateway, TeachLevelRequest, TeachLevelResponse, TeachRequest,
-    TeachSession as ApiTeachSession, TeachSpotResponse, VerbBinding, WsServerMessage, router,
+    EngineStatus, EventHub, FakeUpdates, HaArea, HaClientCertificate, HaConnectRequest,
+    HaConnectionUpdate, HaDiscovery, HaEntity, HaGateway, HaInstance, HaServiceSchema,
+    HaStatus as ApiHaStatus, LatencyBreakdown, Mapping, NetworkReport, PauseRequest, PreviewFrame,
+    PreviewSource, RealignCommitResponse, RealignPointRequest, RealignPointResponse,
+    RealignSession, SettingsMap, SetupSuggestRequest, SetupSuggestion, StageLatency, TargetModeDto,
+    TeachCommitRequest, TeachCommitResponse, TeachGateway, TeachLevelRequest, TeachLevelResponse,
+    TeachRequest, TeachSession as ApiTeachSession, TeachSpotResponse, VerbBinding, WsServerMessage,
+    router,
 };
 use flick_capture::{
     CameraPermissionStatus, CaptureHandle, CaptureStatus, FileSource, FileSourceOptions, FrameTap,
@@ -48,8 +49,9 @@ use flick_core::{
 };
 use flick_gestures::{GestureEngine, GestureEngineConfig};
 use flick_ha::{
-    EntityState, HaClient, HaConnectionConfig, HaStatus, KeyringSecretStore, RegistrySnapshot,
-    SafetyClass, SafetyValidator, SecretStore, ServiceCallRecord, record_current_fan_level,
+    ClientIdentity, EntityState, HaClient, HaConnectionConfig, HaStatus, KeyringSecretStore,
+    RegistrySnapshot, SafetyClass, SafetyValidator, SecretStore, ServiceCallRecord,
+    record_current_fan_level,
 };
 use flick_spatial::{
     AnchorGeometry, CameraIntrinsics, DEFAULT_ESTIMATOR_VERSION, PlaceRecord, PlaceStatus,
@@ -1049,6 +1051,15 @@ struct PauseState {
     camera_id: Option<String>,
 }
 
+/// Keychain account holding the mTLS client certificate and key as PEM.
+const HA_CLIENT_CERT_ACCOUNT: &str = "ha:client-certificate";
+
+/// mTLS client identity, read from the keychain on first use.
+enum ClientIdentitySlot {
+    Unloaded,
+    Loaded(Option<Arc<ClientIdentity>>),
+}
+
 struct EngineApp {
     runtime: RuntimeConfig,
     store: Arc<Store>,
@@ -1071,6 +1082,8 @@ struct EngineApp {
     network_tx: watch::Sender<Option<String>>,
     /// Bumped whenever the HA client is replaced, so stale sync tasks stop.
     ha_generation: std::sync::atomic::AtomicU64,
+    /// mTLS client certificate presented when a server asks for one.
+    client_identity: std::sync::Mutex<ClientIdentitySlot>,
     weak_self: std::sync::Weak<EngineApp>,
 }
 
@@ -1096,6 +1109,7 @@ impl EngineApp {
             replay_task: Mutex::new(None),
             network_tx: watch::channel(None).0,
             ha_generation: std::sync::atomic::AtomicU64::new(0),
+            client_identity: std::sync::Mutex::new(ClientIdentitySlot::Unloaded),
             weak_self,
         }
     }
@@ -1272,6 +1286,63 @@ impl EngineApp {
         }
     }
 
+    /// The mTLS client identity, loading it from the keychain on first use.
+    fn client_identity(&self) -> Option<Arc<ClientIdentity>> {
+        let mut slot = self
+            .client_identity
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let ClientIdentitySlot::Loaded(identity) = &*slot {
+            return identity.clone();
+        }
+        if self.runtime.mock_ha {
+            *slot = ClientIdentitySlot::Loaded(None);
+            return None;
+        }
+        let identity = match KeyringSecretStore::new().get(HA_CLIENT_CERT_ACCOUNT) {
+            Ok(Some(pem)) => match ClientIdentity::from_pem(pem.as_bytes()) {
+                Ok(identity) => Some(Arc::new(identity)),
+                Err(err) => {
+                    tracing::warn!(error = %err, "stored client certificate is unreadable");
+                    None
+                }
+            },
+            Ok(None) => None,
+            Err(err) => {
+                // Leave it unloaded so a later attempt can read it.
+                tracing::warn!(error = %err, "failed to read client certificate");
+                return None;
+            }
+        };
+        *slot = ClientIdentitySlot::Loaded(identity.clone());
+        identity
+    }
+
+    fn set_cached_client_identity(&self, identity: Option<Arc<ClientIdentity>>) {
+        *self
+            .client_identity
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            ClientIdentitySlot::Loaded(identity);
+    }
+
+    /// Reconnects the saved instance so a certificate change takes effect,
+    /// without making the caller wait for Home Assistant.
+    async fn reconnect_saved_ha_in_background(&self) {
+        let has_saved = self
+            .ha_instance
+            .lock()
+            .await
+            .as_ref()
+            .is_some_and(|instance| instance.base_url != "mock://home");
+        if self.runtime.mock_ha || !has_saved {
+            return;
+        }
+        if let Some(app) = self.weak_self.upgrade() {
+            tokio::spawn(async move { app.restore_ha_connection().await });
+        }
+    }
+
     /// Builds the client config for a saved instance, including Home/Remote
     /// routing inputs.
     fn ha_config(
@@ -1283,6 +1354,7 @@ impl EngineApp {
         let mut config = HaConnectionConfig::new(instance.base_url.clone(), token)?
             .with_internal_url(instance.internal_url.as_deref())?;
         config.cert_sha256 = cert_sha256;
+        config.client_identity = self.client_identity();
         config.trusted_ssids = instance.trusted_ssids.clone();
         config.ha_uuid = instance.ha_uuid.clone();
         config.network = Some(self.network_tx.subscribe());
@@ -2504,6 +2576,7 @@ impl HaGateway for EngineApp {
         let mut config = HaConnectionConfig::new(request.base_url.clone(), token.clone())
             .map_err(|err| ApiProblem::validation("ha_invalid_url", err.to_string()))?;
         config.cert_sha256 = cert_sha256.clone();
+        config.client_identity = self.client_identity();
         let client = HaClient::connect(config)
             .await
             .map_err(|err| ApiProblem::validation("ha_connect_failed", err.to_string()))?;
@@ -2642,6 +2715,39 @@ impl HaGateway for EngineApp {
                 true
             }
         });
+    }
+
+    async fn client_certificate(&self) -> HaClientCertificate {
+        client_certificate_dto(self.client_identity().as_deref())
+    }
+
+    async fn set_client_certificate(
+        &self,
+        data: Vec<u8>,
+        password: Option<String>,
+    ) -> Result<HaClientCertificate, ApiProblem> {
+        let identity = ClientIdentity::import(&data, password.as_deref())
+            .map_err(|err| ApiProblem::validation(err.code(), err.to_string()))?;
+        if !self.runtime.mock_ha {
+            KeyringSecretStore::new()
+                .set(HA_CLIENT_CERT_ACCOUNT, &identity.to_pem())
+                .map_err(|err| ApiProblem::validation("ha_keychain_failed", err.to_string()))?;
+        }
+        let dto = client_certificate_dto(Some(&identity));
+        self.set_cached_client_identity(Some(Arc::new(identity)));
+        self.reconnect_saved_ha_in_background().await;
+        Ok(dto)
+    }
+
+    async fn delete_client_certificate(&self) -> Result<(), ApiProblem> {
+        if !self.runtime.mock_ha {
+            KeyringSecretStore::new()
+                .delete(HA_CLIENT_CERT_ACCOUNT)
+                .map_err(|err| ApiProblem::validation("ha_keychain_failed", err.to_string()))?;
+        }
+        self.set_cached_client_identity(None);
+        self.reconnect_saved_ha_in_background().await;
+        Ok(())
     }
 
     async fn delete(&self) -> Result<(), ApiProblem> {
@@ -3121,6 +3227,22 @@ fn ms_rfc3339(value: i64) -> String {
     datetime
         .format(&Rfc3339)
         .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_owned())
+}
+
+fn client_certificate_dto(identity: Option<&ClientIdentity>) -> HaClientCertificate {
+    let Some(identity) = identity else {
+        return HaClientCertificate::default();
+    };
+    let info = identity.info();
+    let not_after = OffsetDateTime::from_unix_timestamp(info.not_after).ok();
+    HaClientCertificate {
+        installed: true,
+        subject: Some(info.subject.clone()),
+        issuer: Some(info.issuer.clone()),
+        not_after: not_after.and_then(|at| at.format(&Rfc3339).ok()),
+        sha256: Some(info.sha256.clone()),
+        expired: not_after.is_some_and(|at| at <= OffsetDateTime::now_utc()),
+    }
 }
 
 fn now_rfc3339() -> String {

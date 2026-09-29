@@ -23,10 +23,13 @@
 //!   states/services/registries snapshot used by pickers.
 //! - [`HaClient::resolve_verb`] delegates targeted verb resolution to the pure
 //!   [`verb`] module.
+//! - [`ClientIdentity::import`] reads a `.p12` or PEM client certificate for
+//!   servers that require mutual TLS; set it on [`HaConnectionConfig`].
 //! - [`mock::MockHa::start`] starts a reusable mock HA server and returns
 //!   `(url, token, handle)` for integration tests.
 
 pub mod client;
+pub mod client_cert;
 pub mod dial;
 pub mod discovery;
 pub mod error;
@@ -42,6 +45,7 @@ pub mod verb;
 pub mod mock;
 
 pub use client::{EntitySubscription, HaClient};
+pub use client_cert::{ClientCertError, ClientCertificateInfo, ClientIdentity};
 pub use dial::{DialController, DialEvent, DialTarget};
 pub use discovery::{DiscoveredInstance, discover_instances};
 pub use error::{HaError, map_ha_error};

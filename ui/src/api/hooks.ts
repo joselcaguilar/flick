@@ -14,6 +14,8 @@ import type {
   Gesture,
   GesturePackPreview,
   HaArea,
+  HaClientCertificate,
+  HaClientCertificateUpload,
   HaConnectionUpdate,
   HaDiscovery,
   HaEntity,
@@ -42,6 +44,7 @@ export const queryKeys = {
   settings: ["settings"] as const,
   haDiscover: ["ha", "discover"] as const,
   haStatus: ["ha", "status"] as const,
+  haClientCertificate: ["ha", "client-certificate"] as const,
   haAreas: ["ha", "areas"] as const,
   haEntities: (params = "") => ["ha", "entities", params] as const,
   haServices: (domain = "") => ["ha", "services", domain] as const,
@@ -123,6 +126,36 @@ export function useHaUpdate() {
   return useMutation({
     mutationFn: (update: HaConnectionUpdate) => api.patch<HaInstance>("/api/v1/ha", update),
     onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.haStatus }),
+  });
+}
+
+export function useHaClientCertificate() {
+  return useQuery({
+    queryKey: queryKeys.haClientCertificate,
+    queryFn: () => api.get<HaClientCertificate>("/api/v1/ha/client-certificate"),
+  });
+}
+
+export function useHaClientCertificateImport() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (upload: HaClientCertificateUpload) =>
+      api.put<HaClientCertificate>("/api/v1/ha/client-certificate", upload),
+    onSuccess: (certificate) => {
+      client.setQueryData(queryKeys.haClientCertificate, certificate);
+      void client.invalidateQueries({ queryKey: queryKeys.haStatus });
+    },
+  });
+}
+
+export function useHaClientCertificateRemove() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete<void>("/api/v1/ha/client-certificate"),
+    onSuccess: () => {
+      client.setQueryData<HaClientCertificate>(queryKeys.haClientCertificate, { installed: false });
+      void client.invalidateQueries({ queryKey: queryKeys.haStatus });
+    },
   });
 }
 

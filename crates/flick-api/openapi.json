@@ -781,6 +781,64 @@
         }
       }
     },
+    "/api/v1/ha/client-certificate": {
+      "get": {
+        "tags": [],
+        "operationId": "ha_client_certificate",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HaClientCertificate"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [],
+        "operationId": "put_ha_client_certificate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HaClientCertificateUpload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HaClientCertificate"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemJson"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [],
+        "operationId": "delete_ha_client_certificate",
+        "responses": {
+          "204": {}
+        }
+      }
+    },
     "/api/v1/ha/connect": {
       "post": {
         "tags": [],
@@ -3218,6 +3276,71 @@
           "name": {
             "type": "string",
             "description": "Name."
+          }
+        }
+      },
+      "HaClientCertificate": {
+        "type": "object",
+        "description": "Client certificate presented when a server requires mutual TLS (mTLS).",
+        "required": [
+          "installed"
+        ],
+        "properties": {
+          "expired": {
+            "type": "boolean",
+            "description": "Whether the certificate has expired."
+          },
+          "installed": {
+            "type": "boolean",
+            "description": "Whether a certificate is installed."
+          },
+          "issuer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Issuer common name."
+          },
+          "not_after": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Expiry time (RFC 3339)."
+          },
+          "sha256": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "SHA-256 fingerprint, colon-separated hex."
+          },
+          "subject": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Subject common name."
+          }
+        }
+      },
+      "HaClientCertificateUpload": {
+        "type": "object",
+        "description": "Client certificate import.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "string",
+            "description": "Base64 file contents: a `.p12`/`.pfx` bundle, or PEM certificate(s) plus private key."
+          },
+          "password": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Password for a `.p12`/`.pfx` bundle."
           }
         }
       },

@@ -3,6 +3,7 @@ import { useHaConnect, useHaDiscover, useHaStatus, useHaUpdate } from "../../api
 import type { HaConnectionUpdate, HaStatus } from "../../api/types";
 import { Badge, Button, Input } from "../../components/ui";
 import { isTauri, openLocationPrivacySettings } from "../../platform/tauri";
+import { HaClientCertificateRow } from "./HaClientCertificateRow";
 import { extractErrors, type FieldErrors, SettingRow, SettingSection } from "./SettingParts";
 import { useLocationPermission, useRequestLocation, useWifiSsid } from "./useHaNetwork";
 
@@ -283,6 +284,8 @@ export function HaConnectionSection({
           </em>
         ) : null}
       </div>
+
+      <HaClientCertificateRow onNotice={onNotice} />
 
       <form onSubmit={(event) => void reauthenticate(event)}>
         <SettingRow

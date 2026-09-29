@@ -1,13 +1,13 @@
 //! Shared public data types for the HA crate.
 
-use std::{fmt, time::Duration};
+use std::{fmt, sync::Arc, time::Duration};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use tokio::sync::watch;
 use url::Url;
 
-use crate::HaError;
+use crate::{ClientIdentity, HaError};
 
 /// Default request timeout from the HA spec.
 pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -50,6 +50,8 @@ pub struct HaConnectionConfig {
     pub ha_uuid: Option<String>,
     /// Current Wi-Fi SSID reported by the host (`None` when unknown).
     pub network: Option<watch::Receiver<Option<String>>>,
+    /// Client certificate presented when a `wss://` server asks for one (mTLS).
+    pub client_identity: Option<Arc<ClientIdentity>>,
 }
 
 impl HaConnectionConfig {
@@ -70,6 +72,7 @@ impl HaConnectionConfig {
             trusted_ssids: Vec::new(),
             ha_uuid: None,
             network: None,
+            client_identity: None,
         })
     }
 
@@ -101,6 +104,10 @@ impl fmt::Debug for HaConnectionConfig {
             .field("internal_url", &self.internal_url)
             .field("trusted_ssids", &self.trusted_ssids)
             .field("ha_uuid", &self.ha_uuid)
+            .field(
+                "client_identity",
+                &self.client_identity.as_ref().map(|id| &id.info().subject),
+            )
             .finish_non_exhaustive()
     }
 }

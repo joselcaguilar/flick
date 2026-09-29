@@ -259,6 +259,12 @@ pub fn router(state: ApiState) -> Router {
         .route("/api/v1/ha/connect", post(ha_connect))
         .route("/api/v1/ha/status", get(ha_status))
         .route("/api/v1/ha", delete(ha_delete).patch(ha_update))
+        .route(
+            "/api/v1/ha/client-certificate",
+            get(ha_client_certificate)
+                .put(put_ha_client_certificate)
+                .delete(delete_ha_client_certificate),
+        )
         .route("/api/v1/network", put(put_network))
         .route("/api/v1/ha/areas", get(ha_areas))
         .route("/api/v1/ha/entities", get(ha_entities))
@@ -514,6 +520,16 @@ pub trait HaGateway: Send + Sync + 'static {
     async fn update(&self, update: HaConnectionUpdate) -> Result<HaInstance, ApiProblem>;
     /// Records the current Wi-Fi network so the client can pick Home or Remote.
     async fn set_network(&self, report: NetworkReport);
+    /// Installed mTLS client certificate, if any.
+    async fn client_certificate(&self) -> HaClientCertificate;
+    /// Imports a `.p12`/`.pfx` bundle or PEM certificate plus key, then reconnects.
+    async fn set_client_certificate(
+        &self,
+        data: Vec<u8>,
+        password: Option<String>,
+    ) -> Result<HaClientCertificate, ApiProblem>;
+    /// Removes the client certificate, then reconnects.
+    async fn delete_client_certificate(&self) -> Result<(), ApiProblem>;
     /// Area picker.
     async fn areas(&self) -> Vec<HaArea>;
     /// Entity picker.
@@ -760,6 +776,7 @@ impl EngineControl for FakeEngine {
 #[derive(Default)]
 pub struct FakeHa {
     instance: Mutex<Option<HaInstance>>,
+    client_certificate: Mutex<Option<HaClientCertificate>>,
 }
 
 #[async_trait]
@@ -834,6 +851,48 @@ impl HaGateway for FakeHa {
     }
 
     async fn set_network(&self, _report: NetworkReport) {}
+
+    async fn client_certificate(&self) -> HaClientCertificate {
+        self.client_certificate
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .clone()
+            .unwrap_or_default()
+    }
+
+    async fn set_client_certificate(
+        &self,
+        data: Vec<u8>,
+        _password: Option<String>,
+    ) -> Result<HaClientCertificate, ApiProblem> {
+        if data.is_empty() {
+            return Err(ApiProblem::validation(
+                "ha_cert_invalid",
+                "Choose a .p12, .pfx or PEM certificate file.",
+            ));
+        }
+        let certificate = HaClientCertificate {
+            installed: true,
+            subject: Some("Flick Dev Client".to_owned()),
+            issuer: Some("Dev CA".to_owned()),
+            not_after: Some("2030-01-01T00:00:00Z".to_owned()),
+            sha256: Some("AB:CD".to_owned()),
+            expired: false,
+        };
+        *self
+            .client_certificate
+            .lock()
+            .unwrap_or_else(|err| err.into_inner()) = Some(certificate.clone());
+        Ok(certificate)
+    }
+
+    async fn delete_client_certificate(&self) -> Result<(), ApiProblem> {
+        *self
+            .client_certificate
+            .lock()
+            .unwrap_or_else(|err| err.into_inner()) = None;
+        Ok(())
+    }
 
     async fn areas(&self) -> Vec<HaArea> {
         vec![HaArea {
@@ -1368,6 +1427,41 @@ async fn ha_update(
     Json(update): Json<HaConnectionUpdate>,
 ) -> Result<Json<HaInstance>, ApiProblem> {
     state.ha.update(update).await.map(json_response)
+}
+
+#[utoipa::path(get, path = "/api/v1/ha/client-certificate", responses((status = 200, body = HaClientCertificate)))]
+async fn ha_client_certificate(State(state): State<Arc<ApiState>>) -> Json<HaClientCertificate> {
+    json_response(state.ha.client_certificate().await)
+}
+
+#[utoipa::path(put, path = "/api/v1/ha/client-certificate", request_body = HaClientCertificateUpload, responses((status = 200, body = HaClientCertificate), (status = 422, body = ProblemJson)))]
+async fn put_ha_client_certificate(
+    State(state): State<Arc<ApiState>>,
+    Json(upload): Json<HaClientCertificateUpload>,
+) -> Result<Json<HaClientCertificate>, ApiProblem> {
+    use base64::Engine as _;
+    let data = base64::engine::general_purpose::STANDARD
+        .decode(upload.data.trim())
+        .map_err(|_| {
+            ApiProblem::validation("ha_cert_invalid", "The certificate file couldn't be read.")
+        })?;
+    let password = upload.password.filter(|password| !password.is_empty());
+    state
+        .ha
+        .set_client_certificate(data, password)
+        .await
+        .map(json_response)
+}
+
+#[utoipa::path(delete, path = "/api/v1/ha/client-certificate", responses((status = 204)))]
+async fn delete_ha_client_certificate(
+    State(state): State<Arc<ApiState>>,
+) -> Result<StatusCode, ApiProblem> {
+    state
+        .ha
+        .delete_client_certificate()
+        .await
+        .map(|()| no_content())
 }
 
 #[utoipa::path(put, path = "/api/v1/network", request_body = NetworkReport, responses((status = 204)))]
@@ -2411,7 +2505,8 @@ pub fn openapi_json_pretty() -> Result<String, serde_json::Error> {
     info(title = "Flick Local API", version = "0.1.0", description = "Local-first HTTP and WebSocket API for Flick."),
     paths(
         health, openapi_json, status, pause_engine, resume_engine, get_settings, patch_settings,
-        ha_discover, ha_connect, ha_status, ha_delete, ha_update, put_network, ha_areas, ha_entities, ha_services, ha_call,
+        ha_discover, ha_connect, ha_status, ha_delete, ha_update, ha_client_certificate,
+        put_ha_client_certificate, delete_ha_client_certificate, put_network, ha_areas, ha_entities, ha_services, ha_call,
         cameras_available, list_cameras, create_camera, patch_camera, delete_camera, start_camera,
         stop_camera, preview_ticket, list_gestures, create_gesture, patch_gesture, delete_gesture,
         capture_gesture, motion_takes, patch_gesture_type, cancel_capture, gesture_samples,
@@ -2425,7 +2520,8 @@ pub fn openapi_json_pretty() -> Result<String, serde_json::Error> {
     ),
     components(schemas(
         ProblemJson, HealthResponse, EngineStatus, PauseRequest, StageLatency, HaDiscovery,
-        HaConnectRequest, HaInstance, HaStatus, HaConnectionUpdate, NetworkReport, HaArea, HaEntity, HaServiceSchema, ActionDto,
+        HaConnectRequest, HaInstance, HaStatus, HaConnectionUpdate, HaClientCertificate,
+        HaClientCertificateUpload, NetworkReport, HaArea, HaEntity, HaServiceSchema, ActionDto,
         ActionTargetDto, ActionOutcomeDto, LatencyBreakdown, CameraFormat, AvailableCamera,
         CameraCreate, CameraPatch, Camera, CameraStatus, PreviewTicket, GestureCreate,
         GesturePatch, Gesture, CaptureRequest, CaptureSession, MotionTake, GestureTypePatch,

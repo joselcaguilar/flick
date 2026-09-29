@@ -310,6 +310,78 @@
   min-inline-size: 0;
 }
 
+.cert-editor {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: end;
+  inline-size: 22rem;
+  max-inline-size: 100%;
+}
+
+.cert-card,
+.cert-files {
+  justify-self: stretch;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-control);
+  background: var(--flick-bg-subtle);
+}
+
+.cert-card {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.cert-card-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-inline-size: 0;
+}
+
+.cert-card strong,
+.cert-files span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cert-card span:not(.ui-badge) {
+  color: var(--flick-muted);
+  font-size: 0.8125rem;
+}
+
+.cert-import {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: end;
+  inline-size: 100%;
+}
+
+.cert-files {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-inline-size: 0;
+  color: var(--flick-muted);
+}
+
+.cert-files span {
+  color: var(--flick-text);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+}
+
+.setting-control .cert-import .ui-input {
+  inline-size: 100%;
+}
+
+.cert-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .setting-control-stack {
   display: flex;
   align-items: center;

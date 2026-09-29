@@ -1,4 +1,5 @@
 import { HttpResponse, http } from "msw";
+import type { HaClientCertificate } from "../api/types";
 import {
   activityItems,
   anchors,
@@ -27,6 +28,7 @@ const api = "*/api/v1";
 let mutableSettings = { ...settings };
 let mutableHaInstance = { ...haInstance };
 let mockNetworkSsid: string | null = "Casa";
+let mockClientCertificate: HaClientCertificate = { installed: false, expired: false };
 
 function ok(body: unknown) {
   return HttpResponse.json(body as Parameters<typeof HttpResponse.json>[0]);
@@ -98,6 +100,34 @@ export const handlers = [
     return noContent();
   }),
   http.delete(`${api}/ha`, () => noContent()),
+  http.get(`${api}/ha/client-certificate`, () => ok(mockClientCertificate)),
+  http.put(`${api}/ha/client-certificate`, async ({ request }) => {
+    const body = (await request.json()) as { data?: string; password?: string | null };
+    if (!body.data?.trim()) {
+      return HttpResponse.json(
+        {
+          title: "Validation failed",
+          status: 422,
+          code: "ha_cert_invalid",
+          detail: "Choose a certificate file.",
+        },
+        { status: 422 },
+      );
+    }
+    mockClientCertificate = {
+      installed: true,
+      subject: "Flick Dev Client",
+      issuer: "Dev CA",
+      not_after: "2030-01-01T00:00:00Z",
+      sha256: "AB:CD:EF",
+      expired: false,
+    };
+    return ok(mockClientCertificate);
+  }),
+  http.delete(`${api}/ha/client-certificate`, () => {
+    mockClientCertificate = { installed: false, expired: false };
+    return noContent();
+  }),
   http.get(`${api}/ha/areas`, () => ok(haAreas)),
   http.get(`${api}/ha/entities`, ({ request }) => {
     const url = new URL(request.url);

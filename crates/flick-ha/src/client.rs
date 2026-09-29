@@ -389,7 +389,27 @@ fn describe_connect_error(err: &HaError) -> String {
         return err.to_string();
     };
     let lower = detail.to_ascii_lowercase();
-    let reason = if lower.contains("timed out") {
+    let http_status = lower
+        .split_once("http error: ")
+        .and_then(|(_, rest)| rest.get(..3))
+        .and_then(|code| code.parse::<u16>().ok());
+    let reason = if lower.contains("received fatal alert")
+        && [
+            "certificaterequired",
+            "badcertificate",
+            "unknownca",
+            "accessdenied",
+            "certificateunknown",
+        ]
+        .iter()
+        .any(|alert| lower.contains(alert))
+    {
+        "the server requires a client certificate (mTLS) it accepts"
+    } else if matches!(http_status, Some(400 | 401 | 403)) {
+        "the server refused the connection; it may require a client certificate (mTLS)"
+    } else if matches!(http_status, Some(300..=399)) {
+        "it redirected to a sign-in page (e.g. Cloudflare Access)"
+    } else if lower.contains("timed out") {
         "the server didn't respond in time"
     } else if lower.contains("connection refused") {
         "the connection was refused (check the port)"
@@ -523,7 +543,10 @@ async fn establish(
     pin: Option<&str>,
 ) -> Result<(Ws, String, u64), HaError> {
     let connector = if url.starts_with("wss://") {
-        Connector::Rustls(crate::tls::client_config(pin)?)
+        Connector::Rustls(crate::tls::client_config(
+            pin,
+            config.client_identity.as_deref(),
+        )?)
     } else {
         Connector::Plain
     };
@@ -1198,4 +1221,25 @@ fn pseudo_jitter_ms(max_ms: u128) -> u128 {
         .duration_since(UNIX_EPOCH)
         .map_or(0, |duration| duration.as_nanos());
     1 + (nanos % max_ms)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn explains_mtls_rejections() {
+        let alert = HaError::WebSocket(
+            "TLS error: rustls error: received fatal alert: CertificateRequired".to_owned(),
+        );
+        assert!(describe_connect_error(&alert).contains("client certificate"));
+        let forbidden = HaError::WebSocket("HTTP error: 403 Forbidden".to_owned());
+        assert!(describe_connect_error(&forbidden).contains("mTLS"));
+        let redirect = HaError::WebSocket("HTTP error: 302 Found".to_owned());
+        assert!(describe_connect_error(&redirect).contains("sign-in"));
+        let missing = HaError::WebSocket("HTTP error: 404 Not Found".to_owned());
+        assert!(describe_connect_error(&missing).contains("isn't a Home Assistant"));
+        let untrusted = HaError::WebSocket("invalid peer certificate: UnknownIssuer".to_owned());
+        assert!(describe_connect_error(&untrusted).contains("isn't trusted"));
+    }
 }

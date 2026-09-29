@@ -10,6 +10,7 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+base64.workspace = true
 flick-core.workspace = true
 
 async-trait.workspace = true

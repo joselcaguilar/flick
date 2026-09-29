@@ -170,6 +170,38 @@ pub struct HaConnectionUpdate {
     pub trusted_ssids: Option<Vec<String>>,
 }
 
+/// Client certificate presented when a server requires mutual TLS (mTLS).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+pub struct HaClientCertificate {
+    /// Whether a certificate is installed.
+    pub installed: bool,
+    /// Subject common name.
+    #[serde(default)]
+    pub subject: Option<String>,
+    /// Issuer common name.
+    #[serde(default)]
+    pub issuer: Option<String>,
+    /// Expiry time (RFC 3339).
+    #[serde(default)]
+    pub not_after: Option<String>,
+    /// SHA-256 fingerprint, colon-separated hex.
+    #[serde(default)]
+    pub sha256: Option<String>,
+    /// Whether the certificate has expired.
+    #[serde(default)]
+    pub expired: bool,
+}
+
+/// Client certificate import.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+pub struct HaClientCertificateUpload {
+    /// Base64 file contents: a `.p12`/`.pfx` bundle, or PEM certificate(s) plus private key.
+    pub data: String,
+    /// Password for a `.p12`/`.pfx` bundle.
+    #[serde(default)]
+    pub password: Option<String>,
+}
+
 /// Current network as seen by the desktop shell.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 pub struct NetworkReport {
