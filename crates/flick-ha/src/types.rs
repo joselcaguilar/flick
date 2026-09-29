@@ -118,6 +118,9 @@ pub enum HaStatus {
     Reconnecting {
         /// One-based reconnect attempt counter.
         attempt: u32,
+        /// Why the previous connection attempt failed, when known.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        last_error: Option<String>,
     },
 }
 

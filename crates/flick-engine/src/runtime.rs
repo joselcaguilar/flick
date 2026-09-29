@@ -746,18 +746,29 @@ fn rfc3339_from_ms(ms: i64) -> String {
 }
 
 async fn wait_ha_ready(client: &HaClient) -> anyhow::Result<String> {
-    let status = tokio::time::timeout(Duration::from_secs(8), client.wait_for_auth())
+    let mut rx = client.status();
+    let wait = async {
+        loop {
+            let status = rx.borrow_and_update().clone();
+            match status {
+                HaStatus::Ready { ha_version } => return Ok(ha_version.unwrap_or_default()),
+                HaStatus::AuthFailed { message } => {
+                    anyhow::bail!("Home Assistant rejected the access token: {message}");
+                }
+                HaStatus::Reconnecting {
+                    last_error: Some(reason),
+                    ..
+                } => anyhow::bail!("Couldn't reach Home Assistant: {reason}"),
+                HaStatus::Disconnected | HaStatus::Connecting | HaStatus::Reconnecting { .. } => {}
+            }
+            if rx.changed().await.is_err() {
+                anyhow::bail!("Home Assistant connection closed unexpectedly");
+            }
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(15), wait)
         .await
-        .context("timed out waiting for Home Assistant authentication")??;
-    match status {
-        HaStatus::Ready { ha_version } => Ok(ha_version.unwrap_or_default()),
-        HaStatus::AuthFailed { message } => {
-            anyhow::bail!("Home Assistant authentication failed: {message}");
-        }
-        HaStatus::Disconnected | HaStatus::Connecting | HaStatus::Reconnecting { .. } => {
-            anyhow::bail!("Home Assistant authentication did not complete")
-        }
-    }
+        .context("Couldn't reach Home Assistant: the server didn't respond in time")?
 }
 
 fn load_default_ha_instance(store: &Store) -> anyhow::Result<Option<(HaInstance, String)>> {
@@ -2333,8 +2344,9 @@ impl HaGateway for EngineApp {
         }
         let token = request.token.clone();
         let cert_sha256 = request.trust_cert_sha256.clone();
-        let config = HaConnectionConfig::new(request.base_url.clone(), token.clone())
+        let mut config = HaConnectionConfig::new(request.base_url.clone(), token.clone())
             .map_err(|err| ApiProblem::validation("ha_invalid_url", err.to_string()))?;
+        config.cert_sha256 = cert_sha256.clone();
         let client = HaClient::connect(config)
             .await
             .map_err(|err| ApiProblem::validation("ha_connect_failed", err.to_string()))?;

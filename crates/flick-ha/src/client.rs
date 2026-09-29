@@ -11,7 +11,9 @@ use futures::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use tokio::net::TcpStream;
 use tokio::sync::{RwLock, broadcast, mpsc, oneshot, watch};
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite::Message};
+use tokio_tungstenite::{
+    Connector, MaybeTlsStream, WebSocketStream, connect_async_tls_with_config, tungstenite::Message,
+};
 
 use crate::{
     HaError,
@@ -42,8 +44,15 @@ impl HaClient {
         let registry = Arc::new(RwLock::new(RegistryCache::default()));
         let actor_registry = Arc::clone(&registry);
         let actor_events = events_tx.clone();
-        tokio::spawn(async move {
+        let actor = tokio::spawn(async move {
             run_actor(config, rx, status_tx, actor_events, actor_registry).await;
+        });
+        tokio::spawn(async move {
+            if let Err(err) = actor.await
+                && err.is_panic()
+            {
+                tracing::error!(error = %err, "home assistant client task panicked");
+            }
         });
         Ok(Self {
             tx,
@@ -261,6 +270,7 @@ async fn run_actor(
 
     loop {
         set_status(&status_tx, &events_tx, HaStatus::Connecting);
+        let last_error: Option<String>;
         match establish(&config).await {
             Ok((ws, ha_version, next_id)) => {
                 attempt = 0;
@@ -288,6 +298,7 @@ async fn run_actor(
                 )
                 .await;
                 subscriptions = state.subscriptions;
+                last_error = Some("Connection to Home Assistant was lost".to_owned());
                 fail_pending(&mut state.pending, HaError::Disconnected);
                 set_status(&status_tx, &events_tx, HaStatus::Disconnected);
                 if matches!(disconnected, DisconnectReason::Shutdown) {
@@ -300,7 +311,8 @@ async fn run_actor(
                 break;
             }
             Err(err) => {
-                tracing::debug!(error = %err, "home assistant connect failed");
+                tracing::warn!(url = %config.url, error = %err, "home assistant connect failed");
+                last_error = Some(describe_connect_error(&err));
                 set_status(&status_tx, &events_tx, HaStatus::Disconnected);
             }
         }
@@ -308,7 +320,14 @@ async fn run_actor(
         attempt = attempt.saturating_add(1);
         drop_stale(&mut queued_calls, config.stale_action);
         let delay = backoff_delay(&config, attempt);
-        set_status(&status_tx, &events_tx, HaStatus::Reconnecting { attempt });
+        set_status(
+            &status_tx,
+            &events_tx,
+            HaStatus::Reconnecting {
+                attempt,
+                last_error: last_error.clone(),
+            },
+        );
         let sleep = tokio::time::sleep(delay);
         tokio::pin!(sleep);
         loop {
@@ -326,14 +345,42 @@ async fn run_actor(
     }
 }
 
+/// Short, user-facing reason for a failed connection attempt.
+fn describe_connect_error(err: &HaError) -> String {
+    let HaError::WebSocket(detail) = err else {
+        return err.to_string();
+    };
+    let lower = detail.to_ascii_lowercase();
+    let reason = if lower.contains("timed out") {
+        "the server didn't respond in time"
+    } else if lower.contains("connection refused") {
+        "the connection was refused (check the port)"
+    } else if lower.contains("failed to lookup") || lower.contains("nodename nor servname") {
+        "the host name couldn't be resolved"
+    } else if lower.contains("certificate") || lower.contains("unknownissuer") {
+        "its TLS certificate isn't trusted by this Mac"
+    } else if lower.contains("tls") || lower.contains("handshake") {
+        "the secure (TLS) connection failed"
+    } else if lower.contains("404") || lower.contains("http error") {
+        "that address isn't a Home Assistant server"
+    } else if lower.contains("unreachable") || lower.contains("no route") {
+        "the network is unreachable"
+    } else {
+        return detail.clone();
+    };
+    reason.to_owned()
+}
+
 async fn establish(config: &HaConnectionConfig) -> Result<(Ws, String, u64), HaError> {
-    if config.cert_sha256.is_some() {
-        tracing::debug!(
-            "certificate pin configured; rustls native verification still runs before the pin is checked by the desktop shell"
-        );
-    }
-    let (mut ws, _) = connect_async(&config.url)
+    let connector = if config.url.starts_with("wss://") {
+        Connector::Rustls(crate::tls::client_config(config.cert_sha256.as_deref())?)
+    } else {
+        Connector::Plain
+    };
+    let connect = connect_async_tls_with_config(&config.url, None, false, Some(connector));
+    let (mut ws, _) = tokio::time::timeout(config.request_timeout, connect)
         .await
+        .map_err(|_| HaError::WebSocket("connection timed out".to_owned()))?
         .map_err(|err| HaError::WebSocket(err.to_string()))?;
 
     let auth_required = read_json(&mut ws, config.request_timeout).await?;

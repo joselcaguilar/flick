@@ -34,6 +34,7 @@ pub mod protocol;
 pub mod registry;
 pub mod safety;
 pub mod secret;
+pub mod tls;
 pub mod types;
 pub mod verb;
 

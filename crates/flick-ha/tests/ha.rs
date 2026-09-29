@@ -506,3 +506,28 @@ async fn bedroom_fan_scenario_runs_end_to_end_through_client() {
     assert_eq!(calls[0].service_data, json!({"percentage":1}));
     assert_eq!(calls[1].service, "turn_off");
 }
+
+#[tokio::test]
+async fn wss_url_does_not_crash_client_task() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        while let Ok((stream, _)) = listener.accept().await {
+            drop(stream);
+        }
+    });
+    let client = HaClient::connect(
+        HaConnectionConfig::new(format!("https://127.0.0.1:{port}"), "token").unwrap(),
+    )
+    .await
+    .unwrap();
+    wait_for_status(&client, |status| {
+        matches!(status, HaStatus::Reconnecting { .. })
+    })
+    .await;
+    let err = client.request(json!({ "type": "ping" })).await.unwrap_err();
+    assert!(
+        !matches!(err, flick_ha::HaError::ClientStopped),
+        "client task died: {err}"
+    );
+}
