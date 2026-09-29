@@ -79,7 +79,7 @@ function ConfiguredCameraCard({ camera, live }: { camera: Camera; live?: CameraS
         <ListRow title="Rotation" description={`${camera.rotation}°`} trailing="ROI saved" />
       </div>
       <div className="camera-actions">
-        <Button variant={running ? "ghost" : "primary"} size="sm" loading={pending} onClick={toggleCamera}>
+        <Button variant={running ? "danger" : "primary"} size="sm" loading={pending} onClick={toggleCamera}>
           {running ? "Stop camera" : camera.enabled ? "Start camera" : "Enable camera"}
         </Button>
       </div>
