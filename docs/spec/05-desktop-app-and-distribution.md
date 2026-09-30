@@ -127,6 +127,7 @@ The HUD window gets only `core:event:default`.
   Spike P0-04/P0-06 **must verify** that the prompt shows "Flick" and the grant persists across updates.
 - **Permission UX:** the engine reads `AVCaptureDevice.authorizationStatus` (via `objc2-av-foundation`) and reports it in `/status` as `camera_permission` (`authorized` | `denied` | `not_determined` | `restricted`).
   If denied, the UI shows a deep link to `x-apple.systempreferences:com.apple.preference.security?Privacy_Camera`.
+  An unanswered prompt is not a denial. The engine waits up to 120 s for the answer, then reports the camera as `idle` and starts it as soon as the prompt is answered, unless a camera was started or stopped in the meantime.
 - **Sleep/wake:** on system sleep, stop capture; on wake, resume after 2 s. Optional `privacy.keep_awake` holds an `IOPMAssertion` (`PreventUserIdleSystemSleep`) while watching.
 - **Screen lock:** capture continues by default (living-room use). The `privacy.pause_on_screen_lock` option exists. Verify capture behavior while locked in P0-04.
 - **Signing & notarization:**

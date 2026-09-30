@@ -1112,6 +1112,10 @@ struct EngineApp {
     ha_restore_epoch: std::sync::atomic::AtomicU64,
     /// mTLS client certificate presented when a server asks for one.
     client_identity: std::sync::Mutex<ClientIdentitySlot>,
+    /// Bumped by every camera start or stop. A start still waiting on the
+    /// macOS camera prompt runs only while its epoch is the latest, so it
+    /// can't override a newer start or stop.
+    camera_intent_epoch: std::sync::atomic::AtomicU64,
     weak_self: std::sync::Weak<EngineApp>,
 }
 
@@ -1141,6 +1145,7 @@ impl EngineApp {
             ha_connect_epoch: std::sync::atomic::AtomicU64::new(0),
             ha_restore_epoch: std::sync::atomic::AtomicU64::new(0),
             client_identity: std::sync::Mutex::new(ClientIdentitySlot::Unloaded),
+            camera_intent_epoch: std::sync::atomic::AtomicU64::new(0),
             weak_self,
         }
     }
@@ -1751,13 +1756,51 @@ impl EngineApp {
         Ok(Some(camera))
     }
 
+    fn begin_camera_intent(&self) -> u64 {
+        self.camera_intent_epoch
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            + 1
+    }
+
+    /// Starts `camera` once the macOS camera prompt is answered, unless a
+    /// newer camera start or stop happens first.
+    fn start_camera_when_prompt_answered(&self, camera: ApiCamera, intent: u64) {
+        let weak = self.weak_self.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                let Some(app) = weak.upgrade() else {
+                    return;
+                };
+                if app
+                    .camera_intent_epoch
+                    .load(std::sync::atomic::Ordering::SeqCst)
+                    != intent
+                {
+                    return;
+                }
+                if camera_permission_status() != CameraPermissionStatus::NotDetermined {
+                    tracing::info!(camera_id = %camera.id, "camera prompt answered, starting camera");
+                    let _ = app.start_configured_camera(&camera).await;
+                    return;
+                }
+            }
+        });
+    }
+
     async fn start_configured_camera(&self, camera: &ApiCamera) -> CameraStatus {
-        {
+        let intent = self.begin_camera_intent();
+        let paused = {
             let mut pause = self.pause.lock().await;
             if pause.paused {
                 pause.camera_id = Some(camera.id.clone());
-                return paused_camera_status(&camera.id);
             }
+            pause.paused
+        };
+        if paused {
+            let status = paused_camera_status(&camera.id);
+            self.publish_camera_status(status.clone()).await;
+            return status;
         }
         if let Some(path) = self.runtime.fake_camera.as_deref() {
             return self
@@ -1800,6 +1843,21 @@ impl EngineApp {
             .and_then(|result| result.map_err(anyhow::Error::from));
         let status = match opened {
             Ok(source) => self.start_source(source).await,
+            // The open stopped waiting on the macOS prompt; that isn't a denial.
+            Err(err) if camera_permission_status() == CameraPermissionStatus::NotDetermined => {
+                tracing::info!(
+                    camera_id = %camera.id,
+                    error = %err,
+                    "camera prompt unanswered, starting once it is"
+                );
+                self.start_camera_when_prompt_answered(camera.clone(), intent);
+                Ok(CameraStatus {
+                    camera_id: camera.id.clone(),
+                    state: "idle".to_owned(),
+                    fps: Some(0.0),
+                    error: None,
+                })
+            }
             Err(err) => Err(err),
         };
         self.finish_camera_start(&camera.id, status).await
@@ -2981,6 +3039,7 @@ impl EngineControl for EngineApp {
     }
 
     async fn stop_camera(&self, camera_id: &str) -> CameraStatus {
+        self.begin_camera_intent();
         {
             let mut pause = self.pause.lock().await;
             if pause.camera_id.as_deref() == Some(camera_id) {
