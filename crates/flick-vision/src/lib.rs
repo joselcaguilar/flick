@@ -985,6 +985,19 @@ fn rotate(vector: Vector2<f32>, radians: f32) -> Vector2<f32> {
     )
 }
 
+/// Rotates MediaPipe world landmarks from the upright ROI crop back into image
+/// orientation, like MediaPipe's `WorldLandmarkProjectionCalculator`. Without
+/// this, orientation features such as thumb up/down depend on the hand's roll.
+fn project_world_landmarks(world: &[f32], rotation: f32) -> [[f32; 3]; 21] {
+    let mut landmarks = [[0.0_f32; 3]; 21];
+    for (index, landmark) in landmarks.iter_mut().enumerate() {
+        let base = index * 3;
+        let xy = rotate(Vector2::new(world[base], world[base + 1]), rotation);
+        *landmark = [xy.x, xy.y, world[base + 2]];
+    }
+    landmarks
+}
+
 fn normalize_radians(mut radians: f32) -> f32 {
     while radians > PI {
         radians -= 2.0 * PI;
@@ -1417,19 +1430,18 @@ impl HandRuntime {
         let hand = mirror_aware_handedness(mediapipe_hand, mirrored_input);
         let affine = RoiAffine::new(roi);
         let mut projected = [[0.0_f32; 3]; 21];
-        let mut world_landmarks = [[0.0_f32; 3]; 21];
-        for index in 0..21 {
+        for (index, point) in projected.iter_mut().enumerate() {
             let base = index * 3;
             let crop_x = normalize_model_coord(image[base], LANDMARK_INPUT_SIZE);
             let crop_y = normalize_model_coord(image[base + 1], LANDMARK_INPUT_SIZE);
             let projected_xy = affine.roi_to_image([crop_x, crop_y]);
-            projected[index] = [
+            *point = [
                 projected_xy[0],
                 projected_xy[1],
                 normalize_model_coord(image[base + 2], LANDMARK_INPUT_SIZE),
             ];
-            world_landmarks[index] = [world[base], world[base + 1], world[base + 2]];
         }
+        let world_landmarks = project_world_landmarks(world, roi.rotation);
         let bbox = bbox_from_landmarks(&projected);
         if bbox.h < 0.06 {
             return Ok(None);
@@ -2074,6 +2086,16 @@ mod tests {
             assert!((round_trip[0] - point[0]).abs() < 1.0e-6);
             assert!((round_trip[1] - point[1]).abs() < 1.0e-6);
         }
+    }
+
+    #[test]
+    fn world_landmarks_follow_image_orientation_for_rotated_rois() {
+        // Crop frame is upright: the thumb tip (4) sits above its CMC (1).
+        let mut world = [0.0_f32; 63];
+        world[4 * 3 + 1] = -0.05;
+        let landmarks = project_world_landmarks(&world, PI);
+        // A hand rolled 180° points the thumb down in the image.
+        assert!(landmarks[4][1] - landmarks[1][1] > 0.04);
     }
 
     #[test]

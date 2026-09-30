@@ -531,7 +531,9 @@ fn tolerance_for(anchor: &Anchor, base: f32) -> f32 {
     (base + anchor.uncertainty_deg.max(0.0)).clamp(base, 15.0)
 }
 
-fn is_point_pose(hand: &HandObservation) -> bool {
+/// Returns true when the hand shows the index-finger pointing pose used for targeting.
+#[must_use]
+pub fn is_point_pose(hand: &HandObservation) -> bool {
     finger_extended(hand, 5, 6, 7, 8)
         && finger_curled(hand, 9, 10, 12)
         && finger_curled(hand, 13, 14, 16)

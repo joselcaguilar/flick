@@ -1776,6 +1776,7 @@ body.hud-window {
 .teach-main,
 .teach-side {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
 }
 
@@ -1811,8 +1812,17 @@ body.hud-window {
 
 .teach-picker-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(12rem, 0.45fr);
+  grid-template-columns: minmax(0, 1fr) minmax(12rem, 1fr);
   gap: 0.8rem;
+}
+
+.teach-picker-grid > * {
+  min-inline-size: 0;
+}
+
+.teach-picker-grid .ui-select {
+  inline-size: 100%;
+  min-inline-size: 0;
 }
 
 .sentence-field input {
@@ -2164,6 +2174,14 @@ body.hud-window {
 .inline-result {
   margin: 0;
   font-size: 0.85rem;
+}
+
+.inline-error,
+.teach-step-card .inline-error {
+  margin: 0;
+  color: var(--flick-accent-red);
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 .mapping-editor-grid {

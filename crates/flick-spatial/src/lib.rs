@@ -48,4 +48,7 @@ pub use ray::{
     DEFAULT_ESTIMATOR_VERSION, DominantEye, HandPose, PointingRay, RayEstimateError, RayEstimator,
     RayEstimatorSettings, RayModel, RaySource,
 };
-pub use selector::{Spatial, TargetEvent, TargetSelectorImpl, TargetSelectorSettings};
+pub use selector::{
+    Spatial, TargetClearReason, TargetEvent, TargetSelectorImpl, TargetSelectorSettings,
+    is_point_pose,
+};

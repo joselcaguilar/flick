@@ -4,6 +4,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     str::FromStr,
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
@@ -117,10 +118,14 @@ impl ReplayCatalog {
 }
 
 /// Replays one fixture once through gesture recognition and dispatch.
+///
+/// When `recorded` is set, every replayed frame is also appended there so teach
+/// spots can sample a replay the way they sample a live camera.
 pub async fn replay_once(
     fixture_name: String,
     path: PathBuf,
     dispatcher: Dispatcher,
+    recorded: Option<Arc<Mutex<Vec<HandFrame>>>>,
 ) -> anyhow::Result<ReplayStats> {
     let text = fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
     let records = read_records(&text)?;
@@ -139,6 +144,11 @@ pub async fn replay_once(
         tokio::time::sleep_until(deadline).await;
         let frame = record.to_frame(start_std)?;
         stats.frames += 1;
+        if let Some(recorded) = &recorded
+            && let Ok(mut recorded) = recorded.lock()
+        {
+            recorded.push(frame.clone());
+        }
 
         let spatial_selection = if let Some(intrinsics) = &record.intrinsics {
             if selector.is_none() && !anchors.is_empty() {

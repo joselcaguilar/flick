@@ -19,7 +19,7 @@ test("teaches the fan and verifies circle and stop through HA, HUD, and activity
 
   await replay(request, "targeting/two_anchors_25deg");
   await page.getByRole("button", { name: "Capture spot 1" }).click();
-  await expect(page.getByText("Spot 1").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Capture spot 2" })).toBeVisible();
   await replay(request, "targeting/two_anchors_25deg");
   await page.getByRole("button", { name: "Capture spot 2" }).click();
   await expect(page.getByRole("button", { name: "Use current speed" })).toBeVisible();

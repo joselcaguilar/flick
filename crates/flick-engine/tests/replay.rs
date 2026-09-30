@@ -242,6 +242,7 @@ async fn fake_landmark_replay_owner_fan_circle_dispatches_mock_ha() -> anyhow::R
         "landmarks/owner_fan_circle".to_owned(),
         Path::new(FIXTURES).join("landmarks/owner_fan_circle.jsonl"),
         dispatcher,
+        None,
     )
     .await?;
     assert!(stats.frames > 0);

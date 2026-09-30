@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   useAnchors,
+  useCameras,
   useCancelTeach,
   useCommitTeach,
   useHaEntities,
+  useMappings,
   usePlaces,
   useStartRealign,
   useStartTeach,
@@ -17,6 +19,7 @@ import type {
   Action,
   Anchor,
   HaEntity,
+  Mapping,
   TeachCommitResponse,
   TeachSpotResponse,
   TeachVerb,
@@ -30,12 +33,34 @@ import {
 } from "../../components/domain";
 import { Badge, Button, GlassPanel, ListRow, Select, Skeleton, Switch } from "../../components/ui";
 import { useEventStore } from "../../events/store";
-import { useActiveCamera, useLiveHands } from "../../events/useLiveHands";
+import { useActiveCamera, useCameraLive, useLiveHands } from "../../events/useLiveHands";
 import { formatTime } from "../../lib/utils";
 
+function anchorTarget(anchor: Anchor) {
+  return anchor.target as unknown as { entity_id?: string; device_id?: string; area_id?: string };
+}
+
 function anchorTargetEntity(anchor: Anchor) {
-  const target = anchor.target as unknown as { entity_id?: string; device_id?: string; area_id?: string };
+  const target = anchorTarget(anchor);
   return target.entity_id ?? target.device_id ?? target.area_id ?? "Unknown target";
+}
+
+function reteachHref(anchor: Anchor) {
+  const params = new URLSearchParams({ anchor: anchor.id });
+  const entityId = anchorTarget(anchor).entity_id;
+  if (entityId) params.set("entity", entityId);
+  return `/devices/teach?${params}`;
+}
+
+function statusLabel(status?: string | null) {
+  if (!status) return "Unknown";
+  const label = status.replace(/_/g, " ");
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function useCameraNames() {
+  const cameras = useCameras();
+  return (cameraId: string) => cameras.data?.find((camera) => camera.id === cameraId)?.name ?? "Camera";
 }
 
 function pickOwnerFan(entities: HaEntity[]) {
@@ -112,12 +137,23 @@ function levelLabel(action: Action) {
   return action.verb.replace(/_/g, " ");
 }
 
-function TeachPreview({ title, detail, sessionId }: { title: string; detail: string; sessionId?: string }) {
+function TeachPreview({
+  title,
+  detail,
+  sessionId,
+  cameraId,
+}: {
+  title: string;
+  detail: string;
+  sessionId?: string;
+  cameraId?: string;
+}) {
   const activeCamera = useActiveCamera();
-  const hands = useLiveHands(activeCamera.id);
+  const id = cameraId || activeCamera.id;
+  const running = useCameraLive(id)?.state === "running";
+  const hands = useLiveHands(id);
   const teach = useEventStore((state) => state.teach);
   const progress = teach?.session_id === sessionId ? teach : undefined;
-  const confidence = progress?.confidence ?? 0.82;
   return (
     <GlassPanel className="teach-preview-panel">
       <div className="preview-header">
@@ -128,19 +164,26 @@ function TeachPreview({ title, detail, sessionId }: { title: string; detail: str
         <Badge tone={progress?.phase === "error" ? "danger" : "success"}>{progress?.hint ?? detail}</Badge>
       </div>
       <PreviewCanvas
-        cameraId={activeCamera.running ? activeCamera.id : undefined}
-        alt="Live camera preview with pointing ray"
-        hands={hands?.hands}
-        ray={hands?.ray}
+        cameraId={running ? id : undefined}
+        alt={running ? "Live camera preview with pointing ray" : "Camera is off"}
+        hands={running ? hands?.hands : []}
+        ray={running ? hands?.ray : undefined}
       />
+      {running ? null : (
+        <p className="camera-note">
+          This camera is off. <Link to="/cameras">Start it from Cameras</Link>, then capture the spot.
+        </p>
+      )}
       <div className="teach-ray-caption">
         <ConfidenceMeter
-          value={confidence}
+          value={progress?.confidence ?? 0}
           label={
-            progress?.ray_jitter_deg != null ? `Jitter ${progress.ray_jitter_deg.toFixed(1)}°` : "Ray steady"
+            progress?.ray_jitter_deg != null
+              ? `Jitter ${progress.ray_jitter_deg.toFixed(1)}°`
+              : "Waiting for a steady ray"
           }
         />
-        <span>{progress?.phase ?? "Median ray only"} · no camera image saved</span>
+        <span>{progress ? statusLabel(progress.phase) : "Median ray only"} · no camera image saved</span>
       </div>
     </GlassPanel>
   );
@@ -228,9 +271,28 @@ function defaultVerbDrafts(domain: string): VerbDraft[] {
   ];
 }
 
+function verbDraftsFromMappings(mappings: Mapping[], anchorId: string): VerbDraft[] {
+  return mappings
+    .filter((mapping) => mapping.anchor_id === anchorId)
+    .map((mapping) => {
+      const gesture =
+        gestureChoices.find((choice) => choice.value === mapping.gesture_id)?.label ??
+        mapping.gesture_name ??
+        mapping.gesture_id;
+      return {
+        id: mapping.id,
+        label: `Point + ${gesture.toLowerCase()} → ${levelLabel(mapping.action)}`,
+        gestureId: mapping.gesture_id,
+        enabled: mapping.enabled,
+        action: mapping.action,
+      };
+    });
+}
+
 export function DevicesRoute() {
   const places = usePlaces();
   const anchors = useAnchors();
+  const cameraName = useCameraNames();
   const grouped = (places.data ?? []).map((place) => ({
     place,
     anchors: (anchors.data ?? []).filter((anchor) => anchor.place_id === place.id),
@@ -262,7 +324,7 @@ export function DevicesRoute() {
           <GlassPanel className="place-card" key={place.id}>
             <div className="panel-heading">
               <div>
-                <span>{place.camera_id}</span>
+                <span>{cameraName(place.camera_id)}</span>
                 <strong>{place.name}</strong>
               </div>
               <Badge tone={statusTone(place.status)}>{place.status}</Badge>
@@ -286,7 +348,7 @@ export function DevicesRoute() {
                     ))}
                   </div>
                   <div className="device-card-actions">
-                    <Link className="ui-button ui-button-secondary ui-button-sm" to="/devices/teach">
+                    <Link className="ui-button ui-button-secondary ui-button-sm" to={reteachHref(anchor)}>
                       Re-teach
                     </Link>
                     <Button variant="ghost" size="sm">
@@ -321,13 +383,20 @@ export function OnboardingTeachDeviceStep() {
 }
 
 export function TeachDeviceRoute() {
+  const [searchParams] = useSearchParams();
+  const reteachEntityId = searchParams.get("entity") ?? "";
+  const reteachAnchorId = searchParams.get("anchor") ?? "";
   const entities = useHaEntities("");
   const status = useStatus();
+  const configuredCameras = useCameras();
+  const anchors = useAnchors();
+  const mappings = useMappings();
+  const eventCameras = useEventStore((state) => state.cameras);
   const startTeach = useStartTeach();
   const ownerFan = pickOwnerFan(entities.data ?? []);
   const [stage, setStage] = useState<TeachStage>("pick");
-  const [query, setQuery] = useState("fan");
-  const [selectedEntityId, setSelectedEntityId] = useState<string>("");
+  const [query, setQuery] = useState(reteachEntityId || "fan");
+  const [selectedEntityId, setSelectedEntityId] = useState<string>(reteachEntityId);
   const [cameraId, setCameraId] = useState("");
   const [session, setSession] = useState<{ id: string; prompt: string } | null>(null);
   const [spots, setSpots] = useState<TeachSpotResponse[]>([]);
@@ -340,16 +409,37 @@ export function TeachDeviceRoute() {
   const testLevel = useTeachLevelTest(session?.id);
   const commitTeach = useCommitTeach(session?.id);
   const cancelTeach = useCancelTeach(session?.id);
-  const cameras = status.data?.cameras ?? [];
+
+  const cameraOptions = useMemo(() => {
+    const live = status.data?.cameras ?? [];
+    const stateOf = (id: string) =>
+      eventCameras[id]?.state ?? live.find((camera) => camera.camera_id === id)?.state ?? "stopped";
+    const options = (configuredCameras.data ?? []).map((camera) => ({
+      value: camera.id,
+      name: camera.name,
+      state: stateOf(camera.id),
+    }));
+    for (const camera of live) {
+      if (!options.some((option) => option.value === camera.camera_id)) {
+        options.push({
+          value: camera.camera_id,
+          name: camera.name ?? "Camera",
+          state: stateOf(camera.camera_id),
+        });
+      }
+    }
+    return options.map((option) => ({ ...option, label: `${option.name} · ${statusLabel(option.state)}` }));
+  }, [configuredCameras.data, eventCameras, status.data?.cameras]);
 
   useEffect(() => {
     if (!selectedEntityId && ownerFan) setSelectedEntityId(ownerFan.entity_id);
   }, [ownerFan, selectedEntityId]);
 
   useEffect(() => {
-    const firstCamera = cameras[0]?.camera_id ?? cameras[0]?.id ?? "dev-camera";
-    if (!cameraId) setCameraId(firstCamera);
-  }, [cameraId, cameras]);
+    if (cameraId || status.isLoading || configuredCameras.isLoading) return;
+    const preferred = cameraOptions.find((option) => option.state === "running") ?? cameraOptions[0];
+    if (preferred) setCameraId(preferred.value);
+  }, [cameraId, cameraOptions, configuredCameras.isLoading, status.isLoading]);
 
   const visibleEntities = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -367,6 +457,11 @@ export function TeachDeviceRoute() {
   const domain = selectedEntity?.domain ?? "fan";
   const sensitive = isSensitiveEntity(selectedEntity);
   const teachFanLevels = domain === "fan";
+  const replacesAnchorId =
+    reteachAnchorId && selectedEntity?.entity_id === reteachEntityId ? reteachAnchorId : undefined;
+  const reteachName = replacesAnchorId
+    ? (anchors.data?.find((anchor) => anchor.id === replacesAnchorId)?.name ?? selectedEntity?.name)
+    : undefined;
   const canCaptureSecondSpot = Boolean(session && spots.length >= 1);
   const canCommit = Boolean(
     session &&
@@ -376,46 +471,57 @@ export function TeachDeviceRoute() {
   );
 
   async function startSession() {
-    if (!selectedEntity) return;
-    const started = await startTeach.mutateAsync({
-      camera_id: cameraId || "dev-camera",
-      target: { entity_id: selectedEntity.entity_id },
-    });
+    if (!selectedEntity || !cameraId) return;
+    const started = await startTeach
+      .mutateAsync({
+        camera_id: cameraId,
+        target: { entity_id: selectedEntity.entity_id },
+        anchor_id: replacesAnchorId,
+      })
+      .catch(() => null);
+    if (!started) return;
+    const existingVerbs = replacesAnchorId
+      ? verbDraftsFromMappings(mappings.data ?? [], replacesAnchorId)
+      : [];
     setSession({ id: started.id, prompt: started.prompt });
     setSpots([]);
     setLevels([]);
-    setVerbs(defaultVerbDrafts(selectedEntity.domain));
+    setVerbs(existingVerbs.length ? existingVerbs : defaultVerbDrafts(selectedEntity.domain));
     setCommitResult(null);
     setStage("spots");
   }
 
   async function captureSpot() {
-    const spot = await teachSpot.mutateAsync();
+    const spot = await teachSpot.mutateAsync().catch(() => null);
+    if (!spot) return;
     setSpots((items) => [...items, spot]);
     if (spot.spot_index >= 2) setStage(teachFanLevels ? "levels" : "verbs");
   }
 
   async function useCurrentSpeed() {
-    const response = await teachLevel.mutateAsync({ level: levelToCapture });
+    const response = await teachLevel.mutateAsync({ level: levelToCapture }).catch(() => null);
+    if (!response) return;
     setLevels(response.levels);
-    setVerbs(defaultVerbDrafts(domain));
     setLevelToCapture(response.levels.length + 1);
   }
 
   async function commit() {
     if (!selectedEntity) return;
-    const result = await commitTeach.mutateAsync({
-      name: selectedEntity.name,
-      verbs: verbs
-        .filter((verb) => verb.enabled)
-        .map<TeachVerb>((verb) => ({ gesture_id: verb.gestureId, action: verb.action })),
-    });
+    const result = await commitTeach
+      .mutateAsync({
+        name: reteachName ?? selectedEntity.name,
+        verbs: verbs
+          .filter((verb) => verb.enabled)
+          .map<TeachVerb>((verb) => ({ gesture_id: verb.gestureId, action: verb.action })),
+      })
+      .catch(() => null);
+    if (!result) return;
     setCommitResult(result);
     setStage("done");
   }
 
   async function cancel() {
-    if (session) await cancelTeach.mutateAsync();
+    if (session) await cancelTeach.mutateAsync().catch(() => undefined);
     setSession(null);
     setSpots([]);
     setLevels([]);
@@ -431,17 +537,18 @@ export function TeachDeviceRoute() {
     <section className="feature-screen teach-screen" aria-labelledby="screen-title">
       <header className="operate-header">
         <div>
-          <h1 id="screen-title">Teach a device</h1>
+          <h1 id="screen-title">{reteachName ? `Re-teach ${reteachName}` : "Teach a device"}</h1>
           <p>
-            Pick the Home Assistant target, capture two pointing spots, teach fine fan levels and test the
-            verbs.
+            {reteachName
+              ? "Capture two new pointing spots. Flick replaces the old position and keeps its gestures."
+              : "Pick the Home Assistant target, capture two pointing spots, teach fine fan levels and test the verbs."}
           </p>
         </div>
         {stage === "pick" ? (
           <Button
             variant="primary"
             loading={startTeach.isPending}
-            disabled={!selectedEntity}
+            disabled={!selectedEntity || !cameraId}
             onClick={startSession}
           >
             Start capture
@@ -470,17 +577,18 @@ export function TeachDeviceRoute() {
                 </label>
                 <div className="sentence-field">
                   <span>Camera</span>
-                  <Select
-                    value={cameraId}
-                    onValueChange={setCameraId}
-                    label="Camera"
-                    items={(cameras.length ? cameras : [{ camera_id: "dev-camera", state: "idle" }]).map(
-                      (camera) => ({
-                        value: camera.camera_id,
-                        label: `${camera.camera_id} · ${camera.state}`,
-                      }),
-                    )}
-                  />
+                  {cameraOptions.length ? (
+                    <Select
+                      value={cameraId}
+                      onValueChange={setCameraId}
+                      label="Camera"
+                      items={cameraOptions.map(({ value, label }) => ({ value, label }))}
+                    />
+                  ) : (
+                    <p className="field-help">
+                      No camera yet. <Link to="/cameras">Add one in Cameras</Link>.
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="teach-entity-list">
@@ -496,10 +604,16 @@ export function TeachDeviceRoute() {
                   </button>
                 ))}
               </div>
+              {startTeach.error ? (
+                <p className="inline-error" role="alert">
+                  {startTeach.error.message}
+                </p>
+              ) : null}
             </GlassPanel>
           ) : (
             <TeachPreview
               sessionId={session?.id}
+              cameraId={cameraId}
               title={`Point at ${selectedEntity?.name ?? "the device"} and hold still`}
               detail={spots.length < 1 ? "spot 1 · hold steady" : "move ~25° · spot 2"}
             />
@@ -548,6 +662,11 @@ export function TeachDeviceRoute() {
                   Add optional spot
                 </Button>
               </div>
+              {teachSpot.error ? (
+                <p className="inline-error" role="alert">
+                  {teachSpot.error.message}
+                </p>
+              ) : null}
             </GlassPanel>
           ) : null}
 
@@ -578,6 +697,11 @@ export function TeachDeviceRoute() {
                 </Button>
               </div>
               {testLevel.data?.message ? <p className="inline-result">{testLevel.data.message}</p> : null}
+              {teachLevel.error ? (
+                <p className="inline-error" role="alert">
+                  {teachLevel.error.message}
+                </p>
+              ) : null}
             </GlassPanel>
           ) : null}
 
@@ -644,6 +768,11 @@ export function TeachDeviceRoute() {
                   Back
                 </Button>
               </div>
+              {commitTeach.error ? (
+                <p className="inline-error" role="alert">
+                  {commitTeach.error.message}
+                </p>
+              ) : null}
             </GlassPanel>
           ) : null}
 
@@ -714,6 +843,7 @@ export function TeachDeviceRoute() {
 export function PlacesRoute() {
   const places = usePlaces();
   const anchors = useAnchors();
+  const cameraName = useCameraNames();
   return (
     <section className="feature-screen" aria-labelledby="screen-title">
       <header className="operate-header">
@@ -727,7 +857,7 @@ export function PlacesRoute() {
           <GlassPanel className="place-card" key={place.id}>
             <div className="panel-heading">
               <div>
-                <span>{place.camera_id}</span>
+                <span>{cameraName(place.camera_id)}</span>
                 <strong>{place.name}</strong>
               </div>
               <Badge tone={statusTone(place.status)}>{place.status}</Badge>

@@ -320,6 +320,21 @@ impl Dispatcher {
             .collect();
     }
 
+    /// Returns the enabled gesture → action pairs mapped to one anchor, in mapping order.
+    pub async fn anchor_verbs(&self, anchor_id: AnchorId) -> Vec<(GestureId, Action)> {
+        let state = self.inner.state.lock().await;
+        let mut mappings = state
+            .mappings
+            .iter()
+            .filter(|mapping| mapping.enabled && mapping.target == MappingTarget::Anchor(anchor_id))
+            .collect::<Vec<_>>();
+        mappings.sort_by_key(|mapping| mapping.sort_order);
+        mappings
+            .into_iter()
+            .map(|mapping| (mapping.gesture_id, mapping.action.clone()))
+            .collect()
+    }
+
     /// Replaces the action sink without rebuilding mappings or cooldown state.
     pub async fn set_sink(&self, sink: Arc<dyn flick_core::ActionSink>) {
         *self.inner.sink.lock().await = sink;

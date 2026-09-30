@@ -174,7 +174,8 @@ impl ApiState {
             preview: gateways.preview,
             config_sync: gateways.config,
             tickets: Arc::new(PreviewTickets::default()),
-            events: EventHub::new(16),
+            // Live hands and targeting events are bursty; keep room so slow sockets don't resync.
+            events: EventHub::new(256),
             mappings: Arc::new(Mutex::new(BTreeMap::new())),
             places: Arc::new(Mutex::new(BTreeMap::new())),
             anchors: Arc::new(Mutex::new(BTreeMap::new())),
@@ -2074,15 +2075,30 @@ async fn teach_commit(
             )
         })
         .collect::<Result<Vec<_>, _>>()?;
-    response.mapping_ids = created_mappings
-        .iter()
-        .map(|mapping| mapping.id.clone())
-        .collect();
     let all_mappings = {
         let mut mappings = state.mappings.lock().unwrap_or_else(|err| err.into_inner());
-        for mapping in created_mappings {
-            mappings.insert(mapping.id.clone(), mapping);
-        }
+        response.mapping_ids = created_mappings
+            .into_iter()
+            .map(|created| {
+                // Re-teaching keeps one mapping per anchor gesture instead of stacking duplicates.
+                let existing = mappings.values_mut().find(|mapping| {
+                    mapping.target_mode == TargetModeDto::Anchor
+                        && mapping.anchor_id == created.anchor_id
+                        && mapping.gesture_id == created.gesture_id
+                });
+                if let Some(existing) = existing {
+                    existing.name = created.name;
+                    existing.action = created.action;
+                    existing.enabled = true;
+                    existing.sensitive_ack = created.sensitive_ack;
+                    existing.updated_at = created.updated_at;
+                    return existing.id.clone();
+                }
+                let id = created.id.clone();
+                mappings.insert(id.clone(), created);
+                id
+            })
+            .collect();
         mappings.values().cloned().collect::<Vec<_>>()
     };
     state.config_sync.mappings_changed(all_mappings).await?;
@@ -2303,7 +2319,8 @@ fn event_allowed(
         let entry = last_hands
             .entry(payload.camera_id.clone())
             .or_insert(now - Duration::from_secs(1));
-        if now.duration_since(*entry) < Duration::from_millis(66) {
+        // An empty frame clears the overlay, so it is never dropped.
+        if !payload.hands.is_empty() && now.duration_since(*entry) < Duration::from_millis(66) {
             return false;
         }
         *entry = now;

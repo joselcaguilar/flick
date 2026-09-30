@@ -155,11 +155,13 @@ A laptop moves; RTSP cameras don't. Anchors are only valid while the camera sees
 ## 7. Teach flow (UI in `04-…` §6b)
 
 1. **Pick the device:** HA entity/device search, sorted by the camera's area. Optional *Suggest devices I can see* (Phase 2, §8).
-2. **Point from spot 1:** "Point at the ceiling fan and hold still" → 1 s capture (median ray), with live ray feedback.
+2. **Point from spot 1:** "Point at the ceiling fan and hold still" → ~1 s capture from the running camera (average of the settled rays, p90 jitter), with live ray feedback. No steady pointing hand → the spot is rejected with a hint.
 3. **Point from spot 2:** "Take one or two steps to the side and point again" → triangulate → confidence meter. A third spot is optional.
 4. **Speed levels** (fans with fine steps) or **level check** (other domains).
 5. **Verbs:** the default verbs for the domain are shown as sentences ("Point + ↻ → speed 1", "Point + ✋✋ apart → off"). The user can edit them or record a custom verb in the Studio.
 6. **Test:** "Point at it again" → HUD selection + angular error. "Try a verb" → real call with the result.
+
+**Re-teach** (Devices → Re-teach) runs the same flow for an existing device and replaces its anchor in place: same id, name and verbs, so its mappings keep working.
 
 Target time: **≤ 90 s per device.**
 
@@ -193,6 +195,7 @@ They run through the shared replay harness and the nightly metrics (`07-…` §1
   - `targeting/point_fan_circle.jsonl` (hand landmarks + face keypoints) → **exactly one** `fan.turn_on {percentage: 1}` to `fan.ventilador_dormitorio` via mock HA;
   - `targeting/point_fan_stop.jsonl` → exactly one `fan.turn_off`.
 - **Lock (replay):** circling after selection never changes the selection (fixture with two anchors 25° apart).
+- **Teach (e2e):** the teach UI flow runs against a fake-landmark engine (`FLICK_FAKE_LANDMARKS`). With no live camera, each spot samples the latest fixture replay instead.
 - **Negatives (nightly metric):** the shared negatives replay (`02-…` §8) also asserts **0** targeted actions, since there is no selection without a deliberate point + dwell.
 - **Selection accuracy (nightly metric):** P0-08 dataset (≥ 3 people × 5 targets × 3 positions, MacBook camera):
   - ≥ 95 % correct selection for anchors ≥ 20° apart;

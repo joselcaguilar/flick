@@ -30,12 +30,13 @@ use flick_api::{
     CameraPatch, CameraStatus, ConfigGateway, EmptyEvent, EngineControl, EnginePausedEvent,
     EngineStatus, EventHub, FakeUpdates, HaArea, HaClientCertificate, HaConnectRequest,
     HaConnectionUpdate, HaDiscovery, HaEntity, HaGateway, HaInstance, HaServiceSchema,
-    HaStatus as ApiHaStatus, LatencyBreakdown, Mapping, NetworkReport, PauseRequest, PreviewFrame,
-    PreviewSource, RealignCommitResponse, RealignPointRequest, RealignPointResponse,
-    RealignSession, SettingsMap, SetupSuggestRequest, SetupSuggestion, StageLatency, TargetModeDto,
-    TeachCommitRequest, TeachCommitResponse, TeachGateway, TeachLevelRequest, TeachLevelResponse,
-    TeachRequest, TeachSession as ApiTeachSession, TeachSpotResponse, VerbBinding, WsServerMessage,
-    router,
+    HaStatus as ApiHaStatus, HandEvent, HandsEvent, LatencyBreakdown, Mapping, NetworkReport,
+    PauseRequest, PreviewFrame, PreviewSource, RayEvent, RealignCommitResponse,
+    RealignPointRequest, RealignPointResponse, RealignSession, SettingsMap, SetupSuggestRequest,
+    SetupSuggestion, StageLatency, TargetAmbiguousEvent, TargetClearedEvent, TargetHoverEvent,
+    TargetModeDto, TargetSelectedEvent, TeachCommitRequest, TeachCommitResponse, TeachGateway,
+    TeachLevelRequest, TeachLevelResponse, TeachProgressEvent, TeachRequest,
+    TeachSession as ApiTeachSession, TeachSpotResponse, VerbBinding, WsServerMessage, router,
 };
 use flick_capture::{
     CameraPermissionStatus, CaptureHandle, CaptureStatus, FileSource, FileSourceOptions, FrameTap,
@@ -44,8 +45,8 @@ use flick_capture::{
 };
 use flick_core::{
     Action, ActionOutcome, ActionStatus, ActionTarget, AnchorId, CameraId, DialProperty,
-    FrameSource, GestureId, HandFrame, HandPipeline, MappingId, PlaceId, SourceInfo, SourceKind,
-    StoreError, Verb,
+    FrameSource, GestureEvent, GestureId, GesturePhase, HandFrame, HandObservation, HandPipeline,
+    Handedness, MappingId, PlaceId, SourceInfo, SourceKind, StoreError, Verb,
 };
 use flick_gestures::{GestureEngine, GestureEngineConfig};
 use flick_ha::{
@@ -54,10 +55,10 @@ use flick_ha::{
     record_current_fan_level,
 };
 use flick_spatial::{
-    AnchorGeometry, CameraIntrinsics, DEFAULT_ESTIMATOR_VERSION, PlaceRecord, PlaceStatus,
-    PointingRay, RaySource, RealignPair, StoredIntrinsics, TargetSelectorImpl,
-    TargetSelectorSettings, TeachObservation, TeachSession as SpatialTeachSession, TeachTarget,
-    realign,
+    Anchor as SpatialAnchor, AnchorGeometry, CameraIntrinsics, DEFAULT_ESTIMATOR_VERSION,
+    PlaceRecord, PlaceStatus, PointingRay, RayEstimator, RealignPair, StoredIntrinsics,
+    TargetClearReason, TargetEvent, TargetSelectorImpl, TargetSelectorSettings, TeachObservation,
+    TeachSession as SpatialTeachSession, TeachTarget, is_point_pose, realign,
 };
 use flick_store::Store;
 use flick_vision::{EpChoice, HandPipelineImpl, ModelSet};
@@ -73,9 +74,9 @@ use tokio::{
 use crate::{
     config::RuntimeConfig,
     dispatcher::{
-        Dispatcher, DispatcherAnchor, DispatcherMapping, DispatcherSettings, HaActionSink,
-        MappingHand, MappingTarget, NoopActionSink, classify_action_safety, owner_fan_anchor,
-        owner_scenario_mappings,
+        DispatchReport, Dispatcher, DispatcherAnchor, DispatcherMapping, DispatcherSettings,
+        HaActionSink, MappingHand, MappingTarget, NoopActionSink, classify_action_safety,
+        owner_fan_anchor, owner_scenario_mappings,
     },
     fake_landmarks::{ReplayCatalog, ReplayFixture, replay_once},
     targeting_store::{SqliteTargetingStore, anchor_record_to_anchor, anchor_to_record},
@@ -1078,6 +1079,8 @@ struct EngineApp {
     capture: Mutex<Option<EngineCapture>>,
     replay_catalog: Mutex<Option<ReplayCatalog>>,
     replay_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    /// Frames of the latest dev replay; teach spots sample them when no camera runs.
+    replay_frames: Arc<std::sync::Mutex<Vec<HandFrame>>>,
     /// Wi-Fi SSID reported by the desktop shell; drives Home/Remote routing.
     network_tx: watch::Sender<Option<String>>,
     /// Bumped whenever the HA client is replaced, so stale sync tasks stop.
@@ -1107,6 +1110,7 @@ impl EngineApp {
             capture: Mutex::new(None),
             replay_catalog: Mutex::new(None),
             replay_task: Mutex::new(None),
+            replay_frames: Arc::default(),
             network_tx: watch::channel(None).0,
             ha_generation: std::sync::atomic::AtomicU64::new(0),
             client_identity: std::sync::Mutex::new(ClientIdentitySlot::Unloaded),
@@ -1231,8 +1235,16 @@ impl EngineApp {
             .await
             .clone()
             .context("dispatcher is not ready")?;
-        let handle = tokio::spawn(async move {
-            match replay_once(fixture_name.clone(), path, dispatcher).await {
+        let mut task = self.replay_task.lock().await;
+        if let Some(previous) = task.take() {
+            previous.abort();
+        }
+        if let Ok(mut frames) = self.replay_frames.lock() {
+            frames.clear();
+        }
+        let recorded = Arc::clone(&self.replay_frames);
+        *task = Some(tokio::spawn(async move {
+            match replay_once(fixture_name.clone(), path, dispatcher, Some(recorded)).await {
                 Ok(stats) => tracing::info!(
                     fixture = %stats.fixture,
                     frames = stats.frames,
@@ -1244,13 +1256,42 @@ impl EngineApp {
                     tracing::warn!(%error, fixture = %fixture_name, "fake landmark replay failed")
                 }
             }
-        });
-        let mut task = self.replay_task.lock().await;
-        if let Some(previous) = task.take() {
-            previous.abort();
-        }
-        *task = Some(handle);
+        }));
         Ok(())
+    }
+
+    /// Dev stand-in for a live camera: rays from the latest replay once it has finished.
+    async fn replayed_pointing_rays(&self) -> Vec<PointingRay> {
+        let deadline = Instant::now() + REPLAY_SPOT_WAIT;
+        while Instant::now() < deadline {
+            let replaying = self
+                .replay_task
+                .lock()
+                .await
+                .as_ref()
+                .is_some_and(|task| !task.is_finished());
+            if !replaying {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        let frames = self
+            .replay_frames
+            .lock()
+            .map(|mut frames| std::mem::take(&mut *frames))
+            .unwrap_or_default();
+        // Fixtures are recorded at 720p.
+        let mut estimator = RayEstimator::new(
+            CameraIntrinsics::sane_default(1280, 720),
+            TargetSelectorSettings::default().ray,
+        );
+        frames
+            .iter()
+            .filter_map(|frame| {
+                let hand = pointing_hand(&frame.hands)?;
+                estimator.estimate(hand, None, frame.captured_at).ok()
+            })
+            .collect()
     }
 
     async fn mock_ha_calls(&self) -> Vec<ServiceCallRecord> {
@@ -1414,7 +1455,40 @@ impl EngineApp {
         if let Some(dispatcher) = self.dispatcher.lock().await.clone() {
             dispatcher.set_anchors(dispatcher_anchors).await;
         }
+        self.refresh_selector_anchors().await;
         Ok(())
+    }
+
+    /// Taught anchors for the camera's place, which the pointing selector aims at.
+    fn selector_anchors_for(&self, camera_id: CameraId) -> Vec<SpatialAnchor> {
+        let places = match self.targeting.try_places_for_camera(camera_id) {
+            Ok(places) => places,
+            Err(err) => {
+                tracing::warn!(camera_id = %camera_id, error = %err, "failed to load places for targeting");
+                return Vec::new();
+            }
+        };
+        let Some(place) = places
+            .iter()
+            .find(|place| place.active)
+            .or_else(|| places.first())
+        else {
+            return Vec::new();
+        };
+        match self.targeting.try_anchors_for_place(place.id) {
+            Ok(records) => records.iter().filter_map(anchor_record_to_anchor).collect(),
+            Err(err) => {
+                tracing::warn!(place_id = %place.id, error = %err, "failed to load anchors for targeting");
+                Vec::new()
+            }
+        }
+    }
+
+    async fn refresh_selector_anchors(&self) {
+        let capture = self.capture.lock().await;
+        if let Some(capture) = capture.as_ref() {
+            capture.set_anchors(self.selector_anchors_for(capture.source_info.id));
+        }
     }
 
     fn spawn_pause_timer(self: &Arc<Self>) {
@@ -1620,6 +1694,28 @@ impl EngineApp {
         status
     }
 
+    async fn publish_teach_progress(
+        &self,
+        session_id: &str,
+        phase: &str,
+        ray_jitter_deg: Option<f64>,
+        confidence: Option<f64>,
+        hint: Option<&str>,
+    ) {
+        if let Some(events) = self.events.lock().await.clone() {
+            events.publish(WsServerMessage::TeachProgress {
+                ts: now_rfc3339(),
+                payload: TeachProgressEvent {
+                    session_id: session_id.to_owned(),
+                    phase: phase.to_owned(),
+                    ray_jitter_deg,
+                    confidence,
+                    hint: hint.map(ToOwned::to_owned),
+                },
+            });
+        }
+    }
+
     async fn publish_camera_status(&self, status: CameraStatus) {
         tracing::info!(
             camera_id = %status.camera_id,
@@ -1653,8 +1749,11 @@ impl EngineApp {
         S: FrameSource,
     {
         let dispatcher = self.dispatcher.lock().await.clone();
+        let events = self.events.lock().await.clone();
+        let anchors = self.selector_anchors_for(source.info().id);
         let model_root = model_manifest_path(&self.runtime);
-        let capture = EngineCapture::start(source, dispatcher, model_root.as_deref())?;
+        let capture =
+            EngineCapture::start(source, dispatcher, events, anchors, model_root.as_deref())?;
         let status = capture.status();
         let mut current = self.capture.lock().await;
         if let Some(old) = current.take() {
@@ -1737,6 +1836,8 @@ impl EngineApp {
 struct EngineTeachSession {
     camera_id: String,
     target: serde_json::Value,
+    /// Anchor explicitly being re-taught.
+    replaces: Option<AnchorId>,
     levels: Vec<f64>,
     spatial: SpatialTeachSession,
 }
@@ -1745,6 +1846,22 @@ struct EngineRealignSession {
     place_id: PlaceId,
     pairs: Vec<RealignPair>,
 }
+
+/// The WS server forwards at most one `hands` frame per 66 ms per socket.
+const HANDS_EVENT_INTERVAL: Duration = Duration::from_millis(70);
+/// Brief detector dropouts should not blink the overlay off.
+const HANDS_CLEAR_AFTER: Duration = Duration::from_millis(150);
+const TARGET_EVENT_INTERVAL: Duration = Duration::from_millis(100);
+/// The selector reports hover every frame, so silence this long means the aim was abandoned.
+const TARGET_AIMING_STALE: Duration = Duration::from_millis(600);
+const VISION_SUMMARY_INTERVAL: Duration = Duration::from_secs(10);
+const TEACH_SPOT_SAMPLE_WINDOW: Duration = Duration::from_millis(1_200);
+const TEACH_SPOT_MIN_RAYS: usize = 5;
+/// Upper bound a dev teach spot waits for an in-flight fixture replay.
+const REPLAY_SPOT_WAIT: Duration = Duration::from_secs(5);
+const POINT_PRESENCE_MIN: f32 = 0.5;
+
+type PendingAnchors = Arc<std::sync::Mutex<Option<Vec<SpatialAnchor>>>>;
 
 struct EngineCapture {
     source_info: SourceInfo,
@@ -1755,12 +1872,15 @@ struct EngineCapture {
     preview: FrameTap,
     latest_hands: Arc<std::sync::Mutex<Option<HandFrame>>>,
     last_error: Arc<std::sync::Mutex<Option<String>>>,
+    pending_anchors: PendingAnchors,
 }
 
 impl EngineCapture {
     fn start<S>(
         source: S,
         dispatcher: Option<Dispatcher>,
+        events: Option<EventHub>,
+        anchors: Vec<SpatialAnchor>,
         model_root: Option<&Path>,
     ) -> anyhow::Result<Self>
     where
@@ -1773,11 +1893,28 @@ impl EngineCapture {
         let worker_stop = Arc::new(AtomicBool::new(false));
         let latest_hands = Arc::new(std::sync::Mutex::new(None));
         let last_error = Arc::new(std::sync::Mutex::new(None));
-        let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel();
+        let pending_anchors: PendingAnchors = Arc::new(std::sync::Mutex::new(None));
+        let refresh_selection = Arc::new(AtomicBool::new(false));
+        let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel::<GestureEvent>();
+        let (target_tx, mut target_rx) = tokio::sync::mpsc::unbounded_channel::<TargetEvent>();
+        // Ends on its own once the worker drops `target_tx`, so the final clear is still delivered.
+        if let Some(events) = events.clone() {
+            let dispatcher = dispatcher.clone();
+            tokio::spawn(async move {
+                while let Some(event) = target_rx.recv().await {
+                    events.publish(target_message(event, dispatcher.as_ref()).await);
+                }
+            });
+        }
         let dispatch_task = dispatcher.map(|dispatcher| {
+            let refresh_selection = Arc::clone(&refresh_selection);
             tokio::spawn(async move {
                 while let Some(event) = event_rx.recv().await {
-                    let _ = dispatcher.dispatch(&event).await;
+                    let report = dispatcher.dispatch(&event).await;
+                    log_dispatch(&event, &report);
+                    if event.target.is_some() && !report.outcomes.is_empty() {
+                        refresh_selection.store(true, Ordering::Relaxed);
+                    }
                 }
             })
         });
@@ -1785,27 +1922,69 @@ impl EngineCapture {
             let worker_stop = Arc::clone(&worker_stop);
             let latest_hands = Arc::clone(&latest_hands);
             let last_error = Arc::clone(&last_error);
+            let pending_anchors = Arc::clone(&pending_anchors);
             let source_info = source_info.clone();
+            let camera_id = source_info.id;
             let mut pipeline = build_hand_pipeline(model_root, source_info.mirror);
             let mut gestures = GestureEngine::new(GestureEngineConfig::default());
+            let mut anchor_count = anchors.len();
+            tracing::info!(camera_id = %camera_id, anchors = anchor_count, "targeting anchors loaded");
             let mut selector = TargetSelectorImpl::new(
                 CameraIntrinsics::sane_default(source_info.width, source_info.height),
-                Vec::new(),
+                anchors,
                 TargetSelectorSettings::default(),
             );
+            let mut hands_feed = events.map(|events| HandsFeed::new(events, camera_id.to_string()));
+            let mut targets = TargetFeed::new(target_tx);
+            let mut stats = VisionStats::new(Instant::now());
             thread::Builder::new()
                 .name(format!("flick-vision-{}", source_info.id))
                 .spawn(move || {
                     while !worker_stop.load(Ordering::Relaxed) {
+                        let pending = pending_anchors
+                            .lock()
+                            .ok()
+                            .and_then(|mut pending| pending.take());
+                        if let Some(anchors) = pending {
+                            anchor_count = anchors.len();
+                            let selected = selector.selected();
+                            selector.set_anchors(anchors);
+                            // The selector drops a deleted anchor's selection without an event.
+                            if let Some(anchor_id) =
+                                selected.filter(|_| selector.selected().is_none())
+                            {
+                                targets.push(
+                                    TargetEvent::Cleared {
+                                        camera_id,
+                                        anchor_id,
+                                        reason: TargetClearReason::Paused,
+                                    },
+                                    Instant::now(),
+                                );
+                            }
+                            tracing::info!(camera_id = %camera_id, anchors = anchor_count, "targeting anchors updated");
+                        }
+                        if refresh_selection.swap(false, Ordering::Relaxed) {
+                            selector.refresh();
+                        }
                         let Some(frame) = slot.wait_latest(Duration::from_millis(100)) else {
                             continue;
                         };
                         match pipeline.process(&frame) {
                             Ok(hands) => {
+                                let now = Instant::now();
                                 let selection = selector.update(&hands, None);
+                                for event in selector.take_events() {
+                                    targets.push(event, now);
+                                }
+                                targets.expire_aiming(camera_id, selector.selected(), now);
                                 for event in gestures.update(&hands, &selection).events {
                                     let _ = event_tx.send(event);
                                 }
+                                if let Some(feed) = hands_feed.as_mut() {
+                                    feed.publish(&hands, now);
+                                }
+                                stats.record(&hands, camera_id, anchor_count, now);
                                 if let Ok(mut latest) = latest_hands.lock() {
                                     *latest = Some(hands);
                                 }
@@ -1820,6 +1999,14 @@ impl EngineCapture {
                             }
                         }
                     }
+                    selector.clear();
+                    for event in selector.take_events() {
+                        targets.push(event, Instant::now());
+                    }
+                    targets.finish(camera_id);
+                    if let Some(feed) = hands_feed.as_mut() {
+                        feed.clear();
+                    }
                 })
                 .context("failed to spawn vision worker")?
         };
@@ -1832,7 +2019,15 @@ impl EngineCapture {
             preview,
             latest_hands,
             last_error,
+            pending_anchors,
         })
+    }
+
+    /// Hands the vision worker a fresh anchor set; it applies it before the next frame.
+    fn set_anchors(&self, anchors: Vec<SpatialAnchor>) {
+        if let Ok(mut pending) = self.pending_anchors.lock() {
+            *pending = Some(anchors);
+        }
     }
 
     fn status(&self) -> CameraStatus {
@@ -1897,6 +2092,489 @@ impl Drop for EngineCapture {
             dispatch_task.abort();
         }
     }
+}
+
+/// Publishes throttled landmark frames for the live overlay.
+struct HandsFeed {
+    events: EventHub,
+    camera_id: String,
+    last_sent: Option<Instant>,
+    last_seq: u64,
+    showing: bool,
+    empty_since: Option<Instant>,
+}
+
+impl HandsFeed {
+    fn new(events: EventHub, camera_id: String) -> Self {
+        Self {
+            events,
+            camera_id,
+            last_sent: None,
+            last_seq: 0,
+            showing: false,
+            empty_since: None,
+        }
+    }
+
+    fn publish(&mut self, frame: &HandFrame, now: Instant) {
+        self.last_seq = frame.seq;
+        if frame.hands.is_empty() {
+            let empty_since = *self.empty_since.get_or_insert(now);
+            if now.saturating_duration_since(empty_since) >= HANDS_CLEAR_AFTER {
+                self.clear();
+            }
+            return;
+        }
+        self.empty_since = None;
+        if self
+            .last_sent
+            .is_some_and(|at| now.saturating_duration_since(at) < HANDS_EVENT_INTERVAL)
+        {
+            return;
+        }
+        self.last_sent = Some(now);
+        self.showing = true;
+        self.send(hands_event(&self.camera_id, frame));
+    }
+
+    fn clear(&mut self) {
+        if !self.showing {
+            return;
+        }
+        self.showing = false;
+        self.empty_since = None;
+        self.send(HandsEvent {
+            camera_id: self.camera_id.clone(),
+            seq: self.last_seq,
+            hands: Vec::new(),
+            ray: None,
+        });
+    }
+
+    fn send(&self, payload: HandsEvent) {
+        self.events.publish(WsServerMessage::Hands {
+            ts: now_rfc3339(),
+            payload,
+        });
+    }
+}
+
+/// Forwards selector events to the UI, throttling per-frame hover updates.
+struct TargetFeed {
+    tx: tokio::sync::mpsc::UnboundedSender<TargetEvent>,
+    aiming: Option<(AnchorId, Instant)>,
+    last_forwarded: Option<Instant>,
+    selected: Option<TargetEvent>,
+}
+
+impl TargetFeed {
+    fn new(tx: tokio::sync::mpsc::UnboundedSender<TargetEvent>) -> Self {
+        Self {
+            tx,
+            aiming: None,
+            last_forwarded: None,
+            selected: None,
+        }
+    }
+
+    fn push(&mut self, event: TargetEvent, now: Instant) {
+        let forward = match &event {
+            TargetEvent::Hover {
+                anchor_id,
+                name,
+                dwell_progress,
+                ..
+            } => {
+                let changed = self.aim(*anchor_id, now);
+                if changed {
+                    tracing::info!(anchor_id = %anchor_id, name = %name, "pointing at device");
+                }
+                changed || *dwell_progress >= 1.0 || self.due(now)
+            }
+            TargetEvent::Ambiguous { anchor_ids, .. } => {
+                let changed = self.aim(anchor_ids[0], now);
+                if changed {
+                    tracing::info!(first = %anchor_ids[0], second = %anchor_ids[1], "pointing between two devices");
+                }
+                changed || self.due(now)
+            }
+            TargetEvent::Selected {
+                anchor_id, name, ..
+            } => {
+                tracing::info!(anchor_id = %anchor_id, name = %name, "device selected");
+                self.aiming = None;
+                self.selected = Some(event.clone());
+                true
+            }
+            TargetEvent::Cleared {
+                anchor_id, reason, ..
+            } => {
+                tracing::info!(anchor_id = %anchor_id, reason = clear_reason_str(*reason), "device target cleared");
+                self.aiming = None;
+                if self.selected_anchor() == Some(*anchor_id) {
+                    self.selected = None;
+                }
+                true
+            }
+        };
+        if forward {
+            self.last_forwarded = Some(now);
+            let _ = self.tx.send(event);
+        }
+    }
+
+    /// Clears a hover or ambiguity the selector abandoned silently, so the HUD never sticks on it.
+    fn expire_aiming(&mut self, camera_id: CameraId, selected: Option<AnchorId>, now: Instant) {
+        let Some((anchor_id, seen_at)) = self.aiming else {
+            return;
+        };
+        if now.saturating_duration_since(seen_at) < TARGET_AIMING_STALE {
+            return;
+        }
+        self.aiming = None;
+        self.last_forwarded = Some(now);
+        let restore = self
+            .selected
+            .clone()
+            .filter(|_| selected.is_some() && selected == self.selected_anchor());
+        let _ = self.tx.send(restore.unwrap_or(TargetEvent::Cleared {
+            camera_id,
+            anchor_id,
+            reason: TargetClearReason::HandLost,
+        }));
+    }
+
+    fn finish(&mut self, camera_id: CameraId) {
+        if let Some((anchor_id, _)) = self.aiming.take() {
+            let _ = self.tx.send(TargetEvent::Cleared {
+                camera_id,
+                anchor_id,
+                reason: TargetClearReason::Paused,
+            });
+        }
+    }
+
+    fn aim(&mut self, anchor_id: AnchorId, now: Instant) -> bool {
+        let changed = self.aiming.map(|(current, _)| current) != Some(anchor_id);
+        self.aiming = Some((anchor_id, now));
+        changed
+    }
+
+    fn due(&self, now: Instant) -> bool {
+        self.last_forwarded
+            .is_none_or(|at| now.saturating_duration_since(at) >= TARGET_EVENT_INTERVAL)
+    }
+
+    fn selected_anchor(&self) -> Option<AnchorId> {
+        match &self.selected {
+            Some(TargetEvent::Selected { anchor_id, .. }) => Some(*anchor_id),
+            _ => None,
+        }
+    }
+}
+
+/// Periodic log line that shows whether hands and pointing are being detected.
+struct VisionStats {
+    window_start: Instant,
+    frames: u32,
+    hand_frames: u32,
+    point_frames: u32,
+}
+
+impl VisionStats {
+    const fn new(now: Instant) -> Self {
+        Self {
+            window_start: now,
+            frames: 0,
+            hand_frames: 0,
+            point_frames: 0,
+        }
+    }
+
+    fn record(&mut self, frame: &HandFrame, camera_id: CameraId, anchors: usize, now: Instant) {
+        self.frames = self.frames.saturating_add(1);
+        if !frame.hands.is_empty() {
+            self.hand_frames = self.hand_frames.saturating_add(1);
+        }
+        if pointing_hand(&frame.hands).is_some() {
+            self.point_frames = self.point_frames.saturating_add(1);
+        }
+        if now.saturating_duration_since(self.window_start) < VISION_SUMMARY_INTERVAL {
+            return;
+        }
+        if self.hand_frames > 0 {
+            tracing::info!(
+                camera_id = %camera_id,
+                frames = self.frames,
+                hand_frames = self.hand_frames,
+                point_frames = self.point_frames,
+                anchors,
+                "vision summary"
+            );
+        }
+        *self = Self::new(now);
+    }
+}
+
+fn pointing_hand(hands: &[HandObservation]) -> Option<&HandObservation> {
+    hands
+        .iter()
+        .filter(|hand| hand.presence >= POINT_PRESENCE_MIN && is_point_pose(hand))
+        .max_by(|a, b| a.presence.total_cmp(&b.presence))
+}
+
+fn hands_event(camera_id: &str, frame: &HandFrame) -> HandsEvent {
+    let ray = pointing_hand(&frame.hands).map(|hand| {
+        let [origin_x, origin_y, _] = hand.image[5];
+        let [tip_x, tip_y, _] = hand.image[8];
+        RayEvent {
+            origin2d: [origin_x, origin_y],
+            tip2d: [
+                tip_x + (tip_x - origin_x) * 1.5,
+                tip_y + (tip_y - origin_y) * 1.5,
+            ],
+            model: "finger".to_owned(),
+        }
+    });
+    HandsEvent {
+        camera_id: camera_id.to_owned(),
+        seq: frame.seq,
+        hands: frame
+            .hands
+            .iter()
+            .map(|hand| HandEvent {
+                track_id: hand.track_id,
+                hand: match hand.hand {
+                    Handedness::Left => "left",
+                    Handedness::Right => "right",
+                }
+                .to_owned(),
+                landmarks: hand.image.to_vec(),
+                bbox: [hand.bbox.x, hand.bbox.y, hand.bbox.w, hand.bbox.h],
+            })
+            .collect(),
+        ray,
+    }
+}
+
+async fn target_message(event: TargetEvent, dispatcher: Option<&Dispatcher>) -> WsServerMessage {
+    let ts = now_rfc3339();
+    match event {
+        TargetEvent::Hover {
+            camera_id,
+            anchor_id,
+            name,
+            score,
+            dwell_progress,
+            runner_up,
+        } => WsServerMessage::TargetHover {
+            ts,
+            payload: TargetHoverEvent {
+                camera_id: camera_id.to_string(),
+                anchor_id: anchor_id.to_string(),
+                name,
+                score: f64::from(score),
+                dwell_progress: f64::from(dwell_progress),
+                runner_up: runner_up.map(|id| id.to_string()),
+            },
+        },
+        TargetEvent::Selected {
+            camera_id,
+            anchor_id,
+            name,
+            domain,
+            expires_at_ms,
+        } => {
+            let verbs = match dispatcher {
+                Some(dispatcher) => dispatcher
+                    .anchor_verbs(anchor_id)
+                    .await
+                    .iter()
+                    .map(|(gesture_id, action)| VerbBinding {
+                        gesture_id: gesture_id.to_string(),
+                        label: format!("{} → {}", gesture_label(gesture_id), action_label(action)),
+                    })
+                    .collect(),
+                None => Vec::new(),
+            };
+            WsServerMessage::TargetSelected {
+                ts,
+                payload: TargetSelectedEvent {
+                    camera_id: camera_id.to_string(),
+                    anchor_id: anchor_id.to_string(),
+                    name,
+                    domain,
+                    expires_at: rfc3339_from_ms(expires_at_ms),
+                    verbs,
+                },
+            }
+        }
+        TargetEvent::Cleared {
+            camera_id,
+            anchor_id,
+            reason,
+        } => WsServerMessage::TargetCleared {
+            ts,
+            payload: TargetClearedEvent {
+                camera_id: camera_id.to_string(),
+                anchor_id: anchor_id.to_string(),
+                reason: clear_reason_str(reason).to_owned(),
+            },
+        },
+        TargetEvent::Ambiguous {
+            camera_id,
+            anchor_ids,
+        } => WsServerMessage::TargetAmbiguous {
+            ts,
+            payload: TargetAmbiguousEvent {
+                camera_id: camera_id.to_string(),
+                anchor_ids: anchor_ids.iter().map(ToString::to_string).collect(),
+            },
+        },
+    }
+}
+
+const fn clear_reason_str(reason: TargetClearReason) -> &'static str {
+    match reason {
+        TargetClearReason::Timeout => "timeout",
+        TargetClearReason::HandLost => "hand_lost",
+        TargetClearReason::Reselected => "reselected",
+        TargetClearReason::Paused => "paused",
+    }
+}
+
+fn gesture_label(gesture_id: &GestureId) -> String {
+    use flick_core::BuiltinGesture as Builtin;
+    let GestureId::Builtin(builtin) = gesture_id else {
+        return "Custom gesture".to_owned();
+    };
+    match builtin {
+        Builtin::ClosedFist => "Fist",
+        Builtin::OpenPalm => "Open palm",
+        Builtin::PointingUp => "Point up",
+        Builtin::ThumbUp => "Thumbs up",
+        Builtin::ThumbDown => "Thumbs down",
+        Builtin::Victory => "Victory",
+        Builtin::ILoveYou => "I love you",
+        Builtin::Point => "Point",
+        Builtin::SwipeLeft => "Swipe left",
+        Builtin::SwipeRight => "Swipe right",
+        Builtin::SwipeUp => "Swipe up",
+        Builtin::SwipeDown => "Swipe down",
+        Builtin::PinchDial => "Pinch dial",
+        Builtin::CircleCw => "Circle clockwise",
+        Builtin::CircleCcw => "Circle counter-clockwise",
+        Builtin::CircleAny => "Circle",
+        Builtin::TwoHandSeparate => "Two hands apart",
+    }
+    .to_owned()
+}
+
+fn action_label(action: &Action) -> String {
+    match action {
+        Action::Verb { verb, level } => match verb {
+            Verb::Up => "Up".to_owned(),
+            Verb::Down => "Down".to_owned(),
+            Verb::On => "On".to_owned(),
+            Verb::Off => "Off".to_owned(),
+            Verb::Stop => "Stop".to_owned(),
+            Verb::Toggle => "Toggle".to_owned(),
+            Verb::LevelSet => format!("Speed {}", level.unwrap_or(1)),
+        },
+        Action::CallService {
+            domain, service, ..
+        } => format!("{domain}.{service}"),
+        Action::Dial { .. } => "Dial".to_owned(),
+    }
+}
+
+fn log_dispatch(event: &GestureEvent, report: &DispatchReport) {
+    if event.phase != GesturePhase::Fired {
+        return;
+    }
+    let outcomes = report
+        .outcomes
+        .iter()
+        .map(|outcome| format!("{:?}", outcome.status))
+        .collect::<Vec<_>>();
+    let suppressed = report
+        .suppressions
+        .iter()
+        .map(|suppression| format!("{:?}", suppression.reason))
+        .collect::<Vec<_>>();
+    tracing::info!(
+        gesture = %event.gesture_id,
+        target = %event.target.map_or_else(|| "none".to_owned(), |id| id.to_string()),
+        confidence = event.confidence,
+        outcomes = ?outcomes,
+        suppressed = ?suppressed,
+        "gesture fired"
+    );
+}
+
+/// Collects filtered pointing rays from the running camera for one teach spot.
+async fn sample_pointing_rays(
+    latest_hands: &std::sync::Mutex<Option<HandFrame>>,
+    intrinsics: CameraIntrinsics,
+) -> Vec<PointingRay> {
+    let mut estimator = RayEstimator::new(intrinsics, TargetSelectorSettings::default().ray);
+    let mut rays = Vec::new();
+    let mut last_seq = None;
+    let deadline = Instant::now() + TEACH_SPOT_SAMPLE_WINDOW;
+    while Instant::now() < deadline {
+        let frame = latest_hands.lock().ok().and_then(|latest| latest.clone());
+        if let Some(frame) = frame
+            && last_seq != Some(frame.seq)
+        {
+            last_seq = Some(frame.seq);
+            if let Some(hand) = pointing_hand(&frame.hands)
+                && let Ok(ray) = estimator.estimate(hand, None, frame.captured_at)
+            {
+                rays.push(ray);
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(33)).await;
+    }
+    rays
+}
+
+/// Averages the settled half of the samples and reports the p90 angular spread in degrees.
+fn settle_rays(rays: &[PointingRay]) -> Option<(PointingRay, f32)> {
+    let settled = &rays[rays.len() / 2..];
+    let last = settled.last()?;
+    let count = settled.len() as f32;
+    let mut origin = [0.0_f32; 3];
+    let mut direction = [0.0_f32; 3];
+    for ray in settled {
+        for axis in 0..3 {
+            origin[axis] += ray.origin[axis] / count;
+            direction[axis] += ray.direction[axis];
+        }
+    }
+    let norm = direction
+        .iter()
+        .map(|value| value * value)
+        .sum::<f32>()
+        .sqrt();
+    if norm <= f32::EPSILON {
+        return None;
+    }
+    let direction = direction.map(|value| value / norm);
+    let mut spread = settled
+        .iter()
+        .map(|ray| {
+            let dot = (0..3)
+                .map(|axis| ray.direction[axis] * direction[axis])
+                .sum::<f32>();
+            dot.clamp(-1.0, 1.0).acos().to_degrees()
+        })
+        .collect::<Vec<_>>();
+    spread.sort_by(f32::total_cmp);
+    let p90 = spread[((spread.len() - 1) * 9) / 10];
+    let mut ray = last.clone();
+    ray.origin = origin;
+    ray.direction = direction;
+    Some((ray, p90))
 }
 
 #[async_trait]
@@ -2197,17 +2875,21 @@ impl EngineControl for EngineApp {
 impl TeachGateway for EngineApp {
     async fn start(&self, request: TeachRequest) -> Result<ApiTeachSession, ApiProblem> {
         let target = teach_target_from_value(&request.target)?;
-        let anchor_id = request
+        let replaces = request
             .anchor_id
             .as_deref()
             .map(AnchorId::from_str)
             .transpose()
-            .map_err(|err| ApiProblem::validation("bad_anchor_id", err.to_string()))?
-            .unwrap_or_else(AnchorId::new);
+            .map_err(|err| ApiProblem::validation("bad_anchor_id", err.to_string()))?;
         let domain = teach_domain(&target);
         let name = teach_name(&target);
-        let spatial =
-            SpatialTeachSession::new(anchor_id, name, target, domain, DEFAULT_ESTIMATOR_VERSION);
+        let spatial = SpatialTeachSession::new(
+            replaces.unwrap_or_else(AnchorId::new),
+            name,
+            target,
+            domain,
+            DEFAULT_ESTIMATOR_VERSION,
+        );
         let session = ApiTeachSession {
             id: flick_core::TeachSessionId::new().to_string(),
             camera_id: request.camera_id,
@@ -2220,6 +2902,7 @@ impl TeachGateway for EngineApp {
             EngineTeachSession {
                 camera_id: session.camera_id.clone(),
                 target: session.target.clone(),
+                replaces,
                 levels: Vec::new(),
                 spatial,
             },
@@ -2228,30 +2911,108 @@ impl TeachGateway for EngineApp {
     }
 
     async fn spot(&self, session_id: &str) -> Result<TeachSpotResponse, ApiProblem> {
-        let mut sessions = self.teach_sessions.lock().await;
-        let session = sessions.get_mut(session_id).ok_or_else(|| {
-            ApiProblem::validation("teach_session_not_found", "teach session not found")
-        })?;
-        let spot_index = u32::try_from(session.spatial.observations().len() + 1)
-            .map_err(|err| ApiProblem::validation("too_many_spots", err.to_string()))?;
-        let observation = TeachObservation {
-            spot_index,
-            ray: PointingRay::new([0.0, 0.0, 0.0], [0.0, -0.1, 1.0], RaySource::FingerOnly),
-            frames: 1,
-            ray_jitter_deg: 0.0,
+        let camera_id = self
+            .teach_sessions
+            .lock()
+            .await
+            .get(session_id)
+            .map(|session| session.camera_id.clone())
+            .ok_or_else(|| {
+                ApiProblem::validation("teach_session_not_found", "teach session not found")
+            })?;
+        let live = {
+            let capture = self.capture.lock().await;
+            capture
+                .as_ref()
+                .filter(|capture| capture.source_info.id.to_string() == camera_id)
+                .map(|capture| {
+                    (
+                        Arc::clone(&capture.latest_hands),
+                        CameraIntrinsics::sane_default(
+                            capture.source_info.width,
+                            capture.source_info.height,
+                        ),
+                    )
+                })
         };
-        session.spatial.add_observation(observation);
+        // Fake-landmark dev engines have no live camera; replayed fixtures stand in for it.
+        if live.is_none() && self.runtime.fake_landmarks.is_none() {
+            return Err(ApiProblem::validation(
+                "camera_not_running",
+                "Start this camera before capturing a spot",
+            ));
+        }
+        self.publish_teach_progress(session_id, "capturing", None, None, None)
+            .await;
+        let rays = match live {
+            Some((latest_hands, intrinsics)) => {
+                sample_pointing_rays(&latest_hands, intrinsics).await
+            }
+            None => self.replayed_pointing_rays().await,
+        };
+        let settled = if rays.len() >= TEACH_SPOT_MIN_RAYS {
+            settle_rays(&rays)
+        } else {
+            None
+        };
+        let Some((ray, jitter_deg)) = settled else {
+            let hint = "Point at the device with your index finger so the camera can see your hand";
+            tracing::info!(
+                session_id,
+                rays = rays.len(),
+                "teach spot found no steady pointing hand"
+            );
+            self.publish_teach_progress(session_id, "error", None, None, Some(hint))
+                .await;
+            return Err(ApiProblem::validation("no_pointing_hand", hint));
+        };
+        let (spot_index, preview) = {
+            let mut sessions = self.teach_sessions.lock().await;
+            let session = sessions.get_mut(session_id).ok_or_else(|| {
+                ApiProblem::validation("teach_session_not_found", "teach session not found")
+            })?;
+            let spot_index = u32::try_from(session.spatial.observations().len() + 1)
+                .map_err(|err| ApiProblem::validation("too_many_spots", err.to_string()))?;
+            session.spatial.add_observation(TeachObservation {
+                spot_index,
+                ray,
+                frames: u32::try_from(rays.len()).unwrap_or(u32::MAX),
+                ray_jitter_deg: jitter_deg,
+            });
+            let preview = session
+                .spatial
+                .finish(&[])
+                .map_err(|err| ApiProblem::validation("teach_failed", err.to_string()))?;
+            (spot_index, preview)
+        };
+        let kind = match preview.anchor.geometry {
+            AnchorGeometry::Point3d { .. } => "point3d",
+            AnchorGeometry::Direction { .. } => "direction",
+        };
+        let confidence = f64::from(preview.quality.confidence);
+        tracing::info!(
+            session_id,
+            spot_index,
+            rays = rays.len(),
+            jitter_deg,
+            kind,
+            confidence,
+            "teach spot captured"
+        );
+        self.publish_teach_progress(
+            session_id,
+            "captured",
+            Some(f64::from(jitter_deg)),
+            Some(confidence),
+            None,
+        )
+        .await;
         Ok(TeachSpotResponse {
             spot_index,
-            ray_jitter_deg: 0.0,
-            confidence: if spot_index >= 2 { 0.9 } else { 0.7 },
-            kind: if spot_index >= 2 {
-                "point3d"
-            } else {
-                "direction"
-            }
-            .to_owned(),
-            residual_deg: None,
+            ray_jitter_deg: f64::from(jitter_deg),
+            confidence,
+            kind: kind.to_owned(),
+            residual_deg: (spot_index >= 2).then(|| f64::from(preview.quality.residual_deg)),
         })
     }
 
@@ -2362,24 +3123,49 @@ impl TeachGateway for EngineApp {
             Err(err) => return Err(ApiProblem::validation("bad_camera_id", err.to_string())),
         };
         let place = self.ensure_place(camera_id)?;
-        let existing = self
+        let records = self
             .targeting
             .try_anchors_for_place(place.id)
-            .map_err(store_problem)?
+            .map_err(store_problem)?;
+        // Re-teaching a device replaces its anchor in place, so its mappings keep working.
+        let target = teach_target_from_value(&session.target)?;
+        let replaced = session
+            .replaces
+            .and_then(|id| records.iter().find(|record| record.id == id))
+            .or_else(|| records.iter().find(|record| record.target == target))
+            .cloned();
+        let existing = records
             .iter()
+            .filter(|record| replaced.as_ref().is_none_or(|old| old.id != record.id))
             .filter_map(anchor_record_to_anchor)
             .collect::<Vec<_>>();
         let mut outcome = session
             .spatial
             .finish(&existing)
             .map_err(|err| ApiProblem::validation("teach_failed", err.to_string()))?;
+        if let Some(old) = &replaced {
+            outcome.anchor.id = old.id;
+            outcome.anchor.name.clone_from(&old.name);
+            outcome.anchor.verb_params = old.verb_params.clone();
+        }
         if let Some(name) = request.name {
             outcome.anchor.name = name;
         }
         if !session.levels.is_empty() {
             outcome.anchor.verb_params = json!({ "levels": session.levels });
         }
-        let record = anchor_to_record(place.id, &outcome.anchor, false, false, now_ms());
+        let mut record = anchor_to_record(
+            place.id,
+            &outcome.anchor,
+            replaced.as_ref().is_some_and(|old| old.sensitive),
+            replaced.as_ref().is_some_and(|old| old.sensitive_ack),
+            now_ms(),
+        );
+        if let Some(old) = &replaced {
+            record.created_at = old.created_at;
+            record.last_used_at = old.last_used_at;
+            tracing::info!(anchor_id = %old.id, name = %record.name, "re-taught device anchor");
+        }
         self.targeting
             .try_upsert_anchor(&record)
             .map_err(store_problem)?;
@@ -2516,6 +3302,7 @@ impl TeachGateway for EngineApp {
                 .try_upsert_anchor(&updated)
                 .map_err(store_problem)?;
         }
+        self.refresh_selector_anchors().await;
         Ok(RealignCommitResponse {
             applied: true,
             residual_deg: f64::from(result.residual_deg),
@@ -2882,6 +3669,7 @@ impl ConfigGateway for EngineApp {
         if let Some(dispatcher) = self.dispatcher.lock().await.clone() {
             dispatcher.set_anchors(dispatcher_anchors).await;
         }
+        self.refresh_selector_anchors().await;
         Ok(())
     }
 }
