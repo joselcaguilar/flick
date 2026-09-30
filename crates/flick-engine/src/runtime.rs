@@ -98,8 +98,6 @@ pub async fn serve(runtime: RuntimeConfig, token: String) -> anyhow::Result<()> 
         Arc::new_cyclic(|weak| EngineApp::new(runtime.clone(), Arc::clone(&store), weak.clone()));
     if runtime.mock_ha {
         start_mock_ha(&app).await?;
-    } else {
-        app.restore_ha_connection().await;
     }
 
     let gateways = ApiGateways {
@@ -146,6 +144,9 @@ pub async fn serve(runtime: RuntimeConfig, token: String) -> anyhow::Result<()> 
         .anchors(dispatcher_anchors)
         .build();
     app.set_dispatcher(dispatcher).await;
+    if !runtime.mock_ha {
+        app.spawn_ha_restore();
+    }
     app.configure_fake_landmarks().await;
     app.spawn_pause_timer();
     app.spawn_camera_autostart(onboarding_completed).await;
@@ -302,6 +303,7 @@ async fn start_mock_ha(app: &Arc<EngineApp>) -> anyhow::Result<HaClient> {
             ..HaInstance::default()
         }),
         snapshot,
+        None,
     )
     .await;
     app.set_mock_ha_handle(handle).await;
@@ -1055,6 +1057,21 @@ struct PauseState {
 /// Keychain account holding the mTLS client certificate and key as PEM.
 const HA_CLIENT_CERT_ACCOUNT: &str = "ha:client-certificate";
 
+/// Reads the mTLS client identity from the keychain. An unreadable PEM counts
+/// as no certificate; a keychain error is returned so a later attempt retries.
+fn read_client_identity() -> Result<Option<Arc<ClientIdentity>>, flick_ha::HaError> {
+    let Some(pem) = KeyringSecretStore::new().get(HA_CLIENT_CERT_ACCOUNT)? else {
+        return Ok(None);
+    };
+    match ClientIdentity::from_pem(pem.as_bytes()) {
+        Ok(identity) => Ok(Some(Arc::new(identity))),
+        Err(err) => {
+            tracing::warn!(error = %err, "stored client certificate is unreadable");
+            Ok(None)
+        }
+    }
+}
+
 /// mTLS client identity, read from the keychain on first use.
 enum ClientIdentitySlot {
     Unloaded,
@@ -1085,6 +1102,14 @@ struct EngineApp {
     network_tx: watch::Sender<Option<String>>,
     /// Bumped whenever the HA client is replaced, so stale sync tasks stop.
     ha_generation: std::sync::atomic::AtomicU64,
+    /// Bumped when a restore starts, a connection is installed, or HA is
+    /// disconnected. A background restore installs its client only while its
+    /// epoch is the latest, so it can't undo what the user did while it
+    /// waited on the keychain.
+    ha_connect_epoch: std::sync::atomic::AtomicU64,
+    /// Epoch of the startup restore while it runs (0 = none), so status reads
+    /// "connecting" until it finishes or something newer supersedes it.
+    ha_restore_epoch: std::sync::atomic::AtomicU64,
     /// mTLS client certificate presented when a server asks for one.
     client_identity: std::sync::Mutex<ClientIdentitySlot>,
     weak_self: std::sync::Weak<EngineApp>,
@@ -1113,6 +1138,8 @@ impl EngineApp {
             replay_frames: Arc::default(),
             network_tx: watch::channel(None).0,
             ha_generation: std::sync::atomic::AtomicU64::new(0),
+            ha_connect_epoch: std::sync::atomic::AtomicU64::new(0),
+            ha_restore_epoch: std::sync::atomic::AtomicU64::new(0),
             client_identity: std::sync::Mutex::new(ClientIdentitySlot::Unloaded),
             weak_self,
         }
@@ -1135,12 +1162,40 @@ impl EngineApp {
         *self.events.lock().await = Some(events);
     }
 
+    fn begin_ha_connect(&self) -> u64 {
+        self.ha_connect_epoch
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            + 1
+    }
+
+    fn is_latest_ha_connect(&self, epoch: u64) -> bool {
+        self.ha_connect_epoch
+            .load(std::sync::atomic::Ordering::SeqCst)
+            == epoch
+    }
+
+    /// Installs the client. With `restore_epoch` it is a background restore,
+    /// dropped if a newer connect or a disconnect happened meanwhile; without
+    /// one it is the newest connection and supersedes restores in flight.
     async fn set_ha_client(
         &self,
         client: HaClient,
         instance: Option<HaInstance>,
         snapshot: RegistrySnapshot,
+        restore_epoch: Option<u64>,
     ) {
+        // Held until installed, so `delete` can't interleave.
+        let mut current = self.ha_client.lock().await;
+        match restore_epoch {
+            Some(epoch) if !self.is_latest_ha_connect(epoch) => {
+                tracing::info!("dropping a superseded Home Assistant restore");
+                return;
+            }
+            Some(_) => {}
+            None => {
+                self.begin_ha_connect();
+            }
+        }
         if let Some(dispatcher) = self.dispatcher.lock().await.clone() {
             dispatcher
                 .set_sink(
@@ -1154,7 +1209,7 @@ impl EngineApp {
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
             + 1;
         let status = client.status();
-        *self.ha_client.lock().await = Some(client);
+        *current = Some(client);
         *self.ha_instance.lock().await = instance;
         *self.registry.lock().await = snapshot;
         self.spawn_ha_registry_sync(generation, status);
@@ -1303,27 +1358,70 @@ impl EngineApp {
         }
     }
 
-    async fn restore_ha_connection(&self) {
-        match load_default_ha_instance(&self.store) {
-            Ok(Some(saved)) => {
-                let secrets = KeyringSecretStore::new();
-                match secrets.get(&saved.keychain_ref) {
-                    Ok(Some(token)) => {
-                        if let Err(err) = self
-                            .connect_saved_ha(saved.instance, token, saved.cert_sha256)
-                            .await
-                        {
-                            tracing::warn!(error = %err, "failed to restore Home Assistant connection");
-                        }
-                    }
-                    Ok(None) => {
-                        tracing::warn!("stored Home Assistant token is missing from keychain")
-                    }
-                    Err(err) => tracing::warn!(error = %err, "failed to read Home Assistant token"),
-                }
+    /// Restores the saved Home Assistant connection in the background, so a
+    /// slow network or a keychain prompt can't hold up the desktop's ready
+    /// handshake, which restarts the engine after 10 s.
+    fn spawn_ha_restore(self: &Arc<Self>) {
+        let epoch = self.begin_ha_connect();
+        self.ha_restore_epoch
+            .store(epoch, std::sync::atomic::Ordering::SeqCst);
+        let app = Arc::clone(self);
+        tokio::spawn(async move {
+            app.restore_ha_connection(epoch).await;
+            app.ha_restore_epoch
+                .store(0, std::sync::atomic::Ordering::SeqCst);
+        });
+    }
+
+    /// Reconnects the saved instance; `epoch` is from `begin_ha_connect`.
+    async fn restore_ha_connection(&self, epoch: u64) {
+        let saved = match load_default_ha_instance(&self.store) {
+            Ok(Some(saved)) => saved,
+            Ok(None) => return,
+            Err(err) => {
+                tracing::warn!(error = %err, "failed to load Home Assistant instance");
+                return;
             }
-            Ok(None) => {}
-            Err(err) => tracing::warn!(error = %err, "failed to load Home Assistant instance"),
+        };
+        {
+            let mut instance = self.ha_instance.lock().await;
+            if instance.is_none() && self.is_latest_ha_connect(epoch) {
+                *instance = Some(saved.instance.clone());
+            }
+        }
+        // Keychain reads block on an access prompt, e.g. after the app is re-signed.
+        let keychain_ref = saved.keychain_ref.clone();
+        let token =
+            tokio::task::spawn_blocking(move || KeyringSecretStore::new().get(&keychain_ref)).await;
+        let token = match token {
+            Ok(Ok(Some(token))) => token,
+            Ok(Ok(None)) => {
+                tracing::warn!("stored Home Assistant token is missing from keychain");
+                return;
+            }
+            Ok(Err(err)) => {
+                tracing::warn!(error = %err, "failed to read Home Assistant token");
+                return;
+            }
+            Err(err) => {
+                tracing::warn!(error = %err, "Home Assistant token read task failed");
+                return;
+            }
+        };
+        if !self.is_latest_ha_connect(epoch) {
+            return;
+        }
+        self.preload_client_identity().await;
+        if let Err(err) = self
+            .connect_saved_ha(saved.instance, token, saved.cert_sha256, Some(epoch))
+            .await
+        {
+            tracing::warn!(error = %err, "failed to restore Home Assistant connection");
+            return;
+        }
+        // Anchors built before the registry arrived carry placeholder entity state.
+        if let Err(err) = self.reload_dispatcher_anchors_from_store().await {
+            tracing::warn!(error = ?err, "failed to reload anchors after restoring Home Assistant");
         }
     }
 
@@ -1340,23 +1438,46 @@ impl EngineApp {
             *slot = ClientIdentitySlot::Loaded(None);
             return None;
         }
-        let identity = match KeyringSecretStore::new().get(HA_CLIENT_CERT_ACCOUNT) {
-            Ok(Some(pem)) => match ClientIdentity::from_pem(pem.as_bytes()) {
-                Ok(identity) => Some(Arc::new(identity)),
-                Err(err) => {
-                    tracing::warn!(error = %err, "stored client certificate is unreadable");
-                    None
-                }
-            },
-            Ok(None) => None,
+        match read_client_identity() {
+            Ok(identity) => {
+                *slot = ClientIdentitySlot::Loaded(identity.clone());
+                identity
+            }
             Err(err) => {
                 // Leave it unloaded so a later attempt can read it.
                 tracing::warn!(error = %err, "failed to read client certificate");
-                return None;
+                None
             }
-        };
-        *slot = ClientIdentitySlot::Loaded(identity.clone());
-        identity
+        }
+    }
+
+    /// Loads the client identity on a blocking thread, so a keychain prompt
+    /// doesn't stall an async worker.
+    async fn preload_client_identity(&self) {
+        let unloaded = matches!(
+            *self
+                .client_identity
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+            ClientIdentitySlot::Unloaded
+        );
+        if self.runtime.mock_ha || !unloaded {
+            return;
+        }
+        match tokio::task::spawn_blocking(read_client_identity).await {
+            Ok(Ok(identity)) => {
+                let mut slot = self
+                    .client_identity
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                // A certificate imported meanwhile wins.
+                if matches!(*slot, ClientIdentitySlot::Unloaded) {
+                    *slot = ClientIdentitySlot::Loaded(identity);
+                }
+            }
+            Ok(Err(err)) => tracing::warn!(error = %err, "failed to read client certificate"),
+            Err(err) => tracing::warn!(error = %err, "client certificate read task failed"),
+        }
     }
 
     fn set_cached_client_identity(&self, identity: Option<Arc<ClientIdentity>>) {
@@ -1380,7 +1501,8 @@ impl EngineApp {
             return;
         }
         if let Some(app) = self.weak_self.upgrade() {
-            tokio::spawn(async move { app.restore_ha_connection().await });
+            let epoch = app.begin_ha_connect();
+            tokio::spawn(async move { app.restore_ha_connection(epoch).await });
         }
     }
 
@@ -1410,6 +1532,7 @@ impl EngineApp {
         instance: HaInstance,
         token: String,
         cert_sha256: Option<String>,
+        restore_epoch: Option<u64>,
     ) -> anyhow::Result<()> {
         let config = self.ha_config(&instance, token, cert_sha256)?;
         let client = HaClient::connect(config).await?;
@@ -1426,7 +1549,8 @@ impl EngineApp {
                 self.registry.lock().await.clone()
             }
         };
-        self.set_ha_client(client, Some(instance), snapshot).await;
+        self.set_ha_client(client, Some(instance), snapshot, restore_epoch)
+            .await;
         Ok(())
     }
 
@@ -1801,8 +1925,17 @@ impl EngineApp {
         let instance = self.ha_instance.lock().await.clone();
         let network_ssid = self.network_tx.borrow().clone();
         let Some(client) = client else {
+            let restore_epoch = self
+                .ha_restore_epoch
+                .load(std::sync::atomic::Ordering::SeqCst);
+            let restoring = restore_epoch != 0 && self.is_latest_ha_connect(restore_epoch);
             return ApiHaStatus {
-                state: "disconnected".to_owned(),
+                state: if restoring {
+                    "connecting"
+                } else {
+                    "disconnected"
+                }
+                .to_owned(),
                 instance,
                 network_ssid,
                 ..ApiHaStatus::default()
@@ -3434,7 +3567,7 @@ impl HaGateway for EngineApp {
             )
             .map_err(|err| ApiProblem::validation("ha_store_failed", err.to_string()))?;
         }
-        self.set_ha_client(client, Some(instance.clone()), snapshot)
+        self.set_ha_client(client, Some(instance.clone()), snapshot, None)
             .await;
         Ok(instance)
     }
@@ -3483,7 +3616,7 @@ impl HaGateway for EngineApp {
             saved.cert_sha256.as_deref(),
         )
         .map_err(|err| ApiProblem::validation("ha_store_failed", err.to_string()))?;
-        self.connect_saved_ha(instance.clone(), token, saved.cert_sha256)
+        self.connect_saved_ha(instance.clone(), token, saved.cert_sha256, None)
             .await
             .map_err(|err| ApiProblem::validation("ha_connect_failed", format!("{err:#}")))?;
         Ok(instance)
@@ -3538,9 +3671,12 @@ impl HaGateway for EngineApp {
     }
 
     async fn delete(&self) -> Result<(), ApiProblem> {
+        // Held throughout, so a restore in flight can't reinstall a client.
+        let mut client = self.ha_client.lock().await;
+        self.begin_ha_connect();
         self.ha_generation
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        *self.ha_client.lock().await = None;
+        *client = None;
         *self.ha_instance.lock().await = None;
         *self.registry.lock().await = RegistrySnapshot::default();
         if let Some(dispatcher) = self.dispatcher.lock().await.clone() {

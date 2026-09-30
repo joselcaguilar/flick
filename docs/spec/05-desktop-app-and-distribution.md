@@ -25,6 +25,9 @@ flowchart LR
   1. The shell generates a 256-bit random token.
   2. It spawns `flick-engine --sidecar --port 0 --data-dir <app data>` and writes the token as the **first stdin line** (never in argv/env).
   3. The engine binds `127.0.0.1:0` and prints one JSON line on stdout: `{"event":"ready","port":53211,"version":"0.1.0"}`.
+     - The shell waits at most 10 s for this line. Nothing that can block goes before it.
+       The saved HA connection is restored **in the background after** the ready line, and `ha.status` reads `connecting` meanwhile.
+       Its keychain reads can show a macOS access prompt (every ad-hoc re-signed local build), and connecting can wait on the network.
   4. The shell stores `{base_url, token}` and exposes them to webviews via the IPC command `engine_endpoint`.
 - **Supervisor:**
   - If `/health` fails 3 times or the process exits, restart with backoff 0.5 s → 10 s.
