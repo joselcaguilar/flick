@@ -34,6 +34,8 @@ flowchart LR
   - The UI shows a banner "Engine restarting…".
   - After 5 crashes in 2 min, stop and show "Flick engine keeps crashing". Offer a diagnostics bundle.
 - **Shutdown:** the shell sends `SIGTERM` (Windows: `CTRL_BREAK`/job-object kill) and waits 3 s. The engine closes cameras and the HA socket cleanly.
+  - The engine also stops when its stdin closes, so it never outlives a shell that crashed or was force-quit.
+  - Blocking work gets at most 2 s and is then left behind. A keychain or camera prompt nobody answered can't keep a stopped engine alive.
 
 ### 1.1 Tauri IPC commands (keep minimal; everything else goes through the engine HTTP API)
 

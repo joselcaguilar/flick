@@ -1,4 +1,4 @@
-use std::{env, io, path::PathBuf};
+use std::{env, io, path::PathBuf, time::Duration};
 
 use clap::{Parser, Subcommand};
 use flick_engine::{bench, config, logging, runtime};
@@ -42,8 +42,22 @@ enum Commands {
     },
 }
 
-#[tokio::main(flavor = "multi_thread", worker_threads = 2)]
-async fn main() -> anyhow::Result<()> {
+/// How long shutdown waits for blocking work before leaving it behind.
+const SHUTDOWN_GRACE: Duration = Duration::from_secs(2);
+
+fn main() -> anyhow::Result<()> {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()?;
+    let result = runtime.block_on(run());
+    // A blocking call such as a keychain read waiting on an unanswered macOS
+    // prompt must not keep the engine alive once it has been told to stop.
+    runtime.shutdown_timeout(SHUTDOWN_GRACE);
+    result
+}
+
+async fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let overrides = config::CliOverrides {
         sidecar: cli.sidecar,
