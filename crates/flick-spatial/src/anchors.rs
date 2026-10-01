@@ -9,6 +9,12 @@ use crate::{
 };
 
 const PARALLEL_FALLBACK_DEG: f32 = 5.0;
+/// Rays from one seat cross near the hand, not at the device (spec 09 §4.1).
+const MIN_TRIANGULATION_BASELINE_M: f32 = 0.5;
+/// A triangulated device must sit at least this far ahead of every teaching origin.
+const MIN_TARGET_DISTANCE_M: f32 = 0.3;
+/// Rays that miss their closest point by more than this never converged on one device.
+const MAX_TRIANGULATION_RESIDUAL_DEG: f32 = 10.0;
 const DISTINCTIVENESS_WARN_DEG: f32 = 15.0;
 
 /// Opaque `anchors.verb_params` JSON interpreted by `flick-ha` verb resolution.
@@ -171,7 +177,8 @@ pub struct AnchorQuality {
     pub residual_deg: f32,
     /// Maximum pairwise teaching ray angle in degrees.
     pub max_ray_separation_deg: f32,
-    /// Whether the geometry fell back to `direction` because rays were near-parallel.
+    /// Whether the geometry fell back to `direction` because the rays could not triangulate a
+    /// device (taught from one seat, near-parallel, or never converged ahead of the user).
     pub direction_fallback: bool,
 }
 
@@ -312,11 +319,16 @@ fn build_anchor(
         return Err(TeachingError::NoObservations);
     }
     let max_sep = max_pairwise_ray_angle(observations);
-    let (geometry, quality) = if observations.len() >= 2 && max_sep >= PARALLEL_FALLBACK_DEG {
+    let triangulated = if observations.len() >= 2
+        && max_sep >= PARALLEL_FALLBACK_DEG
+        && max_origin_baseline(observations) >= MIN_TRIANGULATION_BASELINE_M
+    {
         triangulate(observations)?
     } else {
-        direction_anchor(observations, max_sep)
+        None
     };
+    let (geometry, quality) =
+        triangulated.unwrap_or_else(|| direction_anchor(observations, max_sep));
     let anchor = Anchor {
         id,
         name,
@@ -339,9 +351,11 @@ fn build_anchor(
     })
 }
 
+/// Returns `None` when the rays never converged ahead of the user, so the caller falls back to
+/// a direction anchor instead of storing a point at the hand.
 fn triangulate(
     observations: &[TeachObservation],
-) -> Result<(AnchorGeometry, AnchorQuality), TeachingError> {
+) -> Result<Option<(AnchorGeometry, AnchorQuality)>, TeachingError> {
     let mut a = Mat3::zeros();
     let mut b = Vec3::zeros();
     for obs in observations {
@@ -354,8 +368,15 @@ fn triangulate(
     let Some(position) = a.lu().solve(&b) else {
         return Err(TeachingError::SingularTriangulation);
     };
-    let residual_m = mean_ray_distance(position, observations);
+    let ahead_of_every_origin = observations.iter().all(|obs| {
+        unit_or_z(v3(obs.ray.direction)).dot(&(position - v3(obs.ray.origin)))
+            >= MIN_TARGET_DISTANCE_M
+    });
     let residual_deg = mean_angular_residual(position, observations);
+    if !ahead_of_every_origin || residual_deg > MAX_TRIANGULATION_RESIDUAL_DEG {
+        return Ok(None);
+    }
+    let residual_m = mean_ray_distance(position, observations);
     let avg_distance = observations
         .iter()
         .map(|obs| (position - v3(obs.ray.origin)).norm())
@@ -370,27 +391,31 @@ fn triangulate(
         max_ray_separation_deg: max_pairwise_ray_angle(observations),
         direction_fallback: false,
     };
-    Ok((
+    Ok(Some((
         AnchorGeometry::Point3d {
             position: a3(position),
             covariance: mat_to_array(covariance),
         },
         quality,
-    ))
+    )))
 }
 
 fn direction_anchor(
     observations: &[TeachObservation],
     max_sep: f32,
 ) -> (AnchorGeometry, AnchorQuality) {
+    // Inverse-variance weights keep one shaky spot from dragging a steady one off target.
     let mut direction = Vec3::zeros();
     let mut origin = Vec3::zeros();
+    let mut total_weight = 0.0;
     for obs in observations {
-        direction += unit_or_z(v3(obs.ray.direction));
-        origin += v3(obs.ray.origin);
+        let weight = obs.ray_jitter_deg.max(1.0).powi(-2);
+        direction += unit_or_z(v3(obs.ray.direction)) * weight;
+        origin += v3(obs.ray.origin) * weight;
+        total_weight += weight;
     }
     direction = unit_or_z(direction);
-    origin /= observations.len() as f32;
+    origin /= total_weight;
     let residual_deg = observations
         .iter()
         .map(|obs| vec_angle_deg(direction, v3(obs.ray.direction)))
@@ -488,6 +513,19 @@ fn mean_angular_residual(point: Vec3, observations: &[TeachObservation]) -> f32 
         .map(|obs| vec_angle_deg(v3(obs.ray.direction), point - v3(obs.ray.origin)))
         .sum::<f32>()
         / observations.len() as f32
+}
+
+fn max_origin_baseline(observations: &[TeachObservation]) -> f32 {
+    let mut max_distance = 0.0;
+    for i in 0..observations.len() {
+        for j in (i + 1)..observations.len() {
+            max_distance = f32::max(
+                max_distance,
+                (v3(observations[i].ray.origin) - v3(observations[j].ray.origin)).norm(),
+            );
+        }
+    }
+    max_distance
 }
 
 fn max_pairwise_ray_angle(observations: &[TeachObservation]) -> f32 {

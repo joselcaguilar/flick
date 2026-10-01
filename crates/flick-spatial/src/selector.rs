@@ -18,6 +18,8 @@ const POINT_STABLE: Duration = Duration::from_millis(200);
 const POINT_LOST: Duration = Duration::from_millis(300);
 /// Maximum angular speed allowed while reselecting from Selected.
 const RESELECT_MAX_ANGULAR_SPEED_DEG_S: f32 = 60.0;
+/// A noisy ray that briefly leaves the anchor keeps the dwell running instead of restarting it.
+const HOVER_GRACE: Duration = Duration::from_millis(200);
 
 /// Settings for the target-selection FSM.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -126,6 +128,7 @@ pub struct TargetSelectorImpl {
     last_point_at: Option<Instant>,
     last_ray: Option<LastRay>,
     last_camera_id: Option<CameraId>,
+    aim_error_deg: Option<f32>,
     events: Vec<TargetEvent>,
 }
 
@@ -152,6 +155,7 @@ impl TargetSelectorImpl {
             last_point_at: None,
             last_ray: None,
             last_camera_id: None,
+            aim_error_deg: None,
             events: Vec::with_capacity(8),
         }
     }
@@ -184,9 +188,16 @@ impl TargetSelectorImpl {
         events
     }
 
+    /// Angular error to the closest anchor in the latest update, when it aimed a pointing ray.
+    #[must_use]
+    pub const fn aim_error_deg(&self) -> Option<f32> {
+        self.aim_error_deg
+    }
+
     /// Updates the selection state from one processed hand frame and optional face keypoints.
     pub fn update(&mut self, hands: &HandFrame, face: Option<&FaceKeypoints>) -> SelectionState {
         self.last_camera_id = Some(hands.camera_id);
+        self.aim_error_deg = None;
         let now = hands.captured_at;
         self.expire_selection(hands.camera_id, now);
 
@@ -214,7 +225,7 @@ impl TargetSelectorImpl {
         });
 
         let Some(candidate) = self.best_candidate(&ray) else {
-            self.hover = None;
+            self.miss_hover(now);
             return self.selected_state_or(SelectionState::Aiming);
         };
 
@@ -323,7 +334,7 @@ impl TargetSelectorImpl {
         }
     }
 
-    fn best_candidate(&self, ray: &crate::PointingRay) -> Option<Candidate> {
+    fn best_candidate(&mut self, ray: &crate::PointingRay) -> Option<Candidate> {
         let mut best: Option<Candidate> = None;
         let mut runner: Option<Candidate> = None;
         for anchor in &self.anchors {
@@ -347,6 +358,7 @@ impl TargetSelectorImpl {
             }
         }
         let mut best = best?;
+        self.aim_error_deg = Some(best.score.angular_error_deg);
         if best.score.angular_error_deg > best.tolerance_deg {
             return None;
         }
@@ -358,6 +370,16 @@ impl TargetSelectorImpl {
         Some(best)
     }
 
+    fn miss_hover(&mut self, now: Instant) {
+        if self
+            .hover
+            .and_then(|hover| elapsed(now, hover.last_hit_at))
+            .is_some_and(|gap| gap >= HOVER_GRACE)
+        {
+            self.hover = None;
+        }
+    }
+
     fn update_hover(
         &mut self,
         camera_id: CameraId,
@@ -365,11 +387,15 @@ impl TargetSelectorImpl {
         candidate: Candidate,
         _reselecting: bool,
     ) -> SelectionState {
-        if self.hover.map(|hover| hover.anchor_id) != Some(candidate.anchor_id) {
-            self.hover = Some(Hover {
-                anchor_id: candidate.anchor_id,
-                started_at: now,
-            });
+        match self.hover.as_mut() {
+            Some(hover) if hover.anchor_id == candidate.anchor_id => hover.last_hit_at = now,
+            _ => {
+                self.hover = Some(Hover {
+                    anchor_id: candidate.anchor_id,
+                    started_at: now,
+                    last_hit_at: now,
+                });
+            }
         }
         let Some(hover) = self.hover else {
             return SelectionState::Aiming;
@@ -519,6 +545,7 @@ struct Selected {
 struct Hover {
     anchor_id: AnchorId,
     started_at: Instant,
+    last_hit_at: Instant,
 }
 
 #[derive(Debug, Clone, Copy)]

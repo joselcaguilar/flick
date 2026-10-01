@@ -46,7 +46,7 @@ use flick_capture::{
 use flick_core::{
     Action, ActionOutcome, ActionStatus, ActionTarget, AnchorId, CameraId, DialProperty,
     FrameSource, GestureEvent, GestureId, GesturePhase, HandFrame, HandObservation, HandPipeline,
-    Handedness, MappingId, PlaceId, SourceInfo, SourceKind, StoreError, Verb,
+    Handedness, MappingId, PlaceId, SelectionState, SourceInfo, SourceKind, StoreError, Verb,
 };
 use flick_gestures::{GestureEngine, GestureEngineConfig};
 use flick_ha::{
@@ -2048,6 +2048,8 @@ const TARGET_AIMING_STALE: Duration = Duration::from_millis(600);
 const VISION_SUMMARY_INTERVAL: Duration = Duration::from_secs(10);
 const TEACH_SPOT_SAMPLE_WINDOW: Duration = Duration::from_millis(1_200);
 const TEACH_SPOT_MIN_RAYS: usize = 5;
+/// A spot this shaky adds noise, not information (its confidence jitter score is already 0).
+const TEACH_SPOT_MAX_JITTER_DEG: f32 = 15.0;
 /// Upper bound a dev teach spot waits for an in-flight fixture replay.
 const REPLAY_SPOT_WAIT: Duration = Duration::from_secs(5);
 const POINT_PRESENCE_MIN: f32 = 0.5;
@@ -2175,7 +2177,14 @@ impl EngineCapture {
                                 if let Some(feed) = hands_feed.as_mut() {
                                     feed.publish(&hands, now);
                                 }
-                                stats.record(&hands, camera_id, anchor_count, now);
+                                stats.record(
+                                    &hands,
+                                    &selection,
+                                    selector.aim_error_deg(),
+                                    camera_id,
+                                    anchor_count,
+                                    now,
+                                );
                                 if let Ok(mut latest) = latest_hands.lock() {
                                     *latest = Some(hands);
                                 }
@@ -2464,12 +2473,15 @@ impl TargetFeed {
     }
 }
 
-/// Periodic log line that shows whether hands and pointing are being detected.
+/// Periodic log line that shows whether hands and pointing are being detected and aimed.
 struct VisionStats {
     window_start: Instant,
     frames: u32,
     hand_frames: u32,
     point_frames: u32,
+    aim_errors_deg: Vec<f32>,
+    hover_frames: u32,
+    selected_frames: u32,
 }
 
 impl VisionStats {
@@ -2479,10 +2491,21 @@ impl VisionStats {
             frames: 0,
             hand_frames: 0,
             point_frames: 0,
+            aim_errors_deg: Vec::new(),
+            hover_frames: 0,
+            selected_frames: 0,
         }
     }
 
-    fn record(&mut self, frame: &HandFrame, camera_id: CameraId, anchors: usize, now: Instant) {
+    fn record(
+        &mut self,
+        frame: &HandFrame,
+        selection: &SelectionState,
+        aim_error_deg: Option<f32>,
+        camera_id: CameraId,
+        anchors: usize,
+        now: Instant,
+    ) {
         self.frames = self.frames.saturating_add(1);
         if !frame.hands.is_empty() {
             self.hand_frames = self.hand_frames.saturating_add(1);
@@ -2490,15 +2513,33 @@ impl VisionStats {
         if pointing_hand(&frame.hands).is_some() {
             self.point_frames = self.point_frames.saturating_add(1);
         }
+        self.aim_errors_deg.extend(aim_error_deg);
+        match selection {
+            SelectionState::Hover { .. } => self.hover_frames = self.hover_frames.saturating_add(1),
+            SelectionState::Selected { .. } => {
+                self.selected_frames = self.selected_frames.saturating_add(1);
+            }
+            _ => {}
+        }
         if now.saturating_duration_since(self.window_start) < VISION_SUMMARY_INTERVAL {
             return;
         }
         if self.hand_frames > 0 {
+            // Median angle between the pointing ray and the closest anchor; high means it never hovers.
+            self.aim_errors_deg.sort_by(f32::total_cmp);
+            let aim_error_deg = self
+                .aim_errors_deg
+                .get(self.aim_errors_deg.len() / 2)
+                .map(|deg| (deg * 10.0).round() / 10.0);
             tracing::info!(
                 camera_id = %camera_id,
                 frames = self.frames,
                 hand_frames = self.hand_frames,
                 point_frames = self.point_frames,
+                aim_frames = self.aim_errors_deg.len(),
+                aim_error_deg,
+                hover_frames = self.hover_frames,
+                selected_frames = self.selected_frames,
                 anchors,
                 "vision summary"
             );
@@ -3158,6 +3199,24 @@ impl TeachGateway for EngineApp {
                 .await;
             return Err(ApiProblem::validation("no_pointing_hand", hint));
         };
+        if jitter_deg > TEACH_SPOT_MAX_JITTER_DEG {
+            let hint = "Hold your pointing hand still until the capture finishes";
+            tracing::info!(
+                session_id,
+                rays = rays.len(),
+                jitter_deg,
+                "teach spot rejected an unsteady pointing hand"
+            );
+            self.publish_teach_progress(
+                session_id,
+                "error",
+                Some(f64::from(jitter_deg)),
+                None,
+                Some(hint),
+            )
+            .await;
+            return Err(ApiProblem::validation("unsteady_pointing_hand", hint));
+        }
         let (spot_index, preview) = {
             let mut sessions = self.teach_sessions.lock().await;
             let session = sessions.get_mut(session_id).ok_or_else(|| {

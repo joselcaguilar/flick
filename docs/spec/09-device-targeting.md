@@ -43,7 +43,7 @@ stateDiagram-v2
   [*] --> Idle
   Idle --> Aiming: point pose ≥ 200 ms and ≥ 1 anchor on this camera/place
   Aiming --> Hover: best anchor passes the angle and margin tests
-  Hover --> Aiming: target lost / margin fails
+  Hover --> Aiming: target lost ≥ 200 ms / margin fails
   Hover --> Selected: dwell ≥ 500 ms
   Selected --> Selected: verb fired (window refreshed)
   Selected --> Hover: point pose dwells on ANOTHER anchor (reselect)
@@ -56,6 +56,7 @@ stateDiagram-v2
 | **Point pose** (`builtin.point`, geometric; not the canned `pointing_up`, which covers only upward) | Index extended (MCP-PIP-DIP-TIP angles ≥ 160°); middle, ring and pinky curled (tip closer to the wrist than the PIP); thumb ignored. Stable ≥ 200 ms | — |
 | Hover test | Angular error θ to the anchor ≤ `tolerance_deg` (10°, grows with anchor uncertainty up to 15°) **and** ≥ 5° margin over the second-best anchor | `targeting.tolerance_deg` |
 | Dwell to select | **500 ms** | `targeting.dwell_ms` |
+| Hover grace | A miss shorter than **200 ms** (a noisy frame or two) keeps the dwell running; a longer miss restarts it | — |
 | Selection window | **4 000 ms**, refreshed after every verb (so "circle again" works as a follow-up) | `targeting.window_ms` |
 | **Selection lock** | While selected, the selection only changes after a full dwell on another anchor, with the point pose held **and** the ray's angular speed < 60°/s. This way, drawing a circle never reselects | — |
 | Ambiguity | Two anchors within the margin → no selection; the HUD shows both names ("Fan or lamp? Hold still") → suppression `ambiguous_target` | — |
@@ -82,8 +83,8 @@ Coordinate frame: camera frame, meters (x right, y down, z forward). All 3D valu
 
 | Kind | Built from | Valid when | Notes |
 |---|---|---|---|
-| `point3d` (preferred) | ≥ 2 teaching observations from positions ≥ 0.5 m apart | anywhere in the camera's view | Least-squares closest point to all rays; 3×3 covariance from the residuals. If the rays are nearly parallel (< 5° apart), fall back to `direction` |
-| `direction` | 1 teaching position | the ray origin is within 0.75 m of the teaching origin | HUD hint: "Taught from the couch only — teach from one more spot to use it anywhere" |
+| `point3d` (preferred) | ≥ 2 teaching observations from positions ≥ 0.5 m apart | anywhere in the camera's view | Least-squares closest point to all rays; 3×3 covariance from the residuals. Falls back to `direction` when the positions are < 0.5 m apart, the rays are nearly parallel (< 5° apart), the point lands < 0.3 m ahead of any teaching position (the rays crossed at the hand), or the mean angular residual is > 10° (the rays never converged) |
+| `direction` | 1 teaching position, or spots that can't triangulate (e.g. all taught from one seat). Spots are weighted by 1/jitter², so one shaky spot can't drag a steady one off target | the ray origin is within 0.75 m of the teaching origin | HUD hint: "Taught from the couch only — teach from one more spot to use it anywhere" |
 | `region2d` (Phase 2) | the user taps the device on the live preview (when the camera can see it) | anywhere | SAM 2.1 tiny outlines the object; Depth Anything V2 Small gives depth → converted to `point3d`. Setup-time only |
 
 - Anchors belong to a **place** (§6) and a camera.
@@ -155,8 +156,8 @@ A laptop moves; RTSP cameras don't. Anchors are only valid while the camera sees
 ## 7. Teach flow (UI in `04-…` §6b)
 
 1. **Pick the device:** HA entity/device search, sorted by the camera's area. Optional *Suggest devices I can see* (Phase 2, §8).
-2. **Point from spot 1:** "Point at the ceiling fan and hold still" → ~1 s capture from the running camera (average of the settled rays, p90 jitter), with live ray feedback. No steady pointing hand → the spot is rejected with a hint.
-3. **Point from spot 2:** "Take one or two steps to the side and point again" → triangulate → confidence meter. A third spot is optional.
+2. **Point from spot 1:** "Point at the ceiling fan and hold still" → ~1 s capture from the running camera (average of the settled rays, p90 jitter), with live ray feedback. No pointing hand, or p90 jitter > 15° (a shaky hand) → the spot is rejected with a hint ("Hold your pointing hand still until the capture finishes").
+3. **Point from spot 2:** "Take one or two steps to the side and point again" → triangulate → confidence meter. A third spot is optional. Spots taught < 0.5 m apart (the same seat) give a `direction` anchor (§4.1).
 4. **Speed levels** (fans with fine steps) or **level check** (other domains).
 5. **Verbs:** the default verbs for the domain are shown as sentences ("Point + ↻ → speed 1", "Point + ✋✋ apart → off"). The user can edit them or record a custom verb in the Studio.
 6. **Test:** "Point at it again" → HUD selection + angular error. "Try a verb" → real call with the result.

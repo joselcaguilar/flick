@@ -114,6 +114,52 @@ proptest! {
 }
 
 #[test]
+fn teaching_from_one_seat_falls_back_to_the_steady_direction() -> Result<(), String> {
+    // Two spots from the same chair whose rays diverge: least squares puts the "device" at the hand.
+    let lamp = Vector3::new(0.9, 0.0, 1.2);
+    let shaky_origin = Vector3::new(0.05, 0.10, 0.40);
+    let steady_origin = Vector3::new(0.08, 0.11, 0.42);
+    let sideways = UnitQuaternion::from_euler_angles(0.0, 10.0_f32.to_radians(), 0.0);
+    let shaky = sideways * (lamp - shaky_origin).normalize();
+    let steady = (lamp - steady_origin).normalize();
+    let mut session = TeachSession::new(
+        AnchorId::new(),
+        "Flexo",
+        TeachTarget::Entity("light.flexo".to_owned()),
+        "light",
+        "test.estimator",
+    );
+    for (spot_index, (origin, direction, jitter)) in [
+        (1, (shaky_origin, shaky, 14.0)),
+        (2, (steady_origin, steady, 3.7)),
+    ] {
+        session.add_observation(TeachObservation {
+            spot_index,
+            ray: PointingRay::new(
+                vec_to_array(origin),
+                vec_to_array(direction),
+                RaySource::FingerOnly,
+            ),
+            frames: 20,
+            ray_jitter_deg: jitter,
+        });
+    }
+    let outcome = session.finish(&[]).map_err(|err| err.to_string())?;
+    let AnchorGeometry::Direction { direction, .. } = outcome.anchor.geometry else {
+        return Err(format!(
+            "expected a direction fallback, got {:?}",
+            outcome.anchor.geometry
+        ));
+    };
+    let direction = Vector3::new(direction[0], direction[1], direction[2]);
+    assert!(
+        angle_deg(direction, steady) < 1.0,
+        "anchor drifted toward the shaky spot"
+    );
+    Ok(())
+}
+
+#[test]
 fn target_selector_fsm_table_selects_and_expires() -> Result<(), String> {
     let intrinsics = CameraIntrinsics::sane_default(1280, 720);
     let camera_id = CameraId::new();
