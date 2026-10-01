@@ -434,7 +434,8 @@
         ]
       },
       "status": "ok",
-      "estimator_version": "spatial.ray.v1"
+      "estimator_version": "spatial.ray.v1",
+      "ray_source": "eye_rooted"
     },
     {
       "id": "01K6D7Y0000000000000000003",
@@ -471,7 +472,8 @@
       "uncertainty_deg": 1.0,
       "verb_params": {},
       "status": "ok",
-      "estimator_version": "spatial.ray.v1"
+      "estimator_version": "spatial.ray.v1",
+      "ray_source": "eye_rooted"
     }
   ],
   "entity_states": [

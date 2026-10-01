@@ -45,8 +45,9 @@ use flick_capture::{
 };
 use flick_core::{
     Action, ActionOutcome, ActionStatus, ActionTarget, AnchorId, CameraId, DialProperty,
-    FrameSource, GestureEvent, GestureId, GesturePhase, HandFrame, HandObservation, HandPipeline,
-    Handedness, MappingId, PlaceId, SelectionState, SourceInfo, SourceKind, StoreError, Verb,
+    FaceKeypoints, Frame, FrameSource, GestureEvent, GestureId, GesturePhase, HandFrame,
+    HandObservation, HandPipeline, Handedness, MappingId, PlaceId, SelectionState, SourceInfo,
+    SourceKind, StoreError, Verb,
 };
 use flick_gestures::{GestureEngine, GestureEngineConfig};
 use flick_ha::{
@@ -56,12 +57,13 @@ use flick_ha::{
 };
 use flick_spatial::{
     Anchor as SpatialAnchor, AnchorGeometry, CameraIntrinsics, DEFAULT_ESTIMATOR_VERSION,
-    PlaceRecord, PlaceStatus, PointingRay, RayEstimator, RealignPair, StoredIntrinsics,
-    TargetClearReason, TargetEvent, TargetSelectorImpl, TargetSelectorSettings, TeachObservation,
-    TeachSession as SpatialTeachSession, TeachTarget, is_point_pose, realign,
+    PlaceRecord, PlaceStatus, PointingRay, RayEstimator, RayEstimatorSettings, RayModel, RaySource,
+    RealignPair, StoredIntrinsics, TargetClearReason, TargetEvent, TargetSelectorImpl,
+    TargetSelectorSettings, TeachObservation, TeachSession as SpatialTeachSession, TeachTarget,
+    is_point_pose, realign,
 };
 use flick_store::Store;
-use flick_vision::{EpChoice, HandPipelineImpl, ModelSet};
+use flick_vision::{EpChoice, FaceKeypointRunner, HandPipelineImpl, ModelSet};
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -2053,8 +2055,19 @@ const TEACH_SPOT_MAX_JITTER_DEG: f32 = 15.0;
 /// Upper bound a dev teach spot waits for an in-flight fixture replay.
 const REPLAY_SPOT_WAIT: Duration = Duration::from_secs(5);
 const POINT_PRESENCE_MIN: f32 = 0.5;
+/// Keeps eye-rooted aim through brief face misses, e.g. the pointing hand crossing the face.
+const FACE_HOLD: Duration = Duration::from_secs(1);
 
 type PendingAnchors = Arc<std::sync::Mutex<Option<Vec<SpatialAnchor>>>>;
+type LatestVision = Arc<std::sync::Mutex<Option<VisionSnapshot>>>;
+
+/// The vision worker's latest result, shared with teaching and status.
+#[derive(Clone)]
+struct VisionSnapshot {
+    hands: HandFrame,
+    /// Only tracked while a hand points.
+    face: Option<FaceKeypoints>,
+}
 
 struct EngineCapture {
     source_info: SourceInfo,
@@ -2063,7 +2076,7 @@ struct EngineCapture {
     worker: Option<thread::JoinHandle<()>>,
     dispatch_task: Option<tokio::task::JoinHandle<()>>,
     preview: FrameTap,
-    latest_hands: Arc<std::sync::Mutex<Option<HandFrame>>>,
+    latest_vision: LatestVision,
     last_error: Arc<std::sync::Mutex<Option<String>>>,
     pending_anchors: PendingAnchors,
 }
@@ -2084,7 +2097,7 @@ impl EngineCapture {
         let preview = FrameTap::default();
         let handle = spawn_capture_with_tap(source, slot.clone(), Some(preview.clone()));
         let worker_stop = Arc::new(AtomicBool::new(false));
-        let latest_hands = Arc::new(std::sync::Mutex::new(None));
+        let latest_vision: LatestVision = Arc::new(std::sync::Mutex::new(None));
         let last_error = Arc::new(std::sync::Mutex::new(None));
         let pending_anchors: PendingAnchors = Arc::new(std::sync::Mutex::new(None));
         let refresh_selection = Arc::new(AtomicBool::new(false));
@@ -2113,12 +2126,13 @@ impl EngineCapture {
         });
         let worker = {
             let worker_stop = Arc::clone(&worker_stop);
-            let latest_hands = Arc::clone(&latest_hands);
+            let latest_vision = Arc::clone(&latest_vision);
             let last_error = Arc::clone(&last_error);
             let pending_anchors = Arc::clone(&pending_anchors);
             let source_info = source_info.clone();
             let camera_id = source_info.id;
-            let mut pipeline = build_hand_pipeline(model_root, source_info.mirror);
+            let (mut pipeline, face_runner) = build_vision(model_root, source_info.mirror);
+            let mut faces = FaceTracker::new(face_runner);
             let mut gestures = GestureEngine::new(GestureEngineConfig::default());
             let mut anchor_count = anchors.len();
             tracing::info!(camera_id = %camera_id, anchors = anchor_count, "targeting anchors loaded");
@@ -2166,7 +2180,8 @@ impl EngineCapture {
                         match pipeline.process(&frame) {
                             Ok(hands) => {
                                 let now = Instant::now();
-                                let selection = selector.update(&hands, None);
+                                let face = faces.update(&frame, &hands, now);
+                                let selection = selector.update(&hands, face.as_ref());
                                 for event in selector.take_events() {
                                     targets.push(event, now);
                                 }
@@ -2175,18 +2190,19 @@ impl EngineCapture {
                                     let _ = event_tx.send(event);
                                 }
                                 if let Some(feed) = hands_feed.as_mut() {
-                                    feed.publish(&hands, now);
+                                    feed.publish(&hands, face.as_ref(), now);
                                 }
+                                let snapshot = VisionSnapshot { hands, face };
                                 stats.record(
-                                    &hands,
+                                    &snapshot,
                                     &selection,
                                     selector.aim_error_deg(),
                                     camera_id,
                                     anchor_count,
                                     now,
                                 );
-                                if let Ok(mut latest) = latest_hands.lock() {
-                                    *latest = Some(hands);
+                                if let Ok(mut latest) = latest_vision.lock() {
+                                    *latest = Some(snapshot);
                                 }
                                 if let Ok(mut error) = last_error.lock() {
                                     *error = None;
@@ -2217,7 +2233,7 @@ impl EngineCapture {
             worker: Some(worker),
             dispatch_task,
             preview,
-            latest_hands,
+            latest_vision,
             last_error,
             pending_anchors,
         })
@@ -2316,7 +2332,7 @@ impl HandsFeed {
         }
     }
 
-    fn publish(&mut self, frame: &HandFrame, now: Instant) {
+    fn publish(&mut self, frame: &HandFrame, face: Option<&FaceKeypoints>, now: Instant) {
         self.last_seq = frame.seq;
         if frame.hands.is_empty() {
             let empty_since = *self.empty_since.get_or_insert(now);
@@ -2334,7 +2350,7 @@ impl HandsFeed {
         }
         self.last_sent = Some(now);
         self.showing = true;
-        self.send(hands_event(&self.camera_id, frame));
+        self.send(hands_event(&self.camera_id, frame, face));
     }
 
     fn clear(&mut self) {
@@ -2479,6 +2495,7 @@ struct VisionStats {
     frames: u32,
     hand_frames: u32,
     point_frames: u32,
+    face_frames: u32,
     aim_errors_deg: Vec<f32>,
     hover_frames: u32,
     selected_frames: u32,
@@ -2491,6 +2508,7 @@ impl VisionStats {
             frames: 0,
             hand_frames: 0,
             point_frames: 0,
+            face_frames: 0,
             aim_errors_deg: Vec::new(),
             hover_frames: 0,
             selected_frames: 0,
@@ -2499,19 +2517,24 @@ impl VisionStats {
 
     fn record(
         &mut self,
-        frame: &HandFrame,
+        snapshot: &VisionSnapshot,
         selection: &SelectionState,
         aim_error_deg: Option<f32>,
         camera_id: CameraId,
         anchors: usize,
         now: Instant,
     ) {
+        let frame = &snapshot.hands;
         self.frames = self.frames.saturating_add(1);
         if !frame.hands.is_empty() {
             self.hand_frames = self.hand_frames.saturating_add(1);
         }
         if pointing_hand(&frame.hands).is_some() {
             self.point_frames = self.point_frames.saturating_add(1);
+            // Pointing without a face means eye-taught anchors cannot be aimed at.
+            if snapshot.face.is_some() {
+                self.face_frames = self.face_frames.saturating_add(1);
+            }
         }
         self.aim_errors_deg.extend(aim_error_deg);
         match selection {
@@ -2536,6 +2559,7 @@ impl VisionStats {
                 frames = self.frames,
                 hand_frames = self.hand_frames,
                 point_frames = self.point_frames,
+                face_frames = self.face_frames,
                 aim_frames = self.aim_errors_deg.len(),
                 aim_error_deg,
                 hover_frames = self.hover_frames,
@@ -2555,17 +2579,69 @@ fn pointing_hand(hands: &[HandObservation]) -> Option<&HandObservation> {
         .max_by(|a, b| a.presence.total_cmp(&b.presence))
 }
 
-fn hands_event(camera_id: &str, frame: &HandFrame) -> HandsEvent {
+/// Face keypoints for eye-rooted aim, detected only while a hand points.
+struct FaceTracker {
+    runner: Option<FaceKeypointRunner>,
+    held: Option<(FaceKeypoints, Instant)>,
+    warned: bool,
+}
+
+impl FaceTracker {
+    const fn new(runner: Option<FaceKeypointRunner>) -> Self {
+        Self {
+            runner,
+            held: None,
+            warned: false,
+        }
+    }
+
+    fn update(&mut self, frame: &Frame, hands: &HandFrame, now: Instant) -> Option<FaceKeypoints> {
+        if let Some(runner) = self.runner.as_mut()
+            && pointing_hand(&hands.hands).is_some()
+        {
+            match runner.detect(frame) {
+                Ok(Some(face)) => self.held = Some((face, now)),
+                Ok(None) => {}
+                Err(err) => {
+                    if !self.warned {
+                        self.warned = true;
+                        tracing::warn!(error = %err, "face keypoints failed; aiming falls back to finger-only rays");
+                    }
+                }
+            }
+        }
+        self.held
+            .as_ref()
+            .filter(|(_, at)| now.saturating_duration_since(*at) <= FACE_HOLD)
+            .map(|(face, _)| face.clone())
+    }
+}
+
+fn hands_event(camera_id: &str, frame: &HandFrame, face: Option<&FaceKeypoints>) -> HandsEvent {
     let ray = pointing_hand(&frame.hands).map(|hand| {
-        let [origin_x, origin_y, _] = hand.image[5];
         let [tip_x, tip_y, _] = hand.image[8];
+        // The drawn line matches the aim: eyes → fingertip when a face is tracked, else along the finger.
+        let (origin, extend, model) = match face {
+            Some(face) => {
+                let [[right_x, right_y], [left_x, left_y], ..] = face.points;
+                (
+                    [(right_x + left_x) * 0.5, (right_y + left_y) * 0.5],
+                    0.5,
+                    "eye",
+                )
+            }
+            None => {
+                let [mcp_x, mcp_y, _] = hand.image[5];
+                ([mcp_x, mcp_y], 1.5, "finger")
+            }
+        };
         RayEvent {
-            origin2d: [origin_x, origin_y],
+            origin2d: origin,
             tip2d: [
-                tip_x + (tip_x - origin_x) * 1.5,
-                tip_y + (tip_y - origin_y) * 1.5,
+                tip_x + (tip_x - origin[0]) * extend,
+                tip_y + (tip_y - origin[1]) * extend,
             ],
-            model: "finger".to_owned(),
+            model: model.to_owned(),
         }
     });
     HandsEvent {
@@ -2744,25 +2820,69 @@ fn log_dispatch(event: &GestureEvent, report: &DispatchReport) {
     );
 }
 
-/// Collects filtered pointing rays from the running camera for one teach spot.
+/// Pointing rays sampled for one teach spot, per ray model.
+struct SpotRays {
+    eye: Vec<PointingRay>,
+    finger: Vec<PointingRay>,
+}
+
+impl SpotRays {
+    fn from_rays(rays: Vec<PointingRay>) -> Self {
+        let (eye, finger) = rays
+            .into_iter()
+            .partition(|ray| ray.source == RaySource::EyeRooted);
+        Self { eye, finger }
+    }
+
+    fn take(self, source: RaySource) -> Vec<PointingRay> {
+        match source {
+            RaySource::EyeRooted => self.eye,
+            RaySource::FingerOnly => self.finger,
+        }
+    }
+}
+
+/// Collects filtered eye-rooted and finger-only pointing rays from the running camera for one teach spot.
 async fn sample_pointing_rays(
-    latest_hands: &std::sync::Mutex<Option<HandFrame>>,
+    latest_vision: &std::sync::Mutex<Option<VisionSnapshot>>,
     intrinsics: CameraIntrinsics,
-) -> Vec<PointingRay> {
-    let mut estimator = RayEstimator::new(intrinsics, TargetSelectorSettings::default().ray);
-    let mut rays = Vec::new();
+) -> SpotRays {
+    let settings = TargetSelectorSettings::default().ray;
+    let mut eye_estimator = RayEstimator::new(
+        intrinsics.clone(),
+        RayEstimatorSettings {
+            model: RayModel::Eye,
+            ..settings.clone()
+        },
+    );
+    let mut finger_estimator = RayEstimator::new(
+        intrinsics,
+        RayEstimatorSettings {
+            model: RayModel::Finger,
+            ..settings
+        },
+    );
+    let mut rays = SpotRays {
+        eye: Vec::new(),
+        finger: Vec::new(),
+    };
     let mut last_seq = None;
     let deadline = Instant::now() + TEACH_SPOT_SAMPLE_WINDOW;
     while Instant::now() < deadline {
-        let frame = latest_hands.lock().ok().and_then(|latest| latest.clone());
-        if let Some(frame) = frame
+        let snapshot = latest_vision.lock().ok().and_then(|latest| latest.clone());
+        if let Some(VisionSnapshot { hands: frame, face }) = snapshot
             && last_seq != Some(frame.seq)
         {
             last_seq = Some(frame.seq);
-            if let Some(hand) = pointing_hand(&frame.hands)
-                && let Ok(ray) = estimator.estimate(hand, None, frame.captured_at)
-            {
-                rays.push(ray);
+            if let Some(hand) = pointing_hand(&frame.hands) {
+                if let Some(face) = face.as_ref()
+                    && let Ok(ray) = eye_estimator.estimate(hand, Some(face), frame.captured_at)
+                {
+                    rays.eye.push(ray);
+                }
+                if let Ok(ray) = finger_estimator.estimate(hand, None, frame.captured_at) {
+                    rays.finger.push(ray);
+                }
             }
         }
         tokio::time::sleep(Duration::from_millis(33)).await;
@@ -2856,10 +2976,10 @@ impl EngineControl for EngineApp {
             .as_ref()
             .and_then(|capture| {
                 capture
-                    .latest_hands
+                    .latest_vision
                     .lock()
                     .ok()
-                    .and_then(|hands| hands.as_ref().map(|hands| hands.timings))
+                    .and_then(|latest| latest.as_ref().map(|snapshot| snapshot.hands.timings))
             })
             .map(|timings| {
                 vec![
@@ -3160,7 +3280,7 @@ impl TeachGateway for EngineApp {
                 .filter(|capture| capture.source_info.id.to_string() == camera_id)
                 .map(|capture| {
                     (
-                        Arc::clone(&capture.latest_hands),
+                        Arc::clone(&capture.latest_vision),
                         CameraIntrinsics::sane_default(
                             capture.source_info.width,
                             capture.source_info.height,
@@ -3177,33 +3297,62 @@ impl TeachGateway for EngineApp {
         }
         self.publish_teach_progress(session_id, "capturing", None, None, None)
             .await;
-        let rays = match live {
-            Some((latest_hands, intrinsics)) => {
-                sample_pointing_rays(&latest_hands, intrinsics).await
+        let sampled = match live {
+            Some((latest_vision, intrinsics)) => {
+                sample_pointing_rays(&latest_vision, intrinsics).await
             }
-            None => self.replayed_pointing_rays().await,
+            None => SpotRays::from_rays(self.replayed_pointing_rays().await),
         };
+        // All spots of an anchor share one ray model, chosen by the first spot. Eye-rooted is
+        // preferred: the finger alone is too short to aim across a room.
+        let locked = self
+            .teach_sessions
+            .lock()
+            .await
+            .get(session_id)
+            .and_then(|session| session.spatial.observations().first())
+            .map(|observation| observation.ray.source);
+        let source = locked.unwrap_or(if sampled.eye.len() >= TEACH_SPOT_MIN_RAYS {
+            RaySource::EyeRooted
+        } else {
+            RaySource::FingerOnly
+        });
+        let hand_seen = sampled.finger.len() >= TEACH_SPOT_MIN_RAYS;
+        let rays = sampled.take(source);
         let settled = if rays.len() >= TEACH_SPOT_MIN_RAYS {
             settle_rays(&rays)
         } else {
             None
         };
         let Some((ray, jitter_deg)) = settled else {
-            let hint = "Point at the device with your index finger so the camera can see your hand";
+            let (code, hint) = if source == RaySource::EyeRooted && hand_seen {
+                (
+                    "face_not_visible",
+                    "Keep your face in view of the camera while pointing",
+                )
+            } else {
+                (
+                    "no_pointing_hand",
+                    "Point at the device with your index finger so the camera can see your hand",
+                )
+            };
             tracing::info!(
                 session_id,
                 rays = rays.len(),
+                ray_source = ?source,
+                code,
                 "teach spot found no steady pointing hand"
             );
             self.publish_teach_progress(session_id, "error", None, None, Some(hint))
                 .await;
-            return Err(ApiProblem::validation("no_pointing_hand", hint));
+            return Err(ApiProblem::validation(code, hint));
         };
         if jitter_deg > TEACH_SPOT_MAX_JITTER_DEG {
             let hint = "Hold your pointing hand still until the capture finishes";
             tracing::info!(
                 session_id,
                 rays = rays.len(),
+                ray_source = ?source,
                 jitter_deg,
                 "teach spot rejected an unsteady pointing hand"
             );
@@ -3245,6 +3394,7 @@ impl TeachGateway for EngineApp {
             session_id,
             spot_index,
             rays = rays.len(),
+            ray_source = ?source,
             jitter_deg,
             kind,
             confidence,
@@ -3944,14 +4094,21 @@ impl PreviewSource for EngineApp {
     }
 }
 
-fn build_hand_pipeline(model_root: Option<&Path>, mirrored: bool) -> HandPipelineImpl {
+/// Builds the hand pipeline and, when its models load, the on-demand face keypoint runner.
+fn build_vision(
+    model_root: Option<&Path>,
+    mirrored: bool,
+) -> (HandPipelineImpl, Option<FaceKeypointRunner>) {
+    let model_free = || HandPipelineImpl::without_models().with_mirrored_input(mirrored);
     let Some(model_root) = model_root else {
-        return HandPipelineImpl::without_models().with_mirrored_input(mirrored);
+        return (model_free(), None);
     };
-    match ModelSet::load(model_root)
-        .and_then(|models| HandPipelineImpl::new(models, EpChoice::default()))
-    {
-        Ok(pipeline) => {
+    let built = ModelSet::load(model_root).and_then(|models| {
+        let face = FaceKeypointRunner::new(&models);
+        HandPipelineImpl::new(models, EpChoice::default()).map(|pipeline| (pipeline, face))
+    });
+    match built {
+        Ok((pipeline, face)) => {
             let ep_summary = pipeline
                 .ep_summary()
                 .into_iter()
@@ -3963,7 +4120,7 @@ fn build_hand_pipeline(model_root: Option<&Path>, mirrored: bool) -> HandPipelin
                 ep_summary,
                 "vision models loaded"
             );
-            pipeline.with_mirrored_input(mirrored)
+            (pipeline.with_mirrored_input(mirrored), Some(face))
         }
         Err(err) => {
             tracing::warn!(
@@ -3971,7 +4128,7 @@ fn build_hand_pipeline(model_root: Option<&Path>, mirrored: bool) -> HandPipelin
                 model_root = %model_root.display(),
                 "vision models unavailable; using model-free hand pipeline"
             );
-            HandPipelineImpl::without_models().with_mirrored_input(mirrored)
+            (model_free(), None)
         }
     }
 }

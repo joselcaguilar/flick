@@ -75,6 +75,8 @@ Coordinate frame: camera frame, meters (x right, y down, z forward). All 3D valu
 | **Arm-rooted** | shoulder/elbow → index fingertip | MediaPipe Pose lite (Apache-2.0); for RTSP cameras that see the user from the side or back | ~10–15° | 2 |
 | **Finger-only** (fallback) | index MCP → tip | Hand only | ~15–25° | 1 |
 
+- **Each anchor keeps the model it was taught with** (`ray_source`: `eye_rooted` | `finger_only`; anchors taught before this field existed are `finger_only`). The selector aims at an anchor only with that model and never substitutes the other one. The two rays from one hand can differ by 15–70°, and the teaching bias only cancels out when the same model is used to teach and to point. With no face in view, eye-rooted anchors can't be selected. The last detected face is reused for ≤ 1 s, so one missed detection doesn't drop the aim.
+
 4. **Temporal smoothing:** One-Euro filter on origin and direction; during dwell, the ray used for decisions is the median over the last 250 ms.
 
 ## 4. Anchors (real device ↔ place in space)
@@ -157,6 +159,8 @@ A laptop moves; RTSP cameras don't. Anchors are only valid while the camera sees
 
 1. **Pick the device:** HA entity/device search, sorted by the camera's area. Optional *Suggest devices I can see* (Phase 2, §8).
 2. **Point from spot 1:** "Point at the ceiling fan and hold still" → ~1 s capture from the running camera (average of the settled rays, p90 jitter), with live ray feedback. No pointing hand, or p90 jitter > 15° (a shaky hand) → the spot is rejected with a hint ("Hold your pointing hand still until the capture finishes").
+   - Spot 1 picks the ray model (§3): eye-rooted when the face is visible in ≥ 5 captured frames, otherwise finger-only.
+   - Later spots must use the same model. If the face drops out of view, the spot is rejected with "Keep your face in view of the camera while pointing".
 3. **Point from spot 2:** "Take one or two steps to the side and point again" → triangulate → confidence meter. A third spot is optional. Spots taught < 0.5 m apart (the same seat) give a `direction` anchor (§4.1).
 4. **Speed levels** (fans with fine steps) or **level check** (other domains).
 5. **Verbs:** the default verbs for the domain are shown as sentences ("Point + ↻ → speed 1", "Point + ✋✋ apart → off"). The user can edit them or record a custom verb in the Studio.

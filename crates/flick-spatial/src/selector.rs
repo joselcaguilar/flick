@@ -7,7 +7,8 @@ use flick_core::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Anchor, AnchorScore, CameraIntrinsics, RayEstimator, RayEstimatorSettings,
+    Anchor, AnchorScore, CameraIntrinsics, PointingRay, RayEstimator, RayEstimatorSettings,
+    RayModel, RaySource,
     anchors::score_anchor,
     math::{angle_deg, v3},
 };
@@ -34,7 +35,8 @@ pub struct TargetSelectorSettings {
     pub dwell: Duration,
     /// Selection window after dwell or verb refresh.
     pub window: Duration,
-    /// Ray-estimator settings.
+    /// Ray-estimator tuning. Each anchor is aimed at with the ray model it was taught with, so
+    /// `ray.model` is ignored here.
     pub ray: RayEstimatorSettings,
 }
 
@@ -120,7 +122,8 @@ pub enum TargetEvent {
 pub struct TargetSelectorImpl {
     anchors: Vec<Anchor>,
     settings: TargetSelectorSettings,
-    ray_estimator: RayEstimator,
+    eye_estimator: RayEstimator,
+    finger_estimator: RayEstimator,
     selected: Option<Selected>,
     hover: Option<Hover>,
     point_started: Option<Instant>,
@@ -143,11 +146,25 @@ impl TargetSelectorImpl {
         anchors: Vec<Anchor>,
         settings: TargetSelectorSettings,
     ) -> Self {
-        let ray_estimator = RayEstimator::new(camera_intrinsics, settings.ray.clone());
+        let eye_estimator = RayEstimator::new(
+            camera_intrinsics.clone(),
+            RayEstimatorSettings {
+                model: RayModel::Eye,
+                ..settings.ray.clone()
+            },
+        );
+        let finger_estimator = RayEstimator::new(
+            camera_intrinsics,
+            RayEstimatorSettings {
+                model: RayModel::Finger,
+                ..settings.ray.clone()
+            },
+        );
         Self {
             anchors,
             settings,
-            ray_estimator,
+            eye_estimator,
+            finger_estimator,
             selected: None,
             hover: None,
             point_started: None,
@@ -214,17 +231,21 @@ impl TargetSelectorImpl {
             return self.selected_state_or(SelectionState::Idle);
         }
 
-        let ray = match self.ray_estimator.estimate(hand, face, now) {
-            Ok(ray) => ray,
-            Err(_) => return self.selected_state_or(SelectionState::Aiming),
+        let rays = LiveRays {
+            eye: face.and_then(|face| self.eye_estimator.estimate(hand, Some(face), now).ok()),
+            finger: self.finger_estimator.estimate(hand, None, now).ok(),
         };
-        let angular_speed = self.angular_speed_deg_s(&ray, now);
+        let Some(aim) = rays.eye.as_ref().or(rays.finger.as_ref()) else {
+            return self.selected_state_or(SelectionState::Aiming);
+        };
+        let angular_speed = self.angular_speed_deg_s(aim, now);
         self.last_ray = Some(LastRay {
-            direction: ray.direction,
+            direction: aim.direction,
+            source: aim.source,
             at: now,
         });
 
-        let Some(candidate) = self.best_candidate(&ray) else {
+        let Some(candidate) = self.best_candidate(&rays) else {
             self.miss_hover(now);
             return self.selected_state_or(SelectionState::Aiming);
         };
@@ -334,13 +355,17 @@ impl TargetSelectorImpl {
         }
     }
 
-    fn best_candidate(&mut self, ray: &crate::PointingRay) -> Option<Candidate> {
+    fn best_candidate(&mut self, rays: &LiveRays) -> Option<Candidate> {
         let mut best: Option<Candidate> = None;
         let mut runner: Option<Candidate> = None;
         for anchor in &self.anchors {
             if anchor.status != AnchorStatus::Ok {
                 continue;
             }
+            // A ray from the other model misses by tens of degrees, so never substitute it.
+            let Some(ray) = rays.for_source(anchor.ray_source) else {
+                continue;
+            };
             let score = score_anchor(anchor, ray);
             let tolerance = tolerance_for(anchor, self.settings.tolerance_deg);
             let candidate = Candidate {
@@ -492,8 +517,8 @@ impl TargetSelectorImpl {
         self.anchors.iter().find(|anchor| anchor.id == id)
     }
 
-    fn angular_speed_deg_s(&self, ray: &crate::PointingRay, now: Instant) -> f32 {
-        let Some(last) = self.last_ray else {
+    fn angular_speed_deg_s(&self, ray: &PointingRay, now: Instant) -> f32 {
+        let Some(last) = self.last_ray.filter(|last| last.source == ray.source) else {
             return 0.0;
         };
         let Some(dt) = elapsed(now, last.at).map(|duration| duration.as_secs_f32()) else {
@@ -551,7 +576,23 @@ struct Hover {
 #[derive(Debug, Clone, Copy)]
 struct LastRay {
     direction: [f32; 3],
+    source: RaySource,
     at: Instant,
+}
+
+/// This frame's ray from each model; eye-rooted needs a visible face.
+struct LiveRays {
+    eye: Option<PointingRay>,
+    finger: Option<PointingRay>,
+}
+
+impl LiveRays {
+    fn for_source(&self, source: RaySource) -> Option<&PointingRay> {
+        match source {
+            RaySource::EyeRooted => self.eye.as_ref(),
+            RaySource::FingerOnly => self.finger.as_ref(),
+        }
+    }
 }
 
 fn tolerance_for(anchor: &Anchor, base: f32) -> f32 {

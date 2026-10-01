@@ -635,10 +635,15 @@ impl Letterbox {
 /// Generates the 2016 MediaPipe palm anchors from the normative SSD options.
 #[must_use]
 pub fn generate_palm_anchors() -> Vec<Anchor> {
-    let strides = [8_u32, 16, 16, 16];
+    generate_ssd_anchors(PALM_INPUT_SIZE, &[8, 16, 16, 16])
+}
+
+/// MediaPipe SSD anchors: consecutive layers with the same stride share one grid, and each
+/// cell lists all of their anchors before moving to the next cell.
+fn generate_ssd_anchors(input_size: u32, strides: &[u32]) -> Vec<Anchor> {
     let min_scale = 0.148_437_5_f32;
     let max_scale = 0.75_f32;
-    let mut anchors = Vec::with_capacity(2016);
+    let mut anchors = Vec::new();
     let mut layer_id = 0_usize;
     while layer_id < strides.len() {
         let mut anchor_scales = Vec::new();
@@ -655,8 +660,8 @@ pub fn generate_palm_anchors() -> Vec<Anchor> {
             anchor_scales.push((scale * scale_next).sqrt());
             last_same_stride += 1;
         }
-        let feature_w = PALM_INPUT_SIZE.div_ceil(stride);
-        let feature_h = PALM_INPUT_SIZE.div_ceil(stride);
+        let feature_w = input_size.div_ceil(stride);
+        let feature_h = input_size.div_ceil(stride);
         for y in 0..feature_h {
             for x in 0..feature_w {
                 for _scale in &anchor_scales {
@@ -1787,7 +1792,7 @@ fn bbox_from_landmarks(landmarks: &[[f32; 3]; 21]) -> RectF {
 /// BlazeFace short-range keypoint runner, invoked only by targeting while point pose is active.
 pub struct FaceKeypointRunner {
     runner: Option<ModelRunner>,
-    anchors: Vec<[f32; 2]>,
+    anchors: Vec<Anchor>,
 }
 
 impl FaceKeypointRunner {
@@ -1822,8 +1827,11 @@ impl FaceKeypointRunner {
         let Some(runner) = self.runner.as_mut() else {
             return Ok(None);
         };
-        let input = resize_rgb_nearest(frame, FACE_INPUT_SIZE, FACE_INPUT_SIZE)?;
-        let input = rgb_u8_to_nhwc_f32(&input);
+        // BlazeFace expects an aspect-preserving letterbox in [-1, 1]; zero padding becomes black.
+        let (letterbox, mut input) = letterbox_rgb_to_nhwc(frame, FACE_INPUT_SIZE)?;
+        for value in &mut input {
+            *value = *value * 2.0 - 1.0;
+        }
         let outputs = run_single_input(
             &mut runner.session,
             "input",
@@ -1832,7 +1840,7 @@ impl FaceKeypointRunner {
         )?;
         let regressors = output_tensor(&outputs, "regressors")?;
         let logits = output_tensor(&outputs, "classificators")?;
-        decode_face_keypoints(regressors, logits, &self.anchors)
+        decode_face_keypoints(regressors, logits, &self.anchors, letterbox)
     }
 }
 
@@ -1893,29 +1901,16 @@ impl SceneEmbedder {
     }
 }
 
-fn generate_face_anchors() -> Vec<[f32; 2]> {
-    let strides = [8_u32, 16, 16, 16];
-    let mut anchors = Vec::with_capacity(896);
-    for stride in strides {
-        let feature = FACE_INPUT_SIZE.div_ceil(stride);
-        for y in 0..feature {
-            for x in 0..feature {
-                let center = [
-                    (x as f32 + 0.5) / feature as f32,
-                    (y as f32 + 0.5) / feature as f32,
-                ];
-                anchors.push(center);
-                anchors.push(center);
-            }
-        }
-    }
-    anchors
+/// Short-range BlazeFace anchors: 512 at stride 8, then 384 at stride 16 (six per cell).
+fn generate_face_anchors() -> Vec<Anchor> {
+    generate_ssd_anchors(FACE_INPUT_SIZE, &[8, 16, 16, 16])
 }
 
 fn decode_face_keypoints(
     regressors: &[f32],
     logits: &[f32],
-    anchors: &[[f32; 2]],
+    anchors: &[Anchor],
+    letterbox: Letterbox,
 ) -> Result<Option<FaceKeypoints>, VisionError> {
     let count = logits.len().min(anchors.len()).min(regressors.len() / 16);
     if count == 0 {
@@ -1935,13 +1930,15 @@ fn decode_face_keypoints(
     let Some(index) = best_index else {
         return Ok(None);
     };
-    let anchor = anchors[index];
+    let anchor = &anchors[index];
     let raw = &regressors[index * 16..index * 16 + 16];
     let mut points = [[0.0_f32; 2]; 6];
     for (point_index, point) in points.iter_mut().enumerate() {
         let base = 4 + point_index * 2;
-        point[0] = (raw[base] / FACE_INPUT_SIZE as f32 + anchor[0]).clamp(0.0, 1.0);
-        point[1] = (raw[base + 1] / FACE_INPUT_SIZE as f32 + anchor[1]).clamp(0.0, 1.0);
+        *point = letterbox.unletterbox_point([
+            raw[base] / FACE_INPUT_SIZE as f32 * anchor.w + anchor.x_center,
+            raw[base + 1] / FACE_INPUT_SIZE as f32 * anchor.h + anchor.y_center,
+        ]);
     }
     Ok(Some(FaceKeypoints {
         points,
@@ -1956,23 +1953,6 @@ fn normalize_l2<const N: usize>(values: &mut [f32; N]) {
             *value /= norm;
         }
     }
-}
-
-fn resize_rgb_nearest(frame: &Frame, width: u32, height: u32) -> Result<Vec<u8>, VisionError> {
-    if frame.width == 0 || frame.height == 0 {
-        return Err(VisionError::UnsupportedFrame("empty frame".to_owned()));
-    }
-    let mut out = vec![0_u8; (width * height * 3) as usize];
-    for y in 0..height {
-        let src_y = y * frame.height / height;
-        for x in 0..width {
-            let src_x = x * frame.width / width;
-            let src = ((src_y * frame.width + src_x) * 3) as usize;
-            let dst = ((y * width + x) * 3) as usize;
-            out[dst..dst + 3].copy_from_slice(&frame.data[src..src + 3]);
-        }
-    }
-    Ok(out)
 }
 
 fn apply_masks(data: &mut [u8], width: u32, height: u32, boxes: &[RectF]) {
@@ -2164,5 +2144,18 @@ cache_path = "models/cache/model.onnx"
             format: PixelFormat::Rgb8,
             data: Arc::<[u8]>::from(data),
         }
+    }
+
+    #[test]
+    fn face_anchors_merge_same_stride_layers() {
+        let anchors = generate_face_anchors();
+        assert_eq!(anchors.len(), 896);
+        // Stride-16 layers share one 8x8 grid with six anchors per cell.
+        assert!(
+            anchors[512..518]
+                .iter()
+                .all(|anchor| anchor.x_center == 0.0625 && anchor.y_center == 0.0625)
+        );
+        assert_eq!(anchors[518].x_center, 0.1875);
     }
 }

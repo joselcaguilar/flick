@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize, de, ser::SerializeMap};
 use thiserror::Error;
 
 use crate::{
-    PointingRay,
+    PointingRay, RaySource,
     math::{Mat3, Vec3, a3, angle_deg as vec_angle_deg, unit_or_z, v3},
 };
 
@@ -133,6 +133,13 @@ pub struct Anchor {
     pub status: AnchorStatus,
     /// Ray/triangulation version that produced this anchor.
     pub estimator_version: String,
+    /// Ray model the anchor was taught with; live aim must use the same model.
+    #[serde(default = "legacy_ray_source")]
+    pub ray_source: RaySource,
+}
+
+const fn legacy_ray_source() -> RaySource {
+    RaySource::FingerOnly
 }
 
 impl Anchor {
@@ -224,6 +231,9 @@ pub enum TeachingError {
     /// Triangulation matrix was singular.
     #[error("teaching rays could not be triangulated")]
     SingularTriangulation,
+    /// Spots were captured with different ray models and cannot share one anchor.
+    #[error("teaching spots mix eye-rooted and finger-only rays")]
+    MixedRaySources,
 }
 
 /// Stateful helper for collecting teaching observations.
@@ -315,8 +325,12 @@ fn build_anchor(
     estimator_version: String,
     existing: &[Anchor],
 ) -> Result<TeachingOutcome, TeachingError> {
-    if observations.is_empty() {
+    let Some(first) = observations.first() else {
         return Err(TeachingError::NoObservations);
+    };
+    let ray_source = first.ray.source;
+    if observations.iter().any(|obs| obs.ray.source != ray_source) {
+        return Err(TeachingError::MixedRaySources);
     }
     let max_sep = max_pairwise_ray_angle(observations);
     let triangulated = if observations.len() >= 2
@@ -342,6 +356,7 @@ fn build_anchor(
         verb_params: serde_json::json!({}),
         status: AnchorStatus::Ok,
         estimator_version,
+        ray_source,
     };
     let distinctiveness_warnings = distinctiveness_warnings(&anchor, existing, observations);
     Ok(TeachingOutcome {

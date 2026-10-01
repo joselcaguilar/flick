@@ -192,8 +192,8 @@ sha256 = "587fa34c93de9a523e691669d2405671d67faad86e595e9a63c6d3db401f18f4"
 size_bytes = 418465
 preferred_ep = ["CPU", "CoreML"]
 cache_path = "models/cache/face_detection_short.onnx"
-preprocessing = "Crop/resize active pointing frame to 128x128, RGB float32 in [0,1], NHWC. Runs only while point pose is active."
-postprocessing = "Decode 896 BlazeFace anchors; regressors include box plus 6 keypoints. Eye keypoints feed flick-spatial ray estimation."
+preprocessing = "Aspect-preserving letterbox of the full frame to 128x128, RGB float32 in [-1,1] (2x-1, black padding), NHWC. Runs only while point pose is active."
+postprocessing = "Decode 896 MediaPipe SSD anchors (512 at stride 8, then 384 at stride 16 with six per cell); regressors include box plus 6 keypoints offset in input pixels. Eye keypoints feed flick-spatial ray estimation."
 
 [[models.inputs]]
 name = "input"

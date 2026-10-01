@@ -5,7 +5,7 @@ use std::{str::FromStr, sync::Arc};
 use flick_core::{AnchorId, AnchorKind, AnchorStatus, CameraId, Handedness, PlaceId, StoreError};
 use flick_spatial::{
     Anchor, AnchorGeometry, AnchorObservationRecord, AnchorRecord, PlaceRecord, PlaceStatus,
-    TargetingStore, TargetingStoreError, TeachTarget,
+    RaySource, TargetingStore, TargetingStoreError, TeachTarget,
 };
 use flick_store::Store;
 use rusqlite::{OptionalExtension, Row, params};
@@ -126,14 +126,15 @@ impl SqliteTargetingStore {
         conn.execute(
             "INSERT INTO anchors \
              (id, place_id, name, target, domain, kind, position, direction, teach_origin, covariance, \
-              uncertainty_deg, verb_params, sensitive, sensitive_ack, estimator_version, status, last_used_at, created_at, updated_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19) \
+              uncertainty_deg, verb_params, sensitive, sensitive_ack, estimator_version, status, last_used_at, created_at, updated_at, ray_source) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20) \
              ON CONFLICT(id) DO UPDATE SET \
              place_id = excluded.place_id, name = excluded.name, target = excluded.target, domain = excluded.domain, \
              kind = excluded.kind, position = excluded.position, direction = excluded.direction, teach_origin = excluded.teach_origin, \
              covariance = excluded.covariance, uncertainty_deg = excluded.uncertainty_deg, verb_params = excluded.verb_params, \
              sensitive = excluded.sensitive, sensitive_ack = excluded.sensitive_ack, estimator_version = excluded.estimator_version, \
-             status = excluded.status, last_used_at = excluded.last_used_at, updated_at = excluded.updated_at",
+             status = excluded.status, last_used_at = excluded.last_used_at, updated_at = excluded.updated_at, \
+             ray_source = excluded.ray_source",
             params![
                 anchor.id.to_string(),
                 anchor.place_id.to_string(),
@@ -154,6 +155,7 @@ impl SqliteTargetingStore {
                 anchor.last_used_at,
                 anchor.created_at,
                 anchor.updated_at,
+                ray_source_str(anchor.ray_source),
             ],
         )
         .map_err(database_error)?;
@@ -166,7 +168,7 @@ impl SqliteTargetingStore {
         let raw = conn
             .query_row(
                 "SELECT id, place_id, name, target, domain, kind, position, direction, teach_origin, covariance, \
-                 uncertainty_deg, verb_params, sensitive, sensitive_ack, estimator_version, status, last_used_at, created_at, updated_at \
+                 uncertainty_deg, verb_params, sensitive, sensitive_ack, estimator_version, status, last_used_at, created_at, updated_at, ray_source \
                  FROM anchors WHERE id = ?1",
                 params![id.to_string()],
                 raw_anchor,
@@ -185,7 +187,7 @@ impl SqliteTargetingStore {
         let mut stmt = conn
             .prepare(
                 "SELECT id, place_id, name, target, domain, kind, position, direction, teach_origin, covariance, \
-                 uncertainty_deg, verb_params, sensitive, sensitive_ack, estimator_version, status, last_used_at, created_at, updated_at \
+                 uncertainty_deg, verb_params, sensitive, sensitive_ack, estimator_version, status, last_used_at, created_at, updated_at, ray_source \
                  FROM anchors WHERE place_id = ?1 ORDER BY created_at",
             )
             .map_err(database_error)?;
@@ -202,7 +204,7 @@ impl SqliteTargetingStore {
         let mut stmt = conn
             .prepare(
                 "SELECT id, place_id, name, target, domain, kind, position, direction, teach_origin, covariance, \
-                 uncertainty_deg, verb_params, sensitive, sensitive_ack, estimator_version, status, last_used_at, created_at, updated_at \
+                 uncertainty_deg, verb_params, sensitive, sensitive_ack, estimator_version, status, last_used_at, created_at, updated_at, ray_source \
                  FROM anchors ORDER BY created_at",
             )
             .map_err(database_error)?;
@@ -396,6 +398,7 @@ pub fn anchor_record_to_anchor(record: &AnchorRecord) -> Option<Anchor> {
         verb_params: record.verb_params.clone(),
         status: record.status,
         estimator_version: record.estimator_version.clone(),
+        ray_source: record.ray_source,
     })
 }
 
@@ -440,6 +443,7 @@ pub fn anchor_to_record(
         sensitive,
         sensitive_ack,
         estimator_version: anchor.estimator_version.clone(),
+        ray_source: anchor.ray_source,
         status: anchor.status,
         last_used_at: None,
         created_at: now_ms,
@@ -501,6 +505,7 @@ struct RawAnchor {
     last_used_at: Option<i64>,
     created_at: i64,
     updated_at: i64,
+    ray_source: String,
 }
 
 impl TryFrom<RawAnchor> for AnchorRecord {
@@ -523,6 +528,7 @@ impl TryFrom<RawAnchor> for AnchorRecord {
             sensitive: value.sensitive != 0,
             sensitive_ack: value.sensitive_ack != 0,
             estimator_version: value.estimator_version,
+            ray_source: parse_ray_source(&value.ray_source)?,
             status: parse_anchor_status(&value.status)?,
             last_used_at: value.last_used_at,
             created_at: value.created_at,
@@ -609,6 +615,7 @@ fn raw_anchor(row: &Row<'_>) -> rusqlite::Result<RawAnchor> {
         last_used_at: row.get(16)?,
         created_at: row.get(17)?,
         updated_at: row.get(18)?,
+        ray_source: row.get(19)?,
     })
 }
 
@@ -733,6 +740,23 @@ fn parse_anchor_status(value: &str) -> flick_store::Result<AnchorStatus> {
         "needs_reteach" => Ok(AnchorStatus::NeedsReteach),
         other => Err(StoreError::InvalidJson(format!(
             "invalid anchor status: {other}"
+        ))),
+    }
+}
+
+const fn ray_source_str(value: RaySource) -> &'static str {
+    match value {
+        RaySource::EyeRooted => "eye_rooted",
+        RaySource::FingerOnly => "finger_only",
+    }
+}
+
+fn parse_ray_source(value: &str) -> flick_store::Result<RaySource> {
+    match value {
+        "eye_rooted" => Ok(RaySource::EyeRooted),
+        "finger_only" => Ok(RaySource::FingerOnly),
+        other => Err(StoreError::InvalidJson(format!(
+            "invalid anchor ray source: {other}"
         ))),
     }
 }

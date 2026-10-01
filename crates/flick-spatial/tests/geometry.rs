@@ -6,7 +6,7 @@ use flick_core::{
 };
 use flick_spatial::{
     Anchor, AnchorGeometry, CameraIntrinsics, PointingRay, RayEstimator, RayEstimatorSettings,
-    RayModel, RaySource, RealignPair, TargetSelectorImpl, TargetSelectorSettings, TeachObservation,
+    RaySource, RealignPair, TargetSelectorImpl, TargetSelectorSettings, TeachObservation,
     TeachSession, TeachTarget, realign,
 };
 use nalgebra::{Matrix3, Unit, UnitQuaternion, Vector3};
@@ -173,8 +173,7 @@ fn target_selector_fsm_table_selects_and_expires() -> Result<(), String> {
         "fan.ventilador_dormitorio",
         "fan",
     );
-    let mut settings = TargetSelectorSettings::default();
-    settings.ray.model = RayModel::Finger;
+    let settings = TargetSelectorSettings::default();
     let mut selector = TargetSelectorImpl::new(intrinsics.clone(), vec![anchor], settings);
     let start = Instant::now();
     let rows = [
@@ -243,8 +242,7 @@ fn lock_scenario_circling_after_selection_never_reselects() -> Result<(), String
             "light",
         ),
     ];
-    let mut settings = TargetSelectorSettings::default();
-    settings.ray.model = RayModel::Finger;
+    let settings = TargetSelectorSettings::default();
     let mut selector = TargetSelectorImpl::new(intrinsics.clone(), anchors, settings);
     let start = Instant::now();
     for ms in [0_u64, 250, 500, 800] {
@@ -304,8 +302,7 @@ fn ambiguity_suppresses_selection_when_two_anchors_share_margin() -> Result<(), 
             "light",
         ),
     ];
-    let mut settings = TargetSelectorSettings::default();
-    settings.ray.model = RayModel::Finger;
+    let settings = TargetSelectorSettings::default();
     let mut selector = TargetSelectorImpl::new(intrinsics.clone(), anchors, settings);
     let start = Instant::now();
 
@@ -357,6 +354,7 @@ fn test_anchor(
         verb_params: serde_json::json!({}),
         status: AnchorStatus::Ok,
         estimator_version: "test.estimator".to_owned(),
+        ray_source: RaySource::FingerOnly,
     }
 }
 
