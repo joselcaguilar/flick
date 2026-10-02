@@ -350,6 +350,23 @@ fn targeting_precedence() {
         .events[0];
     assert_eq!(event.target, Some(anchor));
 
+    // A verb from one hand fires while the other hand keeps pointing at the device.
+    let mut thumb = GestureMapping::tap(gesture(BuiltinGesture::ThumbUp));
+    thumb.target_mode = TargetMode::Either;
+    let mut two_hands = TriggerFsmSet::new(TriggerConfig {
+        vote_n: 1,
+        vote_m: 1,
+        mappings: vec![thumb],
+        ..TriggerConfig::default()
+    });
+    let verb = two_hands.update(
+        &frame(0, 2),
+        &[candidate(BuiltinGesture::ThumbUp, 0.9)],
+        &selection,
+    );
+    assert_eq!(verb.events.len(), 1);
+    assert_eq!(verb.events[0].target, Some(anchor));
+
     let mut targeted = GestureMapping::tap(gesture(BuiltinGesture::CircleCw));
     targeted.target_mode = TargetMode::Targeted;
     let mut no_target = TriggerFsmSet::new(TriggerConfig {

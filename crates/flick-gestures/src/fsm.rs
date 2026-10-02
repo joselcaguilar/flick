@@ -406,21 +406,27 @@ impl TriggerFsmSet {
             .iter()
             .filter(|mapping| gesture_matches(mapping.gesture_id, candidate.gesture_id))
             .filter(|mapping| hand_matches(mapping.hand, candidate.hand))
-            .filter(|mapping| two_hand_allowed(mapping, candidate.gesture_id, visible_hands))
             .collect();
+
+        // With a device selected, the other hand is usually still pointing at it,
+        // so verbs skip the two-hand guard.
+        if selected.is_some()
+            && let Some(targeted) = matching.iter().copied().find(|mapping| {
+                matches!(
+                    mapping.target_mode,
+                    TargetMode::Targeted | TargetMode::Either
+                )
+            })
+        {
+            return Ok((targeted, selected));
+        }
+
+        matching.retain(|mapping| two_hand_allowed(mapping, candidate.gesture_id, visible_hands));
         if matching.is_empty() {
             return Err(SuppressionReason::NoMapping);
         }
 
         if selected.is_some() {
-            if let Some(targeted) = matching.iter().copied().find(|mapping| {
-                matches!(
-                    mapping.target_mode,
-                    TargetMode::Targeted | TargetMode::Either
-                )
-            }) {
-                return Ok((targeted, selected));
-            }
             if matching
                 .iter()
                 .any(|mapping| matches!(mapping.target_mode, TargetMode::Targeted))

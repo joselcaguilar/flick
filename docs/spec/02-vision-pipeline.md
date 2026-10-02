@@ -279,7 +279,7 @@ stateDiagram-v2
 
 Extra rules:
 - **Conflicts:** if static gestures from different recognizers (e.g. a Tier 0 built-in and a Tier 1 custom gesture) are both candidates for the same track, the higher score wins only if its margin is ≥ 0.1; otherwise no fire (`ambiguous`). Within Tier 0, the 0.15 margin of §4.2 applies first.
-- **Two-hand guard:** if 2 hands are visible, only a hand whose mapping explicitly allows it fires (`hand` = `left`/`right`, or `any` + `allow_two_hands`). Two-hand gestures (`builtin.two_hand_separate`, two-hand `motion.*`) are exempt.
+- **Two-hand guard:** if 2 hands are visible, only a hand whose mapping explicitly allows it fires (`hand` = `left`/`right`, or `any` + `allow_two_hands`). Two-hand gestures (`builtin.two_hand_separate`, two-hand `motion.*`) are exempt. While a device is selected (`09-…` §2), targeted and either-mode verbs are exempt too: one hand usually keeps pointing at the device while the other makes the verb.
 - **Targeting precedence** (`09-…` §5.3):
   - While a device is selected, targeted mappings win and global mappings for the same gesture are suppressed (`target_selected`).
   - Targeted mappings never fire without a selection (`no_target`).
