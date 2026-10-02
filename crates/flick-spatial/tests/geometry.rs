@@ -7,7 +7,7 @@ use flick_core::{
 use flick_spatial::{
     Anchor, AnchorGeometry, CameraIntrinsics, PointingRay, RayEstimator, RayEstimatorSettings,
     RaySource, RealignPair, TargetSelectorImpl, TargetSelectorSettings, TeachObservation,
-    TeachSession, TeachTarget, realign,
+    TeachSession, TeachTarget, is_point_pose, realign,
 };
 use nalgebra::{Matrix3, Unit, UnitQuaternion, Vector3};
 use proptest::prelude::*;
@@ -397,6 +397,25 @@ fn ambiguity_suppresses_selection_when_two_anchors_share_margin() -> Result<(), 
             .any(|event| matches!(event, flick_spatial::TargetEvent::Ambiguous { anchor_ids, .. } if anchor_ids.contains(&fan_id) && anchor_ids.contains(&lamp_id))),
         "expected ambiguous target event",
     );
+    Ok(())
+}
+
+#[test]
+fn point_pose_reads_world_landmarks() -> Result<(), String> {
+    let intrinsics = CameraIntrinsics::sane_default(1280, 720);
+    let mut hand = synthetic_hand(
+        &intrinsics,
+        Vector3::new(0.0, 0.0, 0.6),
+        Vector3::new(0.0, 0.0, 1.0),
+    )?;
+    // Crop-scale image depth noise used to break the pose; world landmarks must win.
+    hand.image[7][2] = 3.0;
+    hand.image[8][2] = -5.0;
+    assert!(is_point_pose(&hand));
+
+    hand.world[7] = [0.02, -0.05, 0.03];
+    hand.world[8] = [0.02, -0.03, 0.03];
+    assert!(!is_point_pose(&hand));
     Ok(())
 }
 

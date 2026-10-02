@@ -156,8 +156,9 @@ Built-in parameters (thresholds, windows, cooldowns) are defaults delivered by t
 - Score = canned classifier softmax.
 - Candidate if `top1 ≠ None`, `score ≥ tier0_threshold` (default **0.70**), and margin over the second-best ≥ 0.15.
 - **`builtin.point`** is geometric, not from the canned classifier:
-  - index finger extended (MCP–PIP–DIP–TIP joint angles ≥ 160°);
-  - middle, ring and pinky curled (tip closer to the wrist than their PIP);
+  - judged on **world landmarks** (metric, hand-centred) with the same finger tests as the gesture classifier. Image landmarks are only a fallback when world landmarks are missing: their z is at crop scale while x and y are frame-normalised, so joint angles from them swing with depth noise. Pointing rays still use image landmarks;
+  - index finger extended (PIP angle ≥ 155°, DIP angle ≥ 145°, tip > 1.25 × the PIP's distance from the wrist);
+  - middle, ring and pinky curled (tip ≤ 1.08 × the PIP's distance from the wrist, or not extended);
   - thumb ignored; stable ≥ 200 ms.
   - It works in any direction, unlike `pointing_up`.
   - It feeds the `TargetSelector` and is not mappable to global actions while the camera has anchors.

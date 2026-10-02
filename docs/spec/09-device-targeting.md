@@ -53,7 +53,7 @@ stateDiagram-v2
 
 | Rule | Default | Setting |
 |---|---|---|
-| **Point pose** (`builtin.point`, geometric; not the canned `pointing_up`, which covers only upward) | Index extended (MCP-PIP-DIP-TIP angles ≥ 160°); middle, ring and pinky curled (tip closer to the wrist than the PIP); thumb ignored. Stable ≥ 200 ms | — |
+| **Point pose** (`builtin.point`, geometric; not the canned `pointing_up`, which covers only upward) | Judged on world landmarks with the gesture classifier's finger tests (`02-…` §4.2): index extended (PIP ≥ 155°, DIP ≥ 145°, tip > 1.25 × the PIP's wrist distance); middle, ring and pinky curled (tip ≤ 1.08 × the PIP's wrist distance, or not extended); thumb ignored. Stable ≥ 200 ms | — |
 | Hover test | Angular error θ to the anchor ≤ `tolerance_deg` (10°, grows with anchor uncertainty up to 15°) **and** ≥ 5° margin over the second-best anchor | `targeting.tolerance_deg` |
 | Dwell to select | **500 ms** | `targeting.dwell_ms` |
 | Hover grace | A miss shorter than **200 ms** (a noisy frame or two) keeps the dwell running; a longer miss restarts it | — |

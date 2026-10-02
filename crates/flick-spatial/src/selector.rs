@@ -10,7 +10,7 @@ use crate::{
     Anchor, AnchorScore, CameraIntrinsics, PointingRay, RayEstimator, RayEstimatorSettings,
     RayModel, RaySource,
     anchors::{score_anchor, score_geometry},
-    math::{angle_deg, v3},
+    math::{Vec3, angle_deg, v3},
 };
 
 /// Default point-pose stable duration.
@@ -628,33 +628,40 @@ fn live_score(anchor: &Anchor, rays: &LiveRays, base_tolerance: f32) -> Option<(
 }
 
 /// Returns true when the hand shows the index-finger pointing pose used for targeting.
+///
+/// Judged on MediaPipe world landmarks (metric, hand-centred) with the gesture
+/// classifier's thresholds. Image landmarks mix frame-normalised x/y with
+/// crop-scale z, so joint angles from them swing with depth noise and the pose
+/// drops out mid-point. Image landmarks are only a fallback when world
+/// landmarks are missing.
 #[must_use]
 pub fn is_point_pose(hand: &HandObservation) -> bool {
-    finger_extended(hand, 5, 6, 7, 8)
-        && finger_curled(hand, 9, 10, 12)
-        && finger_curled(hand, 13, 14, 16)
-        && finger_curled(hand, 17, 18, 20)
+    let points = pose_points(hand);
+    finger_extended(&points, 5, 6, 7, 8)
+        && finger_curled(&points, 9, 10, 11, 12)
+        && finger_curled(&points, 13, 14, 15, 16)
+        && finger_curled(&points, 17, 18, 19, 20)
 }
 
-fn finger_extended(hand: &HandObservation, mcp: usize, pip: usize, dip: usize, tip: usize) -> bool {
-    joint_angle(hand, mcp, pip, dip) >= 160.0 && joint_angle(hand, pip, dip, tip) >= 160.0
+fn pose_points(hand: &HandObservation) -> [Vec3; 21] {
+    let world_valid = (v3(hand.world[9]) - v3(hand.world[0])).norm() > 1.0e-4;
+    let source = if world_valid {
+        &hand.world
+    } else {
+        &hand.image
+    };
+    std::array::from_fn(|idx| v3(source[idx]))
 }
 
-fn finger_curled(hand: &HandObservation, _mcp: usize, pip: usize, tip: usize) -> bool {
-    let wrist = landmark(hand, 0);
-    let pip = landmark(hand, pip);
-    let tip = landmark(hand, tip);
-    (tip - wrist).norm() < (pip - wrist).norm()
+fn finger_extended(p: &[Vec3; 21], mcp: usize, pip: usize, dip: usize, tip: usize) -> bool {
+    angle_deg(p[mcp] - p[pip], p[dip] - p[pip]) >= 155.0
+        && angle_deg(p[pip] - p[dip], p[tip] - p[dip]) >= 145.0
+        && (p[tip] - p[0]).norm() > (p[pip] - p[0]).norm() * 1.25
 }
 
-fn joint_angle(hand: &HandObservation, a: usize, b: usize, c: usize) -> f32 {
-    let va = landmark(hand, a) - landmark(hand, b);
-    let vc = landmark(hand, c) - landmark(hand, b);
-    angle_deg(va, vc)
-}
-
-fn landmark(hand: &HandObservation, idx: usize) -> nalgebra::Vector3<f32> {
-    nalgebra::Vector3::new(hand.image[idx][0], hand.image[idx][1], hand.image[idx][2])
+fn finger_curled(p: &[Vec3; 21], mcp: usize, pip: usize, dip: usize, tip: usize) -> bool {
+    (p[tip] - p[0]).norm() <= (p[pip] - p[0]).norm() * 1.08
+        || !finger_extended(p, mcp, pip, dip, tip)
 }
 
 fn elapsed(now: Instant, then: Instant) -> Option<Duration> {
