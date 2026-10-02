@@ -122,19 +122,20 @@ impl SqliteTargetingStore {
         let covariance = optional_blob(anchor.covariance.as_ref())?;
         let target = to_text(&anchor.target)?;
         let verb_params = to_text(&anchor.verb_params)?;
+        let finger_aim = anchor.finger_aim.as_ref().map(to_text).transpose()?;
         let conn = self.store.connection();
         conn.execute(
             "INSERT INTO anchors \
              (id, place_id, name, target, domain, kind, position, direction, teach_origin, covariance, \
-              uncertainty_deg, verb_params, sensitive, sensitive_ack, estimator_version, status, last_used_at, created_at, updated_at, ray_source) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20) \
+              uncertainty_deg, verb_params, sensitive, sensitive_ack, estimator_version, status, last_used_at, created_at, updated_at, ray_source, finger_aim) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21) \
              ON CONFLICT(id) DO UPDATE SET \
              place_id = excluded.place_id, name = excluded.name, target = excluded.target, domain = excluded.domain, \
              kind = excluded.kind, position = excluded.position, direction = excluded.direction, teach_origin = excluded.teach_origin, \
              covariance = excluded.covariance, uncertainty_deg = excluded.uncertainty_deg, verb_params = excluded.verb_params, \
              sensitive = excluded.sensitive, sensitive_ack = excluded.sensitive_ack, estimator_version = excluded.estimator_version, \
              status = excluded.status, last_used_at = excluded.last_used_at, updated_at = excluded.updated_at, \
-             ray_source = excluded.ray_source",
+             ray_source = excluded.ray_source, finger_aim = excluded.finger_aim",
             params![
                 anchor.id.to_string(),
                 anchor.place_id.to_string(),
@@ -156,6 +157,7 @@ impl SqliteTargetingStore {
                 anchor.created_at,
                 anchor.updated_at,
                 ray_source_str(anchor.ray_source),
+                finger_aim,
             ],
         )
         .map_err(database_error)?;
@@ -168,7 +170,7 @@ impl SqliteTargetingStore {
         let raw = conn
             .query_row(
                 "SELECT id, place_id, name, target, domain, kind, position, direction, teach_origin, covariance, \
-                 uncertainty_deg, verb_params, sensitive, sensitive_ack, estimator_version, status, last_used_at, created_at, updated_at, ray_source \
+                 uncertainty_deg, verb_params, sensitive, sensitive_ack, estimator_version, status, last_used_at, created_at, updated_at, ray_source, finger_aim \
                  FROM anchors WHERE id = ?1",
                 params![id.to_string()],
                 raw_anchor,
@@ -187,7 +189,7 @@ impl SqliteTargetingStore {
         let mut stmt = conn
             .prepare(
                 "SELECT id, place_id, name, target, domain, kind, position, direction, teach_origin, covariance, \
-                 uncertainty_deg, verb_params, sensitive, sensitive_ack, estimator_version, status, last_used_at, created_at, updated_at, ray_source \
+                 uncertainty_deg, verb_params, sensitive, sensitive_ack, estimator_version, status, last_used_at, created_at, updated_at, ray_source, finger_aim \
                  FROM anchors WHERE place_id = ?1 ORDER BY created_at",
             )
             .map_err(database_error)?;
@@ -204,7 +206,7 @@ impl SqliteTargetingStore {
         let mut stmt = conn
             .prepare(
                 "SELECT id, place_id, name, target, domain, kind, position, direction, teach_origin, covariance, \
-                 uncertainty_deg, verb_params, sensitive, sensitive_ack, estimator_version, status, last_used_at, created_at, updated_at, ray_source \
+                 uncertainty_deg, verb_params, sensitive, sensitive_ack, estimator_version, status, last_used_at, created_at, updated_at, ray_source, finger_aim \
                  FROM anchors ORDER BY created_at",
             )
             .map_err(database_error)?;
@@ -399,6 +401,7 @@ pub fn anchor_record_to_anchor(record: &AnchorRecord) -> Option<Anchor> {
         status: record.status,
         estimator_version: record.estimator_version.clone(),
         ray_source: record.ray_source,
+        finger_aim: record.finger_aim.clone(),
     })
 }
 
@@ -444,6 +447,7 @@ pub fn anchor_to_record(
         sensitive_ack,
         estimator_version: anchor.estimator_version.clone(),
         ray_source: anchor.ray_source,
+        finger_aim: anchor.finger_aim.clone(),
         status: anchor.status,
         last_used_at: None,
         created_at: now_ms,
@@ -506,6 +510,7 @@ struct RawAnchor {
     created_at: i64,
     updated_at: i64,
     ray_source: String,
+    finger_aim: Option<String>,
 }
 
 impl TryFrom<RawAnchor> for AnchorRecord {
@@ -529,6 +534,11 @@ impl TryFrom<RawAnchor> for AnchorRecord {
             sensitive_ack: value.sensitive_ack != 0,
             estimator_version: value.estimator_version,
             ray_source: parse_ray_source(&value.ray_source)?,
+            finger_aim: value
+                .finger_aim
+                .as_deref()
+                .map(|text| from_text(text, "anchors.finger_aim"))
+                .transpose()?,
             status: parse_anchor_status(&value.status)?,
             last_used_at: value.last_used_at,
             created_at: value.created_at,
@@ -616,6 +626,7 @@ fn raw_anchor(row: &Row<'_>) -> rusqlite::Result<RawAnchor> {
         created_at: row.get(17)?,
         updated_at: row.get(18)?,
         ray_source: row.get(19)?,
+        finger_aim: row.get(20)?,
     })
 }
 

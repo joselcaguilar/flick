@@ -45,7 +45,7 @@ stateDiagram-v2
   Aiming --> Hover: best anchor passes the angle and margin tests
   Hover --> Aiming: target lost ≥ 200 ms / margin fails
   Hover --> Selected: dwell ≥ 500 ms
-  Selected --> Selected: verb fired (window refreshed)
+  Selected --> Selected: still aiming at it / verb fired (window refreshed)
   Selected --> Hover: point pose dwells on ANOTHER anchor (reselect)
   Selected --> Idle: window elapsed (4 s) / pause
   Aiming --> Idle: point pose lost ≥ 300 ms
@@ -57,7 +57,7 @@ stateDiagram-v2
 | Hover test | Angular error θ to the anchor ≤ `tolerance_deg` (10°, grows with anchor uncertainty up to 15°) **and** ≥ 5° margin over the second-best anchor | `targeting.tolerance_deg` |
 | Dwell to select | **500 ms** | `targeting.dwell_ms` |
 | Hover grace | A miss shorter than **200 ms** (a noisy frame or two) keeps the dwell running; a longer miss restarts it | — |
-| Selection window | **4 000 ms**, refreshed after every verb (so "circle again" works as a follow-up) | `targeting.window_ms` |
+| Selection window | **4 000 ms**, restarted on every frame that still aims at the selected device and after every verb (so "circle again" works as a follow-up). The window counts from the last aim, not the first | `targeting.window_ms` |
 | **Selection lock** | While selected, the selection only changes after a full dwell on another anchor, with the point pose held **and** the ray's angular speed < 60°/s. This way, drawing a circle never reselects | — |
 | Ambiguity | Two anchors within the margin → no selection; the HUD shows both names ("Fan or lamp? Hold still") → suppression `ambiguous_target` | — |
 
@@ -75,7 +75,7 @@ Coordinate frame: camera frame, meters (x right, y down, z forward). All 3D valu
 | **Arm-rooted** | shoulder/elbow → index fingertip | MediaPipe Pose lite (Apache-2.0); for RTSP cameras that see the user from the side or back | ~10–15° | 2 |
 | **Finger-only** (fallback) | index MCP → tip | Hand only | ~15–25° | 1 |
 
-- **Each anchor keeps the model it was taught with** (`ray_source`: `eye_rooted` | `finger_only`; anchors taught before this field existed are `finger_only`). The selector aims at an anchor only with that model and never substitutes the other one. The two rays from one hand can differ by 15–70°, and the teaching bias only cancels out when the same model is used to teach and to point. With no face in view, eye-rooted anchors can't be selected. The last detected face is reused for ≤ 1 s, so one missed detection doesn't drop the aim.
+- **Each anchor has a primary model** (`ray_source`: `eye_rooted` | `finger_only`; anchors taught before this field existed are `finger_only`). Each teach spot also records the finger-only ray when the hand is seen in ≥ 5 frames, so an eye-rooted anchor keeps a second geometry, `finger_aim`, fitted from those finger rays alone. A live ray is only scored against geometry taught with the same model, never across models: the two rays from one hand can differ by 15–70°, and the teaching bias only cancels out when the same model is used to teach and to point. With the face in view, eye-rooted anchors are scored with the eye-rooted ray. With no face in view, the live finger ray is scored against `finger_aim`, with the tolerance clamped to 15–20°. Eye-rooted anchors taught before `finger_aim` existed have no fallback until re-taught. The last detected face is reused for ≤ 1 s, so one missed detection doesn't drop the aim.
 
 4. **Temporal smoothing:** One-Euro filter on origin and direction; during dwell, the ray used for decisions is the median over the last 250 ms.
 
@@ -159,8 +159,8 @@ A laptop moves; RTSP cameras don't. Anchors are only valid while the camera sees
 
 1. **Pick the device:** HA entity/device search, sorted by the camera's area. Optional *Suggest devices I can see* (Phase 2, §8).
 2. **Point from spot 1:** "Point at the ceiling fan and hold still" → ~1 s capture from the running camera (average of the settled rays, p90 jitter), with live ray feedback. No pointing hand, or p90 jitter > 15° (a shaky hand) → the spot is rejected with a hint ("Hold your pointing hand still until the capture finishes").
-   - Spot 1 picks the ray model (§3): eye-rooted when the face is visible in ≥ 5 captured frames, otherwise finger-only.
-   - Later spots must use the same model. If the face drops out of view, the spot is rejected with "Keep your face in view of the camera while pointing".
+   - Each spot records the eye-rooted ray when the face is visible in ≥ 5 captured frames, and the finger-only ray when the hand is (§3). The eye-rooted ray is the spot's primary when it is steady (p90 jitter ≤ 15°); otherwise a steady finger-only ray is. Only the primary has to be steady.
+   - No face is required, and spots don't lock a model. The anchor's primary model is eye-rooted if any spot used it, otherwise finger-only. An eye-rooted anchor also stores `finger_aim` (§3), so it can still be selected with no face in view.
 3. **Point from spot 2:** "Take one or two steps to the side and point again" → triangulate → confidence meter. A third spot is optional. Spots taught < 0.5 m apart (the same seat) give a `direction` anchor (§4.1).
 4. **Speed levels** (fans with fine steps) or **level check** (other domains).
 5. **Verbs:** the default verbs for the domain are shown as sentences ("Point + ↻ → speed 1", "Point + ✋✋ apart → off"). The user can edit them or record a custom verb in the Studio.

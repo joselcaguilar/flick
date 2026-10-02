@@ -217,6 +217,72 @@ fn target_selector_fsm_table_selects_and_expires() -> Result<(), String> {
 }
 
 #[test]
+fn eye_taught_anchor_selects_by_finger_alone_and_holds_while_aimed() -> Result<(), String> {
+    let intrinsics = CameraIntrinsics::sane_default(1280, 720);
+    let camera_id = CameraId::new();
+    let anchor_id = AnchorId::new();
+    let mcp = Vector3::new(0.0, 0.0, 0.8);
+    let finger = Vector3::new(0.0, -0.12, 1.0).normalize();
+    // The eye line misses the finger line by 25°, so only the finger fallback can match.
+    let eye = Vector3::new(0.0, 0.05, 0.65);
+    let eye_line = UnitQuaternion::from_euler_angles(0.0, 25.0_f32.to_radians(), 0.0) * finger;
+    let mut session = TeachSession::new(
+        anchor_id,
+        "Flexo",
+        TeachTarget::Entity("light.flexo".to_owned()),
+        "light",
+        "test.estimator",
+    );
+    for (origin, direction, source) in [
+        (eye, eye_line, RaySource::EyeRooted),
+        (mcp, finger, RaySource::FingerOnly),
+    ] {
+        session.add_observation(TeachObservation {
+            spot_index: 1,
+            ray: PointingRay::new(vec_to_array(origin), vec_to_array(direction), source),
+            frames: 20,
+            ray_jitter_deg: 2.0,
+        });
+    }
+    let anchor = session.finish(&[]).map_err(|err| err.to_string())?.anchor;
+    assert!(matches!(anchor.ray_source, RaySource::EyeRooted));
+    assert!(
+        anchor.finger_aim.is_some(),
+        "eye-taught anchor lost its finger fallback"
+    );
+    let settings = TargetSelectorSettings::default();
+    let mut selector = TargetSelectorImpl::new(intrinsics.clone(), vec![anchor], settings);
+    let start = Instant::now();
+    let mut selected_since = None;
+    // Runs past the 4 s window: the selection must hold, without a gap, while the finger stays on target.
+    for ms in (0..=6000_u64).step_by(50) {
+        let frame = frame_for_direction(
+            camera_id,
+            &intrinsics,
+            mcp,
+            finger,
+            start + Duration::from_millis(ms),
+        )?;
+        let state = selector.update(&frame, None);
+        let on_target =
+            matches!(state, SelectionState::Selected { anchor_id: id, .. } if id == anchor_id);
+        match selected_since {
+            None if on_target => selected_since = Some(ms),
+            None => assert!(
+                ms < 1000,
+                "not selected by finger alone at {ms} ms: {state:?}, aim error {:?}",
+                selector.aim_error_deg()
+            ),
+            Some(since) => assert!(
+                on_target,
+                "selection from {since} ms dropped at {ms} ms while still aimed: {state:?}"
+            ),
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn lock_scenario_circling_after_selection_never_reselects() -> Result<(), String> {
     let intrinsics = CameraIntrinsics::sane_default(1280, 720);
     let camera_id = CameraId::new();
@@ -355,6 +421,7 @@ fn test_anchor(
         status: AnchorStatus::Ok,
         estimator_version: "test.estimator".to_owned(),
         ray_source: RaySource::FingerOnly,
+        finger_aim: None,
     }
 }
 

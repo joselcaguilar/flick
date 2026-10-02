@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     Anchor, AnchorScore, CameraIntrinsics, PointingRay, RayEstimator, RayEstimatorSettings,
     RayModel, RaySource,
-    anchors::score_anchor,
+    anchors::{score_anchor, score_geometry},
     math::{angle_deg, v3},
 };
 
@@ -21,6 +21,9 @@ const POINT_LOST: Duration = Duration::from_millis(300);
 const RESELECT_MAX_ANGULAR_SPEED_DEG_S: f32 = 60.0;
 /// A noisy ray that briefly leaves the anchor keeps the dwell running instead of restarting it.
 const HOVER_GRACE: Duration = Duration::from_millis(200);
+/// Hover tolerance bounds when an eye-rooted anchor is aimed at with its finger-only fallback.
+const FINGER_FALLBACK_MIN_TOLERANCE_DEG: f32 = 15.0;
+const FINGER_FALLBACK_MAX_TOLERANCE_DEG: f32 = 20.0;
 
 /// Settings for the target-selection FSM.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -35,8 +38,8 @@ pub struct TargetSelectorSettings {
     pub dwell: Duration,
     /// Selection window after dwell or verb refresh.
     pub window: Duration,
-    /// Ray-estimator tuning. Each anchor is aimed at with the ray model it was taught with, so
-    /// `ray.model` is ignored here.
+    /// Ray-estimator tuning. Each anchor is aimed at with the ray model it was taught with, or
+    /// its finger-only fallback without a face, so `ray.model` is ignored here.
     pub ray: RayEstimatorSettings,
 }
 
@@ -262,9 +265,13 @@ impl TargetSelectorImpl {
             return self.selected_state_or(SelectionState::Aiming);
         }
 
-        if let Some(selected) = self.selected.clone() {
+        if let Some(mut selected) = self.selected.clone() {
             if selected.anchor_id == candidate.anchor_id {
-                return self.selection_state(&selected);
+                // Still aiming at it, so the window runs from the last aim, not the first.
+                selected.expires_at = now + self.settings.window;
+                let state = self.selection_state(&selected);
+                self.selected = Some(selected);
+                return state;
             }
             if angular_speed > RESELECT_MAX_ANGULAR_SPEED_DEG_S {
                 self.hover = None;
@@ -362,12 +369,10 @@ impl TargetSelectorImpl {
             if anchor.status != AnchorStatus::Ok {
                 continue;
             }
-            // A ray from the other model misses by tens of degrees, so never substitute it.
-            let Some(ray) = rays.for_source(anchor.ray_source) else {
+            let Some((score, tolerance)) = live_score(anchor, rays, self.settings.tolerance_deg)
+            else {
                 continue;
             };
-            let score = score_anchor(anchor, ray);
-            let tolerance = tolerance_for(anchor, self.settings.tolerance_deg);
             let candidate = Candidate {
                 anchor_id: anchor.id,
                 score,
@@ -595,8 +600,31 @@ impl LiveRays {
     }
 }
 
-fn tolerance_for(anchor: &Anchor, base: f32) -> f32 {
-    (base + anchor.uncertainty_deg.max(0.0)).clamp(base, 15.0)
+fn tolerance_for(uncertainty_deg: f32, base: f32) -> f32 {
+    (base + uncertainty_deg.max(0.0)).clamp(base, 15.0)
+}
+
+/// Scores an anchor with the ray model it was taught with. A ray from the other model misses
+/// by tens of degrees, so it is never substituted; without a face, an eye-rooted anchor is
+/// aimed at with the finger-only model taught alongside it instead.
+fn live_score(anchor: &Anchor, rays: &LiveRays, base_tolerance: f32) -> Option<(AnchorScore, f32)> {
+    if let Some(ray) = rays.for_source(anchor.ray_source) {
+        return Some((
+            score_anchor(anchor, ray),
+            tolerance_for(anchor.uncertainty_deg, base_tolerance),
+        ));
+    }
+    let fallback = anchor.finger_aim.as_ref()?;
+    let ray = rays.finger.as_ref()?;
+    // Finger-only rays are noisier, so the fallback gets a wider tolerance.
+    let tolerance = (base_tolerance + fallback.uncertainty_deg.max(0.0)).clamp(
+        FINGER_FALLBACK_MIN_TOLERANCE_DEG,
+        FINGER_FALLBACK_MAX_TOLERANCE_DEG,
+    );
+    Some((
+        score_geometry(&fallback.geometry, fallback.uncertainty_deg, ray),
+        tolerance,
+    ))
 }
 
 /// Returns true when the hand shows the index-finger pointing pose used for targeting.

@@ -29,9 +29,9 @@ mod ray;
 mod selector;
 
 pub use anchors::{
-    Anchor, AnchorGeometry, AnchorQuality, AnchorScore, DistinctivenessWarning, RayObservation,
-    TeachObservation, TeachSession, TeachTarget, TeachingError, TeachingOutcome, VerbParams,
-    angular_error_deg, recompute_anchor,
+    Anchor, AnchorGeometry, AnchorQuality, AnchorScore, DistinctivenessWarning, FingerAim,
+    RayObservation, TeachObservation, TeachSession, TeachTarget, TeachingError, TeachingOutcome,
+    VerbParams, angular_error_deg, recompute_anchor,
 };
 pub use intrinsics::{
     CameraFov, CameraIntrinsics, DEFAULT_INTRINSICS_VERSION, FOV_TABLE, IntrinsicsSource,

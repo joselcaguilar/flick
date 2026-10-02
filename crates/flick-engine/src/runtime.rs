@@ -57,8 +57,8 @@ use flick_ha::{
 };
 use flick_spatial::{
     Anchor as SpatialAnchor, AnchorGeometry, CameraIntrinsics, DEFAULT_ESTIMATOR_VERSION,
-    PlaceRecord, PlaceStatus, PointingRay, RayEstimator, RayEstimatorSettings, RayModel, RaySource,
-    RealignPair, StoredIntrinsics, TargetClearReason, TargetEvent, TargetSelectorImpl,
+    FingerAim, PlaceRecord, PlaceStatus, PointingRay, RayEstimator, RayEstimatorSettings, RayModel,
+    RaySource, RealignPair, StoredIntrinsics, TargetClearReason, TargetEvent, TargetSelectorImpl,
     TargetSelectorSettings, TeachObservation, TeachSession as SpatialTeachSession, TeachTarget,
     is_point_pose, realign,
 };
@@ -2833,13 +2833,6 @@ impl SpotRays {
             .partition(|ray| ray.source == RaySource::EyeRooted);
         Self { eye, finger }
     }
-
-    fn take(self, source: RaySource) -> Vec<PointingRay> {
-        match source {
-            RaySource::EyeRooted => self.eye,
-            RaySource::FingerOnly => self.finger,
-        }
-    }
 }
 
 /// Collects filtered eye-rooted and finger-only pointing rays from the running camera for one teach spot.
@@ -2927,6 +2920,25 @@ fn settle_rays(rays: &[PointingRay]) -> Option<(PointingRay, f32)> {
     ray.origin = origin;
     ray.direction = direction;
     Some((ray, p90))
+}
+
+/// One ray model's settled ray for a teach spot.
+struct SettledRays {
+    ray: PointingRay,
+    jitter_deg: f32,
+    frames: u32,
+}
+
+fn settle_model(rays: &[PointingRay]) -> Option<SettledRays> {
+    if rays.len() < TEACH_SPOT_MIN_RAYS {
+        return None;
+    }
+    let (ray, jitter_deg) = settle_rays(rays)?;
+    Some(SettledRays {
+        ray,
+        jitter_deg,
+        frames: u32::try_from(rays.len()).unwrap_or(u32::MAX),
+    })
 }
 
 #[async_trait]
@@ -3303,82 +3315,69 @@ impl TeachGateway for EngineApp {
             }
             None => SpotRays::from_rays(self.replayed_pointing_rays().await),
         };
-        // All spots of an anchor share one ray model, chosen by the first spot. Eye-rooted is
-        // preferred: the finger alone is too short to aim across a room.
-        let locked = self
-            .teach_sessions
-            .lock()
-            .await
-            .get(session_id)
-            .and_then(|session| session.spatial.observations().first())
-            .map(|observation| observation.ray.source);
-        let source = locked.unwrap_or(if sampled.eye.len() >= TEACH_SPOT_MIN_RAYS {
-            RaySource::EyeRooted
-        } else {
-            RaySource::FingerOnly
-        });
-        let hand_seen = sampled.finger.len() >= TEACH_SPOT_MIN_RAYS;
-        let rays = sampled.take(source);
-        let settled = if rays.len() >= TEACH_SPOT_MIN_RAYS {
-            settle_rays(&rays)
-        } else {
-            None
+        // Eye-rooted rays aim best across a room, so they lead when the face is visible; the
+        // finger-only ray is kept alongside as the fallback for when the face is not.
+        let eye_rays = sampled.eye.len();
+        let finger_rays = sampled.finger.len();
+        let eye = settle_model(&sampled.eye);
+        let finger = settle_model(&sampled.finger);
+        let unsteady_jitter = eye
+            .as_ref()
+            .or(finger.as_ref())
+            .map(|settled| settled.jitter_deg);
+        let (primary, fallback) = match (eye, finger) {
+            (Some(eye), finger) if eye.jitter_deg <= TEACH_SPOT_MAX_JITTER_DEG => (eye, finger),
+            (_, Some(finger)) if finger.jitter_deg <= TEACH_SPOT_MAX_JITTER_DEG => (finger, None),
+            _ => {
+                if let Some(jitter_deg) = unsteady_jitter {
+                    let hint = "Hold your pointing hand still until the capture finishes";
+                    tracing::info!(
+                        session_id,
+                        eye_rays,
+                        finger_rays,
+                        jitter_deg,
+                        "teach spot rejected an unsteady pointing hand"
+                    );
+                    self.publish_teach_progress(
+                        session_id,
+                        "error",
+                        Some(f64::from(jitter_deg)),
+                        None,
+                        Some(hint),
+                    )
+                    .await;
+                    return Err(ApiProblem::validation("unsteady_pointing_hand", hint));
+                }
+                let hint =
+                    "Point at the device with your index finger so the camera can see your hand";
+                tracing::info!(
+                    session_id,
+                    eye_rays,
+                    finger_rays,
+                    "teach spot found no steady pointing hand"
+                );
+                self.publish_teach_progress(session_id, "error", None, None, Some(hint))
+                    .await;
+                return Err(ApiProblem::validation("no_pointing_hand", hint));
+            }
         };
-        let Some((ray, jitter_deg)) = settled else {
-            let (code, hint) = if source == RaySource::EyeRooted && hand_seen {
-                (
-                    "face_not_visible",
-                    "Keep your face in view of the camera while pointing",
-                )
-            } else {
-                (
-                    "no_pointing_hand",
-                    "Point at the device with your index finger so the camera can see your hand",
-                )
-            };
-            tracing::info!(
-                session_id,
-                rays = rays.len(),
-                ray_source = ?source,
-                code,
-                "teach spot found no steady pointing hand"
-            );
-            self.publish_teach_progress(session_id, "error", None, None, Some(hint))
-                .await;
-            return Err(ApiProblem::validation(code, hint));
-        };
-        if jitter_deg > TEACH_SPOT_MAX_JITTER_DEG {
-            let hint = "Hold your pointing hand still until the capture finishes";
-            tracing::info!(
-                session_id,
-                rays = rays.len(),
-                ray_source = ?source,
-                jitter_deg,
-                "teach spot rejected an unsteady pointing hand"
-            );
-            self.publish_teach_progress(
-                session_id,
-                "error",
-                Some(f64::from(jitter_deg)),
-                None,
-                Some(hint),
-            )
-            .await;
-            return Err(ApiProblem::validation("unsteady_pointing_hand", hint));
-        }
+        let jitter_deg = primary.jitter_deg;
+        let ray_source = primary.ray.source;
+        let finger_fallback = fallback.is_some();
         let (spot_index, preview) = {
             let mut sessions = self.teach_sessions.lock().await;
             let session = sessions.get_mut(session_id).ok_or_else(|| {
                 ApiProblem::validation("teach_session_not_found", "teach session not found")
             })?;
-            let spot_index = u32::try_from(session.spatial.observations().len() + 1)
-                .map_err(|err| ApiProblem::validation("too_many_spots", err.to_string()))?;
-            session.spatial.add_observation(TeachObservation {
-                spot_index,
-                ray,
-                frames: u32::try_from(rays.len()).unwrap_or(u32::MAX),
-                ray_jitter_deg: jitter_deg,
-            });
+            let spot_index = session.spatial.spots().saturating_add(1);
+            for settled in std::iter::once(primary).chain(fallback) {
+                session.spatial.add_observation(TeachObservation {
+                    spot_index,
+                    ray: settled.ray,
+                    frames: settled.frames,
+                    ray_jitter_deg: settled.jitter_deg,
+                });
+            }
             let preview = session
                 .spatial
                 .finish(&[])
@@ -3393,8 +3392,10 @@ impl TeachGateway for EngineApp {
         tracing::info!(
             session_id,
             spot_index,
-            rays = rays.len(),
-            ray_source = ?source,
+            eye_rays,
+            finger_rays,
+            ray_source = ?ray_source,
+            finger_fallback,
             jitter_deg,
             kind,
             confidence,
@@ -3668,28 +3669,33 @@ impl TeachGateway for EngineApp {
             .targeting
             .try_anchors_for_place(session.place_id)
             .map_err(store_problem)?;
+        let realigned = |geometry: AnchorGeometry| match geometry {
+            AnchorGeometry::Point3d {
+                position,
+                covariance,
+            } => AnchorGeometry::Point3d {
+                position: result.transform.transform_point(position),
+                covariance,
+            },
+            AnchorGeometry::Direction {
+                direction,
+                teach_origin,
+                covariance,
+            } => AnchorGeometry::Direction {
+                direction: result.transform.transform_direction(direction),
+                teach_origin,
+                covariance,
+            },
+        };
         for record in records {
             let Some(mut anchor) = anchor_record_to_anchor(&record) else {
                 continue;
             };
-            anchor.geometry = match anchor.geometry {
-                AnchorGeometry::Point3d {
-                    position,
-                    covariance,
-                } => AnchorGeometry::Point3d {
-                    position: result.transform.transform_point(position),
-                    covariance,
-                },
-                AnchorGeometry::Direction {
-                    direction,
-                    teach_origin,
-                    covariance,
-                } => AnchorGeometry::Direction {
-                    direction: result.transform.transform_direction(direction),
-                    teach_origin,
-                    covariance,
-                },
-            };
+            anchor.geometry = realigned(anchor.geometry);
+            anchor.finger_aim = anchor.finger_aim.take().map(|aim| FingerAim {
+                geometry: realigned(aim.geometry),
+                uncertainty_deg: aim.uncertainty_deg,
+            });
             let mut updated = anchor_to_record(
                 record.place_id,
                 &anchor,

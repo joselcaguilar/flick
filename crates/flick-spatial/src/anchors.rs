@@ -133,9 +133,21 @@ pub struct Anchor {
     pub status: AnchorStatus,
     /// Ray/triangulation version that produced this anchor.
     pub estimator_version: String,
-    /// Ray model the anchor was taught with; live aim must use the same model.
+    /// Ray model the anchor was taught with; live aim uses the same model when it can.
     #[serde(default = "legacy_ray_source")]
     pub ray_source: RaySource,
+    /// Finger-only model of an eye-rooted anchor, aimed at while no face is in view.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finger_aim: Option<FingerAim>,
+}
+
+/// Finger-only geometry taught alongside an eye-rooted anchor.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FingerAim {
+    /// Geometry fitted to the finger-only teaching rays.
+    pub geometry: AnchorGeometry,
+    /// Angular uncertainty of that geometry.
+    pub uncertainty_deg: f32,
 }
 
 const fn legacy_ray_source() -> RaySource {
@@ -231,9 +243,6 @@ pub enum TeachingError {
     /// Triangulation matrix was singular.
     #[error("teaching rays could not be triangulated")]
     SingularTriangulation,
-    /// Spots were captured with different ray models and cannot share one anchor.
-    #[error("teaching spots mix eye-rooted and finger-only rays")]
-    MixedRaySources,
 }
 
 /// Stateful helper for collecting teaching observations.
@@ -276,6 +285,12 @@ impl TeachSession {
     #[must_use]
     pub fn observations(&self) -> &[TeachObservation] {
         &self.observations
+    }
+
+    /// Number of spots captured so far; one spot holds one observation per steady ray model.
+    #[must_use]
+    pub fn spots(&self) -> u32 {
+        self.observations.last().map_or(0, |obs| obs.spot_index)
     }
 
     /// Builds the anchor and quality report.
@@ -325,13 +340,56 @@ fn build_anchor(
     estimator_version: String,
     existing: &[Anchor],
 ) -> Result<TeachingOutcome, TeachingError> {
-    let Some(first) = observations.first() else {
+    if observations.is_empty() {
         return Err(TeachingError::NoObservations);
-    };
-    let ray_source = first.ray.source;
-    if observations.iter().any(|obs| obs.ray.source != ray_source) {
-        return Err(TeachingError::MixedRaySources);
     }
+    // A spot holds one observation per ray model it saw steadily. Eye-rooted rays build the
+    // anchor; finger-only rays become its fallback for when no face is in view.
+    let (eye, finger): (Vec<_>, Vec<_>) = observations
+        .iter()
+        .cloned()
+        .partition(|obs| obs.ray.source == RaySource::EyeRooted);
+    let (primary, ray_source) = if eye.is_empty() {
+        (finger.as_slice(), RaySource::FingerOnly)
+    } else {
+        (eye.as_slice(), RaySource::EyeRooted)
+    };
+    let (geometry, quality, uncertainty_deg) = fit_geometry(primary)?;
+    let finger_aim = if eye.is_empty() || finger.is_empty() {
+        None
+    } else {
+        fit_geometry(&finger)
+            .ok()
+            .map(|(geometry, _, uncertainty_deg)| FingerAim {
+                geometry,
+                uncertainty_deg,
+            })
+    };
+    let anchor = Anchor {
+        id,
+        name,
+        target,
+        domain,
+        geometry,
+        uncertainty_deg,
+        verb_params: serde_json::json!({}),
+        status: AnchorStatus::Ok,
+        estimator_version,
+        ray_source,
+        finger_aim,
+    };
+    let distinctiveness_warnings = distinctiveness_warnings(&anchor, existing, primary);
+    Ok(TeachingOutcome {
+        anchor,
+        quality,
+        distinctiveness_warnings,
+    })
+}
+
+/// Fits a `point3d` when rays from separate spots converge, otherwise a `direction`.
+fn fit_geometry(
+    observations: &[TeachObservation],
+) -> Result<(AnchorGeometry, AnchorQuality, f32), TeachingError> {
     let max_sep = max_pairwise_ray_angle(observations);
     let triangulated = if observations.len() >= 2
         && max_sep >= PARALLEL_FALLBACK_DEG
@@ -343,27 +401,11 @@ fn build_anchor(
     };
     let (geometry, quality) =
         triangulated.unwrap_or_else(|| direction_anchor(observations, max_sep));
-    let anchor = Anchor {
-        id,
-        name,
-        target,
-        domain,
-        geometry,
-        uncertainty_deg: quality
-            .residual_deg
-            .max(mean_jitter(observations))
-            .clamp(1.0, 20.0),
-        verb_params: serde_json::json!({}),
-        status: AnchorStatus::Ok,
-        estimator_version,
-        ray_source,
-    };
-    let distinctiveness_warnings = distinctiveness_warnings(&anchor, existing, observations);
-    Ok(TeachingOutcome {
-        anchor,
-        quality,
-        distinctiveness_warnings,
-    })
+    let uncertainty_deg = quality
+        .residual_deg
+        .max(mean_jitter(observations))
+        .clamp(1.0, 20.0);
+    Ok((geometry, quality, uncertainty_deg))
 }
 
 /// Returns `None` when the rays never converged ahead of the user, so the caller falls back to
@@ -455,7 +497,11 @@ fn direction_anchor(
 /// Computes the angular error between a pointing ray and an anchor.
 #[must_use]
 pub fn angular_error_deg(anchor: &Anchor, ray: &PointingRay) -> f32 {
-    match &anchor.geometry {
+    geometry_error_deg(&anchor.geometry, ray)
+}
+
+fn geometry_error_deg(geometry: &AnchorGeometry, ray: &PointingRay) -> f32 {
+    match geometry {
         AnchorGeometry::Point3d { position, .. } => {
             vec_angle_deg(v3(ray.direction), v3(*position) - v3(ray.origin))
         }
@@ -468,8 +514,18 @@ pub fn angular_error_deg(anchor: &Anchor, ray: &PointingRay) -> f32 {
 /// Scores one anchor with the `09-device-targeting` Gaussian angular score.
 #[must_use]
 pub fn score_anchor(anchor: &Anchor, ray: &PointingRay) -> AnchorScore {
-    let theta = angular_error_deg(anchor, ray);
-    let sigma = anchor.uncertainty_deg.max(4.0);
+    score_geometry(&anchor.geometry, anchor.uncertainty_deg, ray)
+}
+
+/// Scores any anchor geometry, such as an eye-rooted anchor's [`FingerAim`].
+#[must_use]
+pub fn score_geometry(
+    geometry: &AnchorGeometry,
+    uncertainty_deg: f32,
+    ray: &PointingRay,
+) -> AnchorScore {
+    let theta = geometry_error_deg(geometry, ray);
+    let sigma = uncertainty_deg.max(4.0);
     let score = (-(theta * theta) / (2.0 * sigma * sigma))
         .exp()
         .clamp(0.0, 1.0);

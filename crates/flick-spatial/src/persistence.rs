@@ -4,7 +4,7 @@ use flick_core::{AnchorId, AnchorKind, AnchorStatus, CameraId, Handedness, Place
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{CameraIntrinsics, IntrinsicsSource, RaySource, TeachTarget, VerbParams};
+use crate::{CameraIntrinsics, FingerAim, IntrinsicsSource, RaySource, TeachTarget, VerbParams};
 
 /// Place persistence status, matching `places.status`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -104,6 +104,9 @@ pub struct AnchorRecord {
     pub estimator_version: String,
     /// `anchors.ray_source`.
     pub ray_source: RaySource,
+    /// `anchors.finger_aim` JSON, the finger-only fallback of an eye-rooted anchor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finger_aim: Option<FingerAim>,
     /// `anchors.status`.
     pub status: AnchorStatus,
     /// `anchors.last_used_at` in unix epoch milliseconds.
