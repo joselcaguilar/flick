@@ -1133,6 +1133,8 @@ export interface components {
         };
         /** @description Anchor record. */
         Anchor: {
+            /** @description Flick-only area id; overrides the Home Assistant area and is never written to HA. */
+            area_override?: string | null;
             /** @description Camera that taught the anchor; extra spots must come from it. */
             camera_id?: string | null;
             /** @description Created time. */
@@ -1166,6 +1168,8 @@ export interface components {
         };
         /** @description Anchor patch. */
         AnchorPatch: {
+            /** @description Flick-only area id; null clears it back to the Home Assistant area. */
+            area_override?: string | null;
             /** @description Name. */
             name?: string | null;
             /** @description Verb params JSON. */

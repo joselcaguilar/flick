@@ -916,6 +916,17 @@ code {
   background: var(--flick-bg-subtle);
 }
 
+.ui-select:disabled,
+.ui-select[data-disabled] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.ui-select:disabled:hover,
+.ui-select[data-disabled]:hover {
+  background: var(--flick-bg);
+}
+
 /* Floating layers are opaque overlays with the Primer overlay shadow. */
 .ui-select-content,
 .ui-popover,
@@ -1764,6 +1775,79 @@ body.hud-window {
   block-size: 1.25rem;
   border: 0;
   background: transparent;
+}
+
+.devices-area-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(32rem, 100%), 1fr));
+  align-items: start;
+  gap: 1rem;
+}
+
+.area-card {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.device-row-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.device-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(11rem, 14rem);
+  align-items: start;
+  gap: 0.75rem 1rem;
+  padding-block: 0.875rem;
+}
+
+.device-row + .device-row {
+  border-block-start: 1px solid var(--flick-border-muted);
+}
+
+.device-row-main,
+.device-row-side,
+.device-area-field {
+  display: grid;
+  gap: 0.5rem;
+  min-inline-size: 0;
+}
+
+.device-area-field {
+  gap: 0.3rem;
+}
+
+.device-area-field .ui-select {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.device-area-hint,
+.device-area-error {
+  margin: 0;
+  font-size: 0.75rem;
+}
+
+.device-area-hint {
+  color: var(--flick-muted);
+}
+
+.device-area-error {
+  justify-self: start;
+  border: 1px solid var(--flick-accent-red);
+  border-radius: var(--radius-lg);
+  background: var(--flick-danger-muted);
+  padding: 0.25rem 0.5rem;
+  color: var(--flick-text);
+}
+
+@media (max-width: 40rem) {
+  .device-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .teach-layout {

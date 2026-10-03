@@ -122,6 +122,49 @@ async fn mapping_gesture_patch_rejects_conflicts() -> Result<(), Box<dyn std::er
 }
 
 #[tokio::test]
+async fn anchor_area_override_patch_validates_and_clears() -> Result<(), Box<dyn std::error::Error>>
+{
+    let anchor = serde_json::from_value(json!({
+        "id": "anchor-lamp",
+        "place_id": "place-office",
+        "name": "Flexo",
+        "target": {"entity_id": "light.flexo"},
+        "domain": "light",
+        "kind": "direction",
+        "verb_params": {},
+        "sensitive": false,
+        "sensitive_ack": false,
+        "status": "ok",
+        "verbs": [],
+        "last_used_at": null,
+        "created_at": "2026-09-28T10:00:00Z",
+        "updated_at": "2026-09-28T10:00:00Z"
+    }))?;
+    let state = ApiState::fake(ApiConfig::dev());
+    state.replace_anchors(vec![anchor]);
+    let app = router(state);
+    let uri = "/api/v1/anchors/anchor-lamp";
+
+    for area in ["   ", "a\u{7}b"] {
+        let patch = json!({"area_override": area});
+        let response = call(&app, json_request_with("PATCH", uri, patch)?).await;
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(problem(response).await?.code, "bad_area_id");
+    }
+
+    for (patch, expected) in [
+        (json!({"area_override": "  office "}), json!("office")),
+        (json!({"name": "Desk lamp"}), json!("office")),
+        (json!({"area_override": null}), serde_json::Value::Null),
+    ] {
+        let response = call(&app, json_request_with("PATCH", uri, patch)?).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(body_json(response).await?["area_override"], expected);
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn client_certificate_upload_rejects_unreadable_data()
 -> Result<(), Box<dyn std::error::Error>> {
     let request = json_request_with(

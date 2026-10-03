@@ -116,6 +116,7 @@ pub async fn serve(runtime: RuntimeConfig, token: String) -> anyhow::Result<()> 
     let mut api_mappings = load_api_mappings(&app.store)?;
     let mut dispatcher_mappings = dispatcher_mappings_from_api(&api_mappings)?;
     let mut api_anchors = load_api_anchors(&app.targeting)?;
+    apply_area_overrides(&app.store, &mut api_anchors)?;
     let mut dispatcher_anchors =
         dispatcher_anchors_from_api(&api_anchors, &app.registry.lock().await.clone());
     if runtime.mock_ha || runtime.fake_landmarks.is_some() {
@@ -517,6 +518,22 @@ fn load_api_anchors(targeting: &SqliteTargetingStore) -> anyhow::Result<Vec<ApiA
         .collect())
 }
 
+/// Flick-only areas live beside the targeting columns; they never reach Home Assistant.
+fn apply_area_overrides(store: &Store, anchors: &mut [ApiAnchor]) -> anyhow::Result<()> {
+    let conn = store.connection();
+    let mut stmt =
+        conn.prepare("SELECT id, area_override FROM anchors WHERE area_override IS NOT NULL")?;
+    let overrides = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<Result<HashMap<_, _>, _>>()?;
+    for anchor in anchors.iter_mut() {
+        anchor.area_override = overrides.get(&anchor.id).cloned();
+    }
+    Ok(())
+}
+
 fn dispatcher_mappings_from_api(mappings: &[Mapping]) -> anyhow::Result<Vec<DispatcherMapping>> {
     mappings.iter().map(dispatcher_mapping_from_api).collect()
 }
@@ -670,6 +687,7 @@ fn api_anchor_from_dispatcher(anchor: &DispatcherAnchor) -> ApiAnchor {
         created_at: now.clone(),
         updated_at: now,
         camera_id: None,
+        area_override: None,
     }
 }
 
@@ -1003,7 +1021,7 @@ fn persist_anchor_edits(store: &Store, anchors: &[ApiAnchor]) -> anyhow::Result<
     }
     for anchor in anchors {
         conn.execute(
-            "UPDATE anchors SET name = ?1, verb_params = ?2, sensitive = ?3, sensitive_ack = ?4, status = ?5, updated_at = ?6 WHERE id = ?7",
+            "UPDATE anchors SET name = ?1, verb_params = ?2, sensitive = ?3, sensitive_ack = ?4, status = ?5, updated_at = ?6, area_override = ?8 WHERE id = ?7",
             params![
                 anchor.name,
                 serde_json::to_string(&anchor.verb_params)?,
@@ -1012,6 +1030,7 @@ fn persist_anchor_edits(store: &Store, anchors: &[ApiAnchor]) -> anyhow::Result<
                 anchor.status,
                 now,
                 anchor.id,
+                anchor.area_override,
             ],
         )?;
     }
@@ -4549,6 +4568,7 @@ fn api_anchor_from_record(
         created_at: ms_rfc3339(record.created_at),
         updated_at: ms_rfc3339(record.updated_at),
         camera_id,
+        area_override: None,
     }
 }
 

@@ -6,6 +6,7 @@ import {
   useCancelTeach,
   useCommitTeach,
   useDeleteAnchor,
+  useHaAreas,
   useHaEntities,
   useMappings,
   usePatchAnchor,
@@ -293,21 +294,59 @@ function verbDraftsFromMappings(mappings: Mapping[], anchorId: string): VerbDraf
     });
 }
 
+const HA_AREA = "__ha__";
+
+function firstId(value: unknown): string | undefined {
+  if (Array.isArray(value)) return typeof value[0] === "string" ? value[0] : undefined;
+  return typeof value === "string" ? value : undefined;
+}
+
 export function DevicesRoute() {
   const places = usePlaces();
   const anchors = useAnchors();
+  const areas = useHaAreas();
+  const entities = useHaEntities();
+  const patchAnchor = usePatchAnchor();
   const cameraName = useCameraNames();
-  const grouped = (places.data ?? []).map((place) => ({
-    place,
-    anchors: (anchors.data ?? []).filter((anchor) => anchor.place_id === place.id),
-  }));
+
+  const areaNames = new Map((areas.data ?? []).map((area) => [area.area_id, area.name]));
+  const entityAreas = new Map(
+    (entities.data ?? []).map((entity) => [entity.entity_id, entity.area_id ?? null]),
+  );
+  const placesById = new Map((places.data ?? []).map((place) => [place.id, place]));
+  const areaItems = [...(areas.data ?? [])]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((area) => ({ value: area.area_id, label: area.name }));
+  const areaName = (areaId: string | null) => (areaId ? (areaNames.get(areaId) ?? areaId) : "No area");
+  const haAreaOf = (anchor: Anchor) => {
+    const target = (anchor.target ?? {}) as unknown as Record<string, unknown>;
+    const entityId = firstId(target.entity_id);
+    return (entityId ? entityAreas.get(entityId) : undefined) ?? firstId(target.area_id) ?? null;
+  };
+  const groups = new Map<string, Anchor[]>();
+  for (const anchor of anchors.data ?? []) {
+    const key = anchor.area_override ?? haAreaOf(anchor) ?? "";
+    const list = groups.get(key);
+    if (list) list.push(anchor);
+    else groups.set(key, [anchor]);
+  }
+  const areaGroups = [...groups.entries()]
+    .map(([key, groupAnchors]) => ({ areaId: key || null, anchors: groupAnchors }))
+    .sort((a, b) => {
+      if (!a.areaId) return 1;
+      if (!b.areaId) return -1;
+      return areaName(a.areaId).localeCompare(areaName(b.areaId));
+    });
 
   return (
     <section className="feature-screen devices-screen" aria-labelledby="screen-title">
       <header className="operate-header">
         <div>
           <h1 id="screen-title">Devices</h1>
-          <p>Point at real objects once, then use reusable gestures like circle or two-hand stop.</p>
+          <p>
+            Every taught device by room, with the camera that sees it. Change a device's room here without
+            touching Home Assistant.
+          </p>
         </div>
         <Link className="ui-button ui-button-primary ui-button-md" to="/devices/teach">
           Teach a device
@@ -315,7 +354,12 @@ export function DevicesRoute() {
       </header>
 
       {anchors.isLoading ? <Skeleton /> : null}
-      {!anchors.isLoading && !anchors.data?.length ? (
+      {anchors.isError ? (
+        <p className="device-area-error" role="alert">
+          Couldn't load devices.
+        </p>
+      ) : null}
+      {!anchors.isLoading && !anchors.isError && !anchors.data?.length ? (
         <GlassPanel className="empty-state-panel">
           <EntityIcon domain="fan" />
           <h2>No devices taught</h2>
@@ -323,49 +367,96 @@ export function DevicesRoute() {
         </GlassPanel>
       ) : null}
 
-      <div className="devices-place-grid">
-        {grouped.map(({ place, anchors: placeAnchors }) => (
-          <GlassPanel className="place-card" key={place.id}>
+      <div className="devices-area-grid">
+        {areaGroups.map(({ areaId, anchors: areaAnchors }) => (
+          <GlassPanel className="place-card area-card" key={areaId ?? "none"}>
             <div className="panel-heading">
               <div>
-                <span>{cameraName(place.camera_id)}</span>
-                <strong>{place.name}</strong>
+                <span>{areaAnchors.length === 1 ? "1 device" : `${areaAnchors.length} devices`}</span>
+                <strong>{areaName(areaId)}</strong>
               </div>
-              <Badge tone={statusTone(place.status)}>{place.status}</Badge>
             </div>
-            <RoomSketch anchors={placeAnchors} />
-            <div className="device-card-list">
-              {placeAnchors.map((anchor) => (
-                <article className="device-card" key={anchor.id}>
-                  <DevicePill name={anchor.name} domain={anchor.domain} detail={anchorTargetEntity(anchor)} />
-                  <div className="device-card-meta">
-                    <Badge tone={statusTone(anchor.status)}>{anchor.status}</Badge>
-                    <span>Last used {formatTime(anchor.last_used_at)}</span>
-                  </div>
-                  <div className="verb-list">
-                    {anchor.verbs.map((verb) => (
-                      <VerbChip
-                        key={`${anchor.id}-${verb.gesture_id}`}
-                        gestureId={verb.gesture_id}
-                        label={verb.label}
+            <ul className="device-row-list">
+              {areaAnchors.map((anchor) => {
+                const place = placesById.get(anchor.place_id);
+                const cameraId = anchor.camera_id ?? place?.camera_id;
+                const haArea = haAreaOf(anchor);
+                const override = anchor.area_override ?? null;
+                const items = [
+                  { value: HA_AREA, label: `Home Assistant (${areaName(haArea)})` },
+                  ...areaItems,
+                  ...(override && !areaNames.has(override) ? [{ value: override, label: override }] : []),
+                ];
+                const saving = patchAnchor.isPending && patchAnchor.variables?.id === anchor.id;
+                const failed = patchAnchor.isError && patchAnchor.variables?.id === anchor.id;
+                return (
+                  <li className="device-row" key={anchor.id}>
+                    <div className="device-row-main">
+                      <DevicePill
+                        name={anchor.name}
+                        domain={anchor.domain}
+                        detail={anchorTargetEntity(anchor)}
                       />
-                    ))}
-                  </div>
-                  <div className="device-card-actions">
-                    <Link className="ui-button ui-button-secondary ui-button-sm" to={reteachHref(anchor)}>
-                      Re-teach
-                    </Link>
-                    <Link
-                      className="ui-button ui-button-secondary ui-button-sm"
-                      to={`/devices/edit?anchor=${anchor.id}`}
-                      aria-label={`Edit ${anchor.name}`}
-                    >
-                      Edit
-                    </Link>
-                  </div>
-                </article>
-              ))}
-            </div>
+                      <div className="device-card-meta">
+                        <span>{cameraId ? cameraName(cameraId) : "No camera"}</span>
+                        <span>{place?.name ?? "Unknown place"}</span>
+                        <Badge tone={statusTone(anchor.status)}>{anchor.status}</Badge>
+                        <span>
+                          {anchor.last_used_at
+                            ? `Last used ${formatTime(anchor.last_used_at)}`
+                            : "Not used yet"}
+                        </span>
+                      </div>
+                      <div className="verb-list">
+                        {anchor.verbs.map((verb) => (
+                          <VerbChip
+                            key={`${anchor.id}-${verb.gesture_id}`}
+                            gestureId={verb.gesture_id}
+                            label={verb.label}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="device-row-side">
+                      <div className="device-area-field">
+                        <Select
+                          label={`Area for ${anchor.name}`}
+                          value={override ?? HA_AREA}
+                          items={items}
+                          disabled={saving}
+                          onValueChange={(value) =>
+                            patchAnchor.mutate({
+                              id: anchor.id,
+                              patch: { area_override: value === HA_AREA ? null : value },
+                            })
+                          }
+                        />
+                        <p className="device-area-hint">
+                          {override ? "Set in Flick · Home Assistant isn't changed" : "From Home Assistant"}
+                        </p>
+                        {failed ? (
+                          <p className="device-area-error" role="alert">
+                            Couldn't change the area. Try again.
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="device-card-actions">
+                        <Link className="ui-button ui-button-secondary ui-button-sm" to={reteachHref(anchor)}>
+                          Re-teach
+                        </Link>
+                        <Link
+                          className="ui-button ui-button-secondary ui-button-sm"
+                          to={`/devices/edit?anchor=${anchor.id}`}
+                          aria-label={`Edit ${anchor.name}`}
+                        >
+                          Edit
+                        </Link>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           </GlassPanel>
         ))}
       </div>

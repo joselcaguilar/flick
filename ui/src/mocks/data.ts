@@ -192,6 +192,7 @@ export const anchors: Anchor[] = [
     verb_params: jsonObject({}),
     sensitive: false,
     sensitive_ack: false,
+    area_override: "living_room",
     status: "ok",
     last_used_at: now,
     created_at: now,

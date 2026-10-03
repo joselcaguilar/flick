@@ -28,6 +28,7 @@ pub fn migrations() -> Migrations<'static> {
         M::up(include_str!("../migrations/0002_ha_urls.sql")),
         M::up(include_str!("../migrations/0003_anchor_ray_source.sql")),
         M::up(include_str!("../migrations/0004_anchor_finger_aim.sql")),
+        M::up(include_str!("../migrations/0005_anchor_area_override.sql")),
     ])
 }
 

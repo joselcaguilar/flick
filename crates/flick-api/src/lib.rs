@@ -1071,6 +1071,7 @@ impl TeachGateway for FakeTeach {
             created_at: now_rfc3339(),
             updated_at: now_rfc3339(),
             camera_id: None,
+            area_override: None,
         };
         Ok(TeachCommitResponse {
             anchor,
@@ -2063,6 +2064,22 @@ async fn patch_anchor(
     Path(id): Path<String>,
     Json(request): Json<AnchorPatch>,
 ) -> Result<Json<Anchor>, ApiProblem> {
+    let area_override = match request.area_override {
+        Some(Some(area_id)) => {
+            let area_id = area_id.trim();
+            if area_id.is_empty()
+                || area_id.chars().count() > 128
+                || area_id.chars().any(char::is_control)
+            {
+                return Err(ApiProblem::validation(
+                    "bad_area_id",
+                    "area id must be 1-128 printable characters",
+                ));
+            }
+            Some(Some(area_id.to_owned()))
+        }
+        other => other,
+    };
     let (anchor, all_anchors) = {
         let mut anchors = state.anchors.lock().unwrap_or_else(|err| err.into_inner());
         let Some(anchor) = anchors.get_mut(&id) else {
@@ -2077,6 +2094,9 @@ async fn patch_anchor(
         }
         if let Some(verb_params) = request.verb_params {
             anchor.verb_params = verb_params;
+        }
+        if let Some(area_override) = area_override {
+            anchor.area_override = area_override;
         }
         anchor.updated_at = now_rfc3339();
         (
@@ -2169,6 +2189,12 @@ async fn teach_commit(
     let mut response = state.teach.commit(&session_id, request).await?;
     let anchors = {
         let mut anchors = state.anchors.lock().unwrap_or_else(|err| err.into_inner());
+        // Re-teach and append reuse the anchor id; keep the Flick-only area the user chose.
+        if response.anchor.area_override.is_none()
+            && let Some(previous) = anchors.get(&response.anchor.id)
+        {
+            response.anchor.area_override = previous.area_override.clone();
+        }
         anchors.insert(response.anchor.id.clone(), response.anchor.clone());
         anchors.clone()
     };

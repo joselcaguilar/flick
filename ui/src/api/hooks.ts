@@ -368,7 +368,7 @@ export function usePatchAnchor() {
       patch,
     }: {
       id: string;
-      patch: { name?: string; verb_params?: Record<string, unknown> };
+      patch: { name?: string; verb_params?: Record<string, unknown>; area_override?: string | null };
     }) => api.patch<Anchor>(`/api/v1/anchors/${id}`, patch),
     onSuccess: () => client.invalidateQueries({ queryKey: ["anchors"] }),
   });

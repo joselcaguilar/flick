@@ -6,14 +6,16 @@ export function Select({
   onValueChange,
   label,
   items,
+  disabled = false,
 }: {
   value: string;
   onValueChange: (value: string) => void;
   label: string;
   items: Array<{ value: string; label: string }>;
+  disabled?: boolean;
 }) {
   return (
-    <SelectPrimitive.Root value={value} onValueChange={onValueChange}>
+    <SelectPrimitive.Root value={value} onValueChange={onValueChange} disabled={disabled}>
       <SelectPrimitive.Trigger className="ui-select" aria-label={label}>
         <SelectPrimitive.Value />
         <SelectPrimitive.Icon className="ui-select-chevron">

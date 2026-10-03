@@ -899,6 +899,9 @@ pub struct Anchor {
     /// Camera that taught the anchor; extra spots must come from it.
     #[serde(default)]
     pub camera_id: Option<String>,
+    /// Flick-only area id; overrides the Home Assistant area and is never written to HA.
+    #[serde(default)]
+    pub area_override: Option<String>,
 }
 
 /// Verb binding shown for a selected target.
@@ -918,6 +921,23 @@ pub struct AnchorPatch {
     /// Verb params JSON.
     #[schema(value_type = Object)]
     pub verb_params: Option<Value>,
+    /// Flick-only area id; null clears it back to the Home Assistant area.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_some",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[schema(value_type = Option<String>, nullable)]
+    pub area_override: Option<Option<String>>,
+}
+
+/// Keeps an explicit JSON `null` distinct from an absent field.
+fn deserialize_some<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
 }
 
 /// Anchor test response.

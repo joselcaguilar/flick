@@ -2244,6 +2244,13 @@
           "updated_at"
         ],
         "properties": {
+          "area_override": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Flick-only area id; overrides the Home Assistant area and is never written to HA."
+          },
           "camera_id": {
             "type": [
               "string",
@@ -2322,6 +2329,13 @@
           "verb_params"
         ],
         "properties": {
+          "area_override": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Flick-only area id; null clears it back to the Home Assistant area."
+          },
           "name": {
             "type": [
               "string",
