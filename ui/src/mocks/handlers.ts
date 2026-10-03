@@ -226,9 +226,11 @@ export const handlers = [
   http.post(`${api}/mappings`, async ({ request }) =>
     ok({ ...mappings[0], ...((await request.json()) as object), id: "map-new" }),
   ),
-  http.patch(`${api}/mappings/:id`, async ({ request, params }) =>
-    ok({ ...mappings[0], id: params.id, ...((await request.json()) as object) }),
-  ),
+  http.patch(`${api}/mappings/:id`, async ({ request, params }) => {
+    const mapping = mappings.find((item) => item.id === params.id) ?? mappings[0];
+    const patch = (await request.json()) as { feedback?: unknown };
+    return ok({ ...mapping, ...patch, feedback: patch.feedback ?? mapping.feedback, id: params.id });
+  }),
   http.delete(`${api}/mappings/:id`, () => noContent()),
   http.post(`${api}/mappings/:id/test`, () => outcome()),
   http.put(`${api}/mappings/order`, () => noContent()),

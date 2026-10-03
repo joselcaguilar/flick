@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { features } from "../config/features";
 import { ActivityRoute } from "../features/activity/ActivityRoute";
+import { AreasRoute } from "../features/areas/Areas";
 import { CamerasRoute } from "../features/cameras/Cameras";
 import { DashboardRoute } from "../features/dashboard/Dashboard";
 import {
@@ -12,7 +13,7 @@ import {
   TeachDeviceRoute,
 } from "../features/devices/Devices";
 import { GesturesLibraryRoute } from "../features/gestures/GesturesLibraryRoute";
-import { MappingEditorRoute, MappingsRoute } from "../features/mappings/Mappings";
+import { MappingEditorRoute } from "../features/mappings/Mappings";
 import { OnboardingRoute } from "../features/onboarding/OnboardingRoute";
 import { ProRoute } from "../features/pro/Pro";
 import { SettingsRoute } from "../features/settings/SettingsRoute";
@@ -95,13 +96,19 @@ export const routes: RouteMeta[] = [
     element: <RealignRoute />,
   },
   {
-    path: "/mappings",
-    title: "Mappings",
-    description: "Targeted and global gesture sentences.",
+    path: "/areas",
+    title: "Areas",
+    description: "Room gestures: all on, all off and routines.",
     nav: true,
     mobile: true,
     shortcut: "⌘4",
-    element: <MappingsRoute />,
+    element: <AreasRoute />,
+  },
+  {
+    path: "/mappings",
+    title: "Mappings",
+    description: "Redirect to Areas.",
+    element: <Navigate to="/areas" replace />,
   },
   {
     path: "/mappings/new",

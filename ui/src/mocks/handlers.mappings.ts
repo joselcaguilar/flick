@@ -1,4 +1,5 @@
 import { HttpResponse, http } from "msw";
+import type { Mapping } from "../api/types";
 import { mappings } from "./data";
 
 const api = "*/api/v1";
@@ -17,12 +18,16 @@ function outcome(message = "Done · Home Assistant confirmed") {
 
 export const mappingHandlers = [
   http.get(`${api}/mappings`, () => ok(mappings)),
-  http.post(`${api}/mappings`, async ({ request }) =>
-    ok({ ...mappings[0], ...((await request.json()) as object), id: "map-new" }),
-  ),
+  http.post(`${api}/mappings`, async ({ request }) => {
+    const body = (await request.json()) as object;
+    const created = { ...mappings[0], ...body, id: `map-new-${mappings.length + 1}` } as Mapping;
+    mappings.push(created);
+    return ok(created);
+  }),
   http.patch(`${api}/mappings/:id`, async ({ request, params }) => {
-    const mapping = mappings.find((item) => item.id === params.id) ?? mappings[0];
-    const patch = (await request.json()) as { gesture_id?: string };
+    const index = mappings.findIndex((item) => item.id === params.id);
+    const mapping = index >= 0 ? mappings[index] : mappings[0];
+    const patch = (await request.json()) as Partial<Mapping>;
     const conflict =
       patch.gesture_id &&
       mapping.anchor_id &&
@@ -44,9 +49,20 @@ export const mappingHandlers = [
         { status: 422 },
       );
     }
-    return ok({ ...mapping, ...patch, id: params.id });
+    const updated = {
+      ...mapping,
+      ...patch,
+      feedback: patch.feedback ?? mapping.feedback,
+      id: params.id,
+    } as Mapping;
+    if (index >= 0) mappings[index] = updated;
+    return ok(updated);
   }),
-  http.delete(`${api}/mappings/:id`, () => noContent()),
+  http.delete(`${api}/mappings/:id`, ({ params }) => {
+    const index = mappings.findIndex((item) => item.id === params.id);
+    if (index >= 0) mappings.splice(index, 1);
+    return noContent();
+  }),
   http.post(`${api}/mappings/:id/test`, () => outcome()),
   http.put(`${api}/mappings/order`, () => noContent()),
 ];

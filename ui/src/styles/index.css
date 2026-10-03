@@ -880,6 +880,10 @@ code {
   white-space: nowrap;
 }
 
+.ui-select[data-placeholder] > span:first-child {
+  color: var(--flick-muted);
+}
+
 .ui-select-chevron {
   display: inline-grid;
   place-items: center;
@@ -2216,6 +2220,7 @@ body.hud-window {
 }
 
 .mappings-screen,
+.areas-screen,
 .mapping-editor-screen {
   display: grid;
   gap: 1rem;
@@ -2224,12 +2229,120 @@ body.hud-window {
 .mapping-tabs,
 .mapping-tab-content,
 .mapping-list,
+.areas-grid,
+.area-panel,
+.area-gesture-list,
 .sentence-builder-card,
 .mapping-safety-panel,
 .mapping-checks-card,
 .sensitive-card {
   display: grid;
   gap: 1rem;
+}
+
+.areas-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+}
+
+.areas-hint,
+.areas-note,
+.area-members,
+.area-excluded,
+.area-empty-row {
+  margin: 0;
+  color: var(--flick-muted);
+}
+
+.areas-hint,
+.areas-note {
+  border: 1px solid var(--flick-border-muted);
+  border-radius: var(--radius-lg);
+  background: var(--flick-bg-subtle);
+  padding: 0.75rem 1rem;
+}
+
+.area-panel {
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-xl);
+  background: var(--flick-surface);
+  padding: 1rem;
+}
+
+.area-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block-start: 0.5rem;
+}
+
+.area-excluded {
+  font-size: 0.85rem;
+}
+
+.area-gesture-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.area-gesture-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 220px) auto;
+  align-items: center;
+  gap: 0.75rem;
+  border-block-start: 1px solid var(--flick-border-muted);
+  padding-block: 0.75rem;
+}
+
+.area-gesture-row:first-child {
+  border-block-start: 0;
+}
+
+.area-gesture-row.new-routine-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 220px) minmax(0, 220px);
+}
+
+.area-gesture-main strong,
+.area-gesture-main span {
+  display: block;
+}
+
+.area-gesture-main span {
+  color: var(--flick-muted);
+  font-size: 0.85rem;
+}
+
+.area-gesture-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.area-gesture-row .inline-error,
+.area-gesture-row .inline-result {
+  grid-column: 1 / -1;
+}
+
+.other-gestures-panel .panel-heading h2 {
+  margin: 0;
+}
+
+.other-gestures-panel .panel-heading p {
+  margin: 0.25rem 0 0;
+  color: var(--flick-muted);
+}
+
+@media (max-width: 720px) {
+  .area-gesture-row,
+  .area-gesture-row.new-routine-row {
+    grid-template-columns: 1fr;
+  }
+
+  .area-gesture-actions {
+    justify-content: flex-start;
+  }
 }
 
 .mapping-tab-content {

@@ -10,6 +10,7 @@
     "gestures": "Gestures",
     "devices": "Devices",
     "mappings": "Mappings",
+    "areas": "Areas",
     "cameras": "Cameras",
     "activity": "Activity",
     "settings": "Settings",
@@ -65,6 +66,7 @@
     "errorBody": "Flick will keep trying. Use the command palette for recovery actions.",
     "screenBody": "This screen is scaffolded for the next UI phase. The route, title, empty state and command path are ready.",
     "mappings": "No mappings yet. Pick a gesture and tell Flick what it should do.",
+    "areas": "No room gestures yet. Teach a device so Flick can group gestures by room.",
     "devices": "Point at something in the room — Flick will remember it.",
     "cameraDenied": "Flick needs camera access to see your gestures. Video stays on this Mac.",
     "haOffline": "Can't reach Home Assistant. Flick will keep trying — your camera is paused meanwhile.",
@@ -79,6 +81,7 @@
     "places": "Places",
     "realign": "Re-align devices",
     "mappings": "Mappings",
+    "areas": "Areas",
     "mappingEditor": "Mapping editor",
     "cameras": "Cameras",
     "activity": "Activity",
@@ -138,6 +141,13 @@
     "globalTab": "Global",
     "editor": "Build a sentence",
     "sensitive": "Sensitive flow"
+  },
+  "areas": {
+    "title": "Areas",
+    "hint": "Room gestures fire when you aren't pointing at a device. Pointing always wins. Changing an area in Flick never edits Home Assistant.",
+    "allOn": "All on",
+    "allOff": "All off",
+    "routines": "Routines"
   },
   "cameras": {
     "title": "Local cameras",

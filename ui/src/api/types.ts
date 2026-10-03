@@ -103,6 +103,8 @@ export type Mapping = Schema<"Mapping"> & {
   gesture_name?: string;
   target_label?: string;
 };
+
+export type MappingCreate = Schema<"MappingCreate">;
 export type ActivityItem = Schema<"ActivityItem"> & {
   gesture_name?: string;
 };

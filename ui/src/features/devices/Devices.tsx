@@ -40,6 +40,7 @@ import { Badge, Button, GlassPanel, Input, ListRow, Select, Skeleton, Switch } f
 import { useEventStore } from "../../events/store";
 import { useActiveCamera, useCameraLive, useLiveHands } from "../../events/useLiveHands";
 import { formatTime } from "../../lib/utils";
+import { effectiveAreaOf, HA_AREA, haAreaOf } from "./area";
 
 function anchorTarget(anchor: Anchor) {
   return anchor.target as unknown as { entity_id?: string; device_id?: string; area_id?: string };
@@ -294,13 +295,6 @@ function verbDraftsFromMappings(mappings: Mapping[], anchorId: string): VerbDraf
     });
 }
 
-const HA_AREA = "__ha__";
-
-function firstId(value: unknown): string | undefined {
-  if (Array.isArray(value)) return typeof value[0] === "string" ? value[0] : undefined;
-  return typeof value === "string" ? value : undefined;
-}
-
 export function DevicesRoute() {
   const places = usePlaces();
   const anchors = useAnchors();
@@ -318,14 +312,9 @@ export function DevicesRoute() {
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((area) => ({ value: area.area_id, label: area.name }));
   const areaName = (areaId: string | null) => (areaId ? (areaNames.get(areaId) ?? areaId) : "No area");
-  const haAreaOf = (anchor: Anchor) => {
-    const target = (anchor.target ?? {}) as unknown as Record<string, unknown>;
-    const entityId = firstId(target.entity_id);
-    return (entityId ? entityAreas.get(entityId) : undefined) ?? firstId(target.area_id) ?? null;
-  };
   const groups = new Map<string, Anchor[]>();
   for (const anchor of anchors.data ?? []) {
-    const key = anchor.area_override ?? haAreaOf(anchor) ?? "";
+    const key = effectiveAreaOf(anchor, entityAreas) ?? "";
     const list = groups.get(key);
     if (list) list.push(anchor);
     else groups.set(key, [anchor]);
@@ -380,7 +369,7 @@ export function DevicesRoute() {
               {areaAnchors.map((anchor) => {
                 const place = placesById.get(anchor.place_id);
                 const cameraId = anchor.camera_id ?? place?.camera_id;
-                const haArea = haAreaOf(anchor);
+                const haArea = haAreaOf(anchor, entityAreas);
                 const override = anchor.area_override ?? null;
                 const items = [
                   { value: HA_AREA, label: `Home Assistant (${areaName(haArea)})` },
@@ -1307,7 +1296,7 @@ export function TeachDeviceRoute() {
             <GlassPanel className="teach-step-card success-card">
               <Badge tone="success">Done</Badge>
               <h2>{commitResult.anchor.name} is ready.</h2>
-              <p>Try these from the room. They are also listed under Mappings → Devices.</p>
+              <p>Try these from the room. They are also listed under Devices.</p>
               <div className="sentence-stack">
                 {verbs
                   .filter((verb) => verb.enabled)
@@ -1318,8 +1307,8 @@ export function TeachDeviceRoute() {
                     </p>
                   ))}
               </div>
-              <Link className="ui-button ui-button-primary ui-button-md" to="/mappings">
-                View mappings
+              <Link className="ui-button ui-button-primary ui-button-md" to="/devices">
+                View devices
               </Link>
             </GlassPanel>
           ) : null}

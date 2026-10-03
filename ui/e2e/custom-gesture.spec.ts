@@ -34,9 +34,13 @@ test("custom gesture can be recorded, mapped, replayed, and sent to HA", async (
     sensitive_ack: false,
   });
 
-  await page.goto("/mappings");
-  await page.getByRole("tab", { name: "Global" }).click();
-  await expect(page.getByText(/Bed light/).first()).toBeVisible();
+  await page.goto("/areas");
+  await expect(
+    page
+      .getByRole("region", { name: "Other gestures" })
+      .getByText(/Bed light/)
+      .first(),
+  ).toBeVisible();
 
   const baseline = (await mockHaCalls(request)).length;
   await replay(request, "landmarks/custom_motion");

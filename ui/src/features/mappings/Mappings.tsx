@@ -77,7 +77,7 @@ function mappingTone(mapping: Mapping) {
   return "success";
 }
 
-function mappingTargetLabel(mapping: Mapping, anchors: ReturnType<typeof useAnchors>["data"]) {
+export function mappingTargetLabel(mapping: Mapping, anchors: ReturnType<typeof useAnchors>["data"]) {
   return (
     mapping.target_label ??
     anchors?.find((anchor) => anchor.id === mapping.anchor_id)?.name ??
@@ -143,7 +143,7 @@ function targetPatch(value: string): Partial<Mapping> {
   return { target_mode: "domain", target_domain: id };
 }
 
-function MappingRow({
+export function MappingRow({
   mapping,
   targetLabel,
   anchors,

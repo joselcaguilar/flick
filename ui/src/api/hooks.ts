@@ -23,6 +23,7 @@ import type {
   HaStatus,
   Health,
   Mapping,
+  MappingCreate,
   ModelPack,
   MotionTake,
   Place,
@@ -314,6 +315,14 @@ export function useTrainClassifier() {
 
 export function useMappings() {
   return useQuery({ queryKey: queryKeys.mappings, queryFn: () => api.get<Mapping[]>("/api/v1/mappings") });
+}
+
+export function useCreateMapping() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: MappingCreate) => api.post<Mapping>("/api/v1/mappings", body),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.mappings }),
+  });
 }
 
 export function usePatchMapping() {

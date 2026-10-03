@@ -35,11 +35,7 @@ export function BrandMark({
       {...ariaProps}
     >
       {decorative ? null : <title id={titleId}>{title}</title>}
-      {tile ? (
-        <>
-          <rect x="5" y="5" width="54" height="54" rx="16" fill="#161B22" />
-        </>
-      ) : null}
+      {tile ? <rect x="5" y="5" width="54" height="54" rx="16" fill="#161B22" /> : null}
       <g strokeLinecap="round">
         <path
           d="M20.3 47c-3.7-3.8-3.5-9.6.5-13.2l13.9-12.6c4-3.6 10.1-3.4 13.6.4 3.6 3.8 3.4 9.6-.5 13.2L33.9 47.4c-4 3.6-10.1 3.4-13.6-.4Z"

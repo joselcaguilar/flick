@@ -424,20 +424,16 @@ impl TriggerFsmSet {
         {
             return Ok((targeted, selected));
         }
+        if selected.is_some() {
+            return Err(SuppressionReason::TargetSelected);
+        }
 
         matching.retain(|mapping| two_hand_allowed(mapping, candidate.gesture_id, visible_hands));
         if matching.is_empty() {
             return Err(SuppressionReason::NoMapping);
         }
 
-        if selected.is_some() {
-            if matching
-                .iter()
-                .any(|mapping| matches!(mapping.target_mode, TargetMode::Targeted))
-            {
-                return Err(SuppressionReason::TargetSelected);
-            }
-        } else if matching
+        if matching
             .iter()
             .all(|mapping| matches!(mapping.target_mode, TargetMode::Targeted))
         {
@@ -847,8 +843,10 @@ fn make_event(
 
 fn selected_anchor(selection: &SelectionState) -> Option<AnchorId> {
     match selection {
-        SelectionState::Selected { anchor_id, .. } => Some(*anchor_id),
-        SelectionState::Idle | SelectionState::Aiming | SelectionState::Hover { .. } => None,
+        SelectionState::Selected { anchor_id, .. } | SelectionState::Hover { anchor_id, .. } => {
+            Some(*anchor_id)
+        }
+        SelectionState::Idle | SelectionState::Aiming => None,
     }
 }
 
@@ -890,5 +888,42 @@ fn suppressed(candidate: &GestureCandidate, reason: SuppressionReason) -> Suppre
         gesture_id: candidate.gesture_id,
         track_id: candidate.track_id,
         reason,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hover_counts_as_targeted_for_mapping_resolution() {
+        let anchor_id = AnchorId::new();
+        let gesture_id = GestureId::Builtin(BuiltinGesture::ThumbUp);
+        let fsm = TriggerFsmSet::new(TriggerConfig {
+            mappings: vec![GestureMapping {
+                gesture_id,
+                target_mode: TargetMode::Global,
+                ..GestureMapping::tap(gesture_id)
+            }],
+            ..TriggerConfig::default()
+        });
+        let candidate = GestureCandidate {
+            gesture_id,
+            track_id: 1,
+            hand: Handedness::Right,
+            confidence: 1.0,
+            progress: None,
+            value: None,
+        };
+        let selection = SelectionState::Hover {
+            anchor_id,
+            score: 0.91,
+            dwell_progress: 0.5,
+            runner_up: None,
+        };
+
+        let resolved = fsm.resolve_mapping(&candidate, 1, &selection);
+
+        assert!(matches!(resolved, Err(SuppressionReason::TargetSelected)));
     }
 }
