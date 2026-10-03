@@ -332,3 +332,4 @@ Added as optional git dependencies behind the `pro` cargo feature of `flick-engi
 | 2026-09-28 | Initial ADR-001…014. Product name **Flick**. HA integration limited to direct service calls. |
 | 2026-09-28 | Added ADR-015 (OTA), ADR-016 (device targeting by pointing), ADR-017 (cloud policy), ADR-018 (Impeccable design process). ADR-007 adds BlazeFace + DINOv2-small; ADR-008 moves motion/two-hand DTW templates into Core. New crates `flick-spatial`, `flick-update`; `flick-pro-motion` removed. |
 | 2026-09-28 | Added ADR-019 (lean testing policy). Trimmed the required test lists in 03, 07, 08, 09 and 10; removed the coverage goal. |
+| 2026-10-03 | Gesture latency tuning: targeted/either verbs fire on 3 of 8 votes while a device is selected (`detection.vote.selected_n`); a held tap hands off to a new mapped gesture without the `release_ms` wait; point-stable 120 ms, dwell 300 ms. Updated 02, 04, 06 and 09. |

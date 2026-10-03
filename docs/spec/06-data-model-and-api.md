@@ -325,7 +325,7 @@ CREATE TABLE update_state (              -- small key/value table owned by flick
 | Key | Default |
 |---|---|
 | `detection.sensitivity` | `"normal"` (`low` \| `normal` \| `high`) |
-| `detection.vote` | `{"n":6,"m":8}` |
+| `detection.vote` | `{"n":6,"m":8,"selected_n":3}` (`selected_n` applies to targeted/either verbs while a device is selected) |
 | `detection.min_hand_size` | `0.06` |
 | `detection.battery_saver` | `false` |
 | `detection.arm` | `{"enabled":false,"gesture":"builtin.open_palm","hold_ms":600,"window_ms":4000}` |
@@ -346,7 +346,7 @@ CREATE TABLE update_state (              -- small key/value table owned by flick
 | `gestures.two_hand_separate.axis` | `"any"` (`any` \| `vertical` \| `horizontal`) |
 | `targeting.enabled` | `true` (effective only when ≥ 1 anchor exists on the camera's active place) |
 | `targeting.tolerance_deg` | `10` (5–15) |
-| `targeting.dwell_ms` | `500` |
+| `targeting.dwell_ms` | `300` (the runtime currently uses the built-in selector default) |
 | `targeting.window_ms` | `4000` |
 | `targeting.ray_model` | `"auto"` (`auto` \| `eye` \| `finger`; `arm` in Phase 2) |
 | `targeting.dominant_eye` | `"center"` (`center` \| `left` \| `right`) |

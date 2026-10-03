@@ -159,7 +159,7 @@ Built-in parameters (thresholds, windows, cooldowns) are defaults delivered by t
   - judged on **world landmarks** (metric, hand-centred) with the same finger tests as the gesture classifier. Image landmarks are only a fallback when world landmarks are missing: their z is at crop scale while x and y are frame-normalised, so joint angles from them swing with depth noise. Pointing rays still use image landmarks;
   - index finger extended (PIP angle ≥ 155°, DIP angle ≥ 145°, tip > 1.25 × the PIP's distance from the wrist);
   - middle, ring and pinky curled (tip ≤ 1.08 × the PIP's distance from the wrist, or not extended);
-  - thumb ignored; stable ≥ 200 ms.
+  - thumb ignored; stable ≥ 120 ms.
   - It works in any direction, unlike `pointing_up`.
   - It feeds the `TargetSelector` and is not mappable to global actions while the camera has anchors.
 - `builtin.pointing_up` global mappings fire only when **no anchor is hovered** (`09-…` §5.3).
@@ -266,7 +266,7 @@ stateDiagram-v2
 
 | Setting | Default |
 |---|---|
-| Vote window | **6 of last 8 frames** (≈ 200–270 ms @30 fps) |
+| Vote window | **6 of last 8 frames** (≈ 200–270 ms @30 fps); **3 of last 8** for targeted/either verbs while a device is selected (`detection.vote.selected_n`) |
 | Tier 0 threshold / Tier 1 threshold | 0.70 / 0.75 (per gesture) |
 | Release required before re-fire | gesture absent ≥ **250 ms** |
 | Per-mapping cooldown | **1 000 ms** |
@@ -279,6 +279,7 @@ stateDiagram-v2
 | Idle → active | first palm detection; active → idle after 2 000 ms without hands |
 
 Extra rules:
+- **Tap handoff:** a new gesture takes over from an active tap as soon as it fires (no `release_ms` wait); the old tap stays latched until then, so point → 👍 needs no release and a misread frame can't re-fire a held tap.
 - **Conflicts:** if static gestures from different recognizers (e.g. a Tier 0 built-in and a Tier 1 custom gesture) are both candidates for the same track, the higher score wins only if its margin is ≥ 0.1; otherwise no fire (`ambiguous`). Within Tier 0, the 0.15 margin of §4.2 applies first.
 - **Two-hand guard:** if 2 hands are visible, only a hand whose mapping explicitly allows it fires (`hand` = `left`/`right`, or `any` + `allow_two_hands`). Two-hand gestures (`builtin.two_hand_separate`, two-hand `motion.*`) are exempt. While a device is selected (`09-…` §2), targeted and either-mode verbs are exempt too: one hand usually keeps pointing at the device while the other makes the verb.
 - **Targeting precedence** (`09-…` §5.3):

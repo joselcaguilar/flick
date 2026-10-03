@@ -14,7 +14,7 @@ use crate::{
 };
 
 /// Default point-pose stable duration.
-const POINT_STABLE: Duration = Duration::from_millis(200);
+const POINT_STABLE: Duration = Duration::from_millis(120);
 /// Point-pose loss duration that returns Aiming to Idle.
 const POINT_LOST: Duration = Duration::from_millis(300);
 /// Maximum angular speed allowed while reselecting from Selected.
@@ -49,7 +49,7 @@ impl Default for TargetSelectorSettings {
             enabled: true,
             tolerance_deg: 10.0,
             margin_deg: 5.0,
-            dwell: Duration::from_millis(500),
+            dwell: Duration::from_millis(300),
             window: Duration::from_millis(4000),
             ray: RayEstimatorSettings::default(),
         }

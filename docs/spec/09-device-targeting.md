@@ -41,10 +41,10 @@ One `TargetSelector` per camera (MVP assumption: **one active user per camera**;
 ```mermaid
 stateDiagram-v2
   [*] --> Idle
-  Idle --> Aiming: point pose ≥ 200 ms and ≥ 1 anchor on this camera/place
+  Idle --> Aiming: point pose ≥ 120 ms and ≥ 1 anchor on this camera/place
   Aiming --> Hover: best anchor passes the angle and margin tests
   Hover --> Aiming: target lost ≥ 200 ms / margin fails
-  Hover --> Selected: dwell ≥ 500 ms
+  Hover --> Selected: dwell ≥ 300 ms
   Selected --> Selected: still aiming at it / verb fired (window refreshed)
   Selected --> Hover: point pose dwells on ANOTHER anchor (reselect)
   Selected --> Idle: window elapsed (4 s) / pause
@@ -53,9 +53,9 @@ stateDiagram-v2
 
 | Rule | Default | Setting |
 |---|---|---|
-| **Point pose** (`builtin.point`, geometric; not the canned `pointing_up`, which covers only upward) | Judged on world landmarks with the gesture classifier's finger tests (`02-…` §4.2): index extended (PIP ≥ 155°, DIP ≥ 145°, tip > 1.25 × the PIP's wrist distance); middle, ring and pinky curled (tip ≤ 1.08 × the PIP's wrist distance, or not extended); thumb ignored. Stable ≥ 200 ms | — |
+| **Point pose** (`builtin.point`, geometric; not the canned `pointing_up`, which covers only upward) | Judged on world landmarks with the gesture classifier's finger tests (`02-…` §4.2): index extended (PIP ≥ 155°, DIP ≥ 145°, tip > 1.25 × the PIP's wrist distance); middle, ring and pinky curled (tip ≤ 1.08 × the PIP's wrist distance, or not extended); thumb ignored. Stable ≥ 120 ms | — |
 | Hover test | Angular error θ to the anchor ≤ `tolerance_deg` (10°, grows with anchor uncertainty up to 15°) **and** ≥ 5° margin over the second-best anchor | `targeting.tolerance_deg` |
-| Dwell to select | **500 ms** | `targeting.dwell_ms` |
+| Dwell to select | **300 ms** | `targeting.dwell_ms` |
 | Hover grace | A miss shorter than **200 ms** (a noisy frame or two) keeps the dwell running; a longer miss restarts it | — |
 | Selection window | **4 000 ms**, restarted on every frame that still aims at the selected device and after every verb (so "circle again" works as a follow-up). The window counts from the last aim, not the first | `targeting.window_ms` |
 | **Selection lock** | While selected, the selection only changes after a full dwell on another anchor, with the point pose held **and** the ray's angular speed < 60°/s. This way, drawing a circle never reselects | — |
@@ -185,8 +185,8 @@ Target time: **≤ 90 s per device.**
 |---|---|
 | Face keypoints (only in point pose) | ≤ 2 ms |
 | PnP + ray + scoring (all anchors) | ≤ 0.3 ms |
-| Selection latency | dwell 500 ms |
-| Point → circle → HA `sent` | ≈ 1.2–2.0 s (a deliberate action; global gestures remain the instant path) |
+| Selection latency | dwell 300 ms |
+| Point → circle → HA `sent` | ≈ 1.0–1.8 s (a deliberate action; global gestures remain the instant path) |
 | Scene signature check | ~10 ms every 60 s |
 
 ## 10. Privacy

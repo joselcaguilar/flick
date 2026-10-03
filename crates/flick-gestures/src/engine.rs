@@ -73,6 +73,9 @@ impl GestureEngineConfig {
             if let Some(m) = vote.get("m").and_then(serde_json::Value::as_u64) {
                 config.trigger.vote_m = m as usize;
             }
+            if let Some(s) = vote.get("selected_n").and_then(serde_json::Value::as_u64) {
+                config.trigger.selected_vote_n = s as usize;
+            }
         }
         if let Some(axis) = settings
             .get("gestures.two_hand_separate.axis")

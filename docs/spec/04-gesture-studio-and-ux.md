@@ -226,7 +226,7 @@ Small pill (360×96, rounded, blurred translucent background; high-contrast opti
 
 | State | Visual | Sound (default on) |
 |---|---|---|
-| Aiming | Thin ring around a device glyph + name of the hovered device ("Ventilador Dormitorio?") filling over the 500 ms dwell | — |
+| Aiming | Thin ring around a device glyph + name of the hovered device ("Ventilador Dormitorio?") filling over the 300 ms dwell | — |
 | Selected | Device name + domain icon, a 4 s countdown bar, verb hints ("↻ speed 1 · ✋✋ off") | soft "lock-on" |
 | Ambiguous | "Two devices here — point more precisely" | — |
 | Candidate | Gesture icon with a filling ring (vote progress) | — |
@@ -267,7 +267,7 @@ Small pill (360×96, rounded, blurred translucent background; high-contrast opti
 |---|---|
 | General | Keep in menu bar (default on); open at login (default off); language (i18n: English first, via `i18next`) |
 | Detection | Sensitivity preset (Low / Normal / High); advanced: vote N-of-M, min hand size; battery saver; arm mode (gesture, hold, window); pause gesture; two-hand "stop" axis (any / vertical / horizontal) |
-| Pointing | Enable pointing (on when ≥ 1 device is taught); aim tolerance (10°, 5–15°); dwell (500 ms); selection window (4 s); show ray in the preview; places per camera + "Re-align now" |
+| Pointing | Enable pointing (on when ≥ 1 device is taught); aim tolerance (10°, 5–15°); dwell (300 ms); selection window (4 s); show ray in the preview; places per camera + "Re-align now" |
 | Safety | Allow sensitive devices (off); confirmation gesture; quiet hours |
 | Feedback | HUD on/off, position, duration, high contrast; sounds on/off, volume; test buttons |
 | Privacy | Pause when HA offline (on); pause on screen lock (off); keep Mac awake while watching (off); "Delete all gesture data"; "Delete all taught devices"; "What Flick stores" explainer |

@@ -44,6 +44,15 @@ const CASES: &[Case] = &[
     Case {
         run: scattered_candidates_do_not_accumulate,
     },
+    Case {
+        run: targeted_verbs_need_fewer_votes,
+    },
+    Case {
+        run: tap_preemption_switches_immediately,
+    },
+    Case {
+        run: held_tap_survives_jitter,
+    },
 ];
 
 fn tap_votes_once() {
@@ -412,6 +421,95 @@ fn scattered_candidates_do_not_accumulate() {
         );
     }
     assert!(fired.is_empty());
+}
+
+fn targeted_verbs_need_fewer_votes() {
+    let anchor = flick_core::AnchorId::new();
+    let selection = SelectionState::Selected {
+        anchor_id: anchor,
+        domain: "light".to_owned(),
+        expires_at_ms: 1_000,
+    };
+    let mut thumb = GestureMapping::tap(gesture(BuiltinGesture::ThumbUp));
+    thumb.target_mode = TargetMode::Either;
+    let mut selected = fsm(vec![thumb.clone()]);
+    let mut idle = fsm(vec![thumb]);
+    let mut selected_events = Vec::new();
+    let mut idle_events = Vec::new();
+    for index in 0..3 {
+        let candidates = [candidate(BuiltinGesture::ThumbUp, 0.9)];
+        selected_events.extend(
+            selected
+                .update(&frame(index * 33, 1), &candidates, &selection)
+                .events,
+        );
+        idle_events.extend(
+            idle.update(&frame(index * 33, 1), &candidates, &SelectionState::Idle)
+                .events,
+        );
+    }
+    assert_eq!(selected_events.len(), 1);
+    assert_eq!(selected_events[0].target, Some(anchor));
+    assert!(idle_events.is_empty());
+}
+
+fn tap_preemption_switches_immediately() {
+    let anchor = flick_core::AnchorId::new();
+    let selection = SelectionState::Selected {
+        anchor_id: anchor,
+        domain: "light".to_owned(),
+        expires_at_ms: 1_000,
+    };
+    let mut thumb = GestureMapping::tap(gesture(BuiltinGesture::ThumbUp));
+    thumb.target_mode = TargetMode::Either;
+    let mut set = TriggerFsmSet::new(TriggerConfig {
+        vote_n: 1,
+        vote_m: 1,
+        mappings: vec![
+            GestureMapping::tap(gesture(BuiltinGesture::PointingUp)),
+            thumb,
+        ],
+        ..TriggerConfig::default()
+    });
+    let point = set.update(
+        &frame(0, 1),
+        &[candidate(BuiltinGesture::PointingUp, 0.9)],
+        &SelectionState::Idle,
+    );
+    assert_eq!(point.events.len(), 1);
+    let verb = set.update(
+        &frame(33, 1),
+        &[candidate(BuiltinGesture::ThumbUp, 0.9)],
+        &selection,
+    );
+    assert_eq!(verb.events.len(), 1);
+    assert_eq!(verb.events[0].target, Some(anchor));
+}
+
+fn held_tap_survives_jitter() {
+    let mut fsm = fsm(vec![
+        GestureMapping::tap(gesture(BuiltinGesture::ThumbUp)),
+        GestureMapping::tap(gesture(BuiltinGesture::PointingUp)),
+    ]);
+    let mut events = Vec::new();
+    for index in 0..55 {
+        let t_ms = index * 33;
+        let held = if t_ms == 264 {
+            BuiltinGesture::PointingUp
+        } else {
+            BuiltinGesture::ThumbUp
+        };
+        events.extend(
+            fsm.update(
+                &frame(t_ms, 1),
+                &[candidate(held, 0.9)],
+                &SelectionState::Idle,
+            )
+            .events,
+        );
+    }
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].gesture_id, gesture(BuiltinGesture::ThumbUp));
 }
 
 proptest! {

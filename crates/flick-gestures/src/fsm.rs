@@ -133,6 +133,8 @@ pub struct TriggerConfig {
     pub vote_n: usize,
     /// Vote window size.
     pub vote_m: usize,
+    /// Votes required (within `vote_m`) when a device is selected; capped at `vote_n`.
+    pub selected_vote_n: usize,
     /// Absence required before another fire.
     pub release_ms: u64,
     /// Hold mode threshold.
@@ -156,6 +158,7 @@ impl Default for TriggerConfig {
         Self {
             vote_n: 6,
             vote_m: 8,
+            selected_vote_n: 3,
             release_ms: 250,
             hold_ms: 800,
             repeat_ms: 400,
@@ -316,6 +319,7 @@ impl TriggerFsmSet {
             if track
                 .active_gesture_id()
                 .is_some_and(|gesture_id| gesture_id != resolved_candidate.candidate.gesture_id)
+                && !track.active_is_tap()
             {
                 result.events.extend(track.update_absent(
                     frame.camera_id,
@@ -478,6 +482,14 @@ impl TrackState {
         self.active.is_some()
     }
 
+    /// A tap has nothing to release, so a different gesture may fire straight away;
+    /// the old tap stays latched until then, so a jitter frame can't re-arm it.
+    fn active_is_tap(&self) -> bool {
+        self.active
+            .as_ref()
+            .is_some_and(|active| active.mode == TriggerMode::Tap)
+    }
+
     fn update_candidate(
         &mut self,
         camera_id: CameraId,
@@ -489,7 +501,13 @@ impl TrackState {
     ) -> TrackProduced {
         self.release_since = None;
         self.record_candidate_vote(candidate.gesture_id, config.vote_m);
-        if self.vote_count(candidate.gesture_id) < config.vote_n {
+        // A selected device already confirms intent, so its verbs need fewer votes.
+        let needed = if target.is_some() {
+            config.selected_vote_n.min(config.vote_n)
+        } else {
+            config.vote_n
+        };
+        if self.vote_count(candidate.gesture_id) < needed {
             return TrackProduced::Suppressed(SuppressionReason::VoteFailed);
         }
 
