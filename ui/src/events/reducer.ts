@@ -24,7 +24,7 @@ function gestureName(gestureId?: string | null) {
   return gestureId
     ?.replace(/^builtin\./, "")
     .replace(/_/g, " ")
-    .replace(/\\b\\w/g, (match) => match.toUpperCase());
+    .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
 function pausedUntil(until?: string | null) {
@@ -150,16 +150,23 @@ export function eventReducer(state: EventStreamState, action: EventStreamAction)
         },
         message.ts,
       );
-    case "action.result":
+    case "action.result": {
+      // The result replaces its fired row so one action reads as one entry that keeps its gesture.
+      const fired = state.activity.find((entry) => entry.id === message.event_id);
+      const remaining = state.activity.filter((entry) => entry.id !== message.event_id);
       return mark(
         {
           ...state,
-          activity: upsertActivity(state.activity, {
+          activity: upsertActivity(remaining, {
             id: message.activity_id,
             ts: message.ts,
             status: message.status,
-            mapping_id: message.mapping_id,
-            action_summary: state.hud.title,
+            gesture_id: fired?.gesture_id,
+            gesture_name: fired?.gesture_name,
+            confidence: fired?.confidence,
+            camera_id: fired?.camera_id,
+            mapping_id: message.mapping_id ?? fired?.mapping_id,
+            action_summary: fired?.action_summary ?? state.hud.title,
             message: message.message,
             latency: message.latency,
           }),
@@ -175,6 +182,7 @@ export function eventReducer(state: EventStreamState, action: EventStreamAction)
         },
         message.ts,
       );
+    }
     case "gesture.update":
       return mark(
         {

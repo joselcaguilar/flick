@@ -73,6 +73,8 @@ export function normalizeGestureName(name?: string | null) {
   if (raw === "circle-clockwise") return "circle-cw";
   if (raw === "circle-counter-clockwise" || raw === "circle-counterclockwise") return "circle-ccw";
   if (raw === "two-hands-apart") return "two-hand-separate";
+  if (raw === "thumb-up") return "thumbs-up";
+  if (raw === "thumb-down") return "thumbs-down";
   return glyphPaths[raw] ? raw : "point";
 }
 

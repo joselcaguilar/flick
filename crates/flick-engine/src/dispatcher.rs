@@ -61,6 +61,8 @@ pub struct DispatcherSettings {
     pub confirmation_window: Duration,
     /// Default confirmation gesture.
     pub default_confirm_gesture: GestureId,
+    /// Records ignored gestures in activity_log (`debug.log_suppressed`).
+    pub log_suppressed: bool,
 }
 
 impl Default for DispatcherSettings {
@@ -69,6 +71,7 @@ impl Default for DispatcherSettings {
             allow_sensitive_actions: false,
             confirmation_window: Duration::from_secs(3),
             default_confirm_gesture: GestureId::Builtin(BuiltinGesture::ThumbUp),
+            log_suppressed: false,
         }
     }
 }
@@ -752,6 +755,9 @@ impl Dispatcher {
         reason: SuppressionReason,
         message: Option<&str>,
     ) {
+        if !self.inner.settings.lock().await.log_suppressed {
+            return;
+        }
         let Some(store) = &self.inner.store else {
             return;
         };

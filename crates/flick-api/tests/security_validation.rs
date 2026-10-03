@@ -93,6 +93,26 @@ async fn client_certificate_upload_rejects_unreadable_data()
     Ok(())
 }
 
+#[tokio::test]
+async fn activity_query_validation_returns_stable_codes() -> Result<(), Box<dyn std::error::Error>>
+{
+    let cases = [
+        ("/api/v1/activity?limit=0", "invalid_limit"),
+        ("/api/v1/activity?limit=201", "invalid_limit"),
+        ("/api/v1/activity?status=bogus", "invalid_status"),
+    ];
+    for (uri, code) in cases {
+        let response = send(json_request_with("GET", uri, serde_json::Value::Null)?).await;
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(problem(response).await?.code, code);
+    }
+
+    let ok = "/api/v1/activity?status=ok&include_suppressed=true";
+    let response = send(json_request_with("GET", ok, serde_json::Value::Null)?).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    Ok(())
+}
+
 async fn send(request: Request<Body>) -> Response<Body> {
     let app = router(ApiState::fake(ApiConfig::dev()));
     match app.oneshot(request).await {

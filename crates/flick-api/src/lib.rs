@@ -541,6 +541,19 @@ pub trait HaGateway: Send + Sync + 'static {
     async fn call(&self, action: ActionDto) -> Result<ActionOutcomeDto, ApiProblem>;
 }
 
+/// Activity list query forwarded to the engine.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ActivityQuery {
+    /// Maximum rows to return.
+    pub limit: usize,
+    /// Cursor: return rows older than this activity id.
+    pub before: Option<String>,
+    /// Exact status filter.
+    pub status: Option<String>,
+    /// Include `suppressed` rows when no status filter is set.
+    pub include_suppressed: bool,
+}
+
 /// Mapping/settings/targeting persistence hook supplied by the engine.
 #[async_trait]
 pub trait ConfigGateway: Send + Sync + 'static {
@@ -550,6 +563,13 @@ pub trait ConfigGateway: Send + Sync + 'static {
     async fn mappings_changed(&self, mappings: Vec<Mapping>) -> Result<(), ApiProblem>;
     /// Called after anchors change through the API.
     async fn anchors_changed(&self, anchors: Vec<Anchor>) -> Result<(), ApiProblem>;
+    /// Lists persisted activity, newest first.
+    async fn activity(&self, _query: ActivityQuery) -> Result<ActivityPage, ApiProblem> {
+        Ok(ActivityPage {
+            items: vec![],
+            next_before: None,
+        })
+    }
 }
 
 /// Teach and realign flows supplied by the spatial lane.
@@ -1794,12 +1814,59 @@ async fn order_mappings(
     Ok(no_content())
 }
 
-#[utoipa::path(get, path = "/api/v1/activity", params(("limit" = Option<u32>, Query), ("before" = Option<String>, Query), ("status" = Option<String>, Query)), responses((status = 200, body = ActivityPage)))]
-async fn activity() -> Json<ActivityPage> {
-    json_response(ActivityPage {
-        items: vec![],
-        next_before: None,
-    })
+const ACTIVITY_STATUSES: [&str; 7] = [
+    "fired",
+    "sent",
+    "ok",
+    "error",
+    "timeout",
+    "stale",
+    "suppressed",
+];
+
+#[utoipa::path(get, path = "/api/v1/activity", params(("limit" = Option<u32>, Query), ("before" = Option<String>, Query), ("status" = Option<String>, Query), ("include_suppressed" = Option<bool>, Query)), responses((status = 200, body = ActivityPage), (status = 422, body = ProblemJson)))]
+async fn activity(
+    State(state): State<Arc<ApiState>>,
+    Query(query): Query<BTreeMap<String, String>>,
+) -> Result<Json<ActivityPage>, ApiProblem> {
+    let limit = match query.get("limit") {
+        None => 50,
+        Some(raw) => raw
+            .parse::<usize>()
+            .ok()
+            .filter(|limit| (1..=200).contains(limit))
+            .ok_or_else(|| {
+                ApiProblem::validation("invalid_limit", "limit must be between 1 and 200")
+            })?,
+    };
+    let status = query
+        .get("status")
+        .filter(|status| !status.is_empty())
+        .cloned();
+    if let Some(status) = &status
+        && !ACTIVITY_STATUSES.contains(&status.as_str())
+    {
+        return Err(ApiProblem::validation(
+            "invalid_status",
+            "unknown activity status",
+        ));
+    }
+    let include_suppressed = query
+        .get("include_suppressed")
+        .is_some_and(|value| value == "true" || value == "1");
+    let page = state
+        .config_sync
+        .activity(ActivityQuery {
+            limit,
+            before: query
+                .get("before")
+                .filter(|before| !before.is_empty())
+                .cloned(),
+            status,
+            include_suppressed,
+        })
+        .await?;
+    Ok(json_response(page))
 }
 
 #[utoipa::path(get, path = "/api/v1/places", params(("camera_id" = Option<String>, Query)), responses((status = 200, body = [Place])))]

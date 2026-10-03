@@ -234,7 +234,7 @@ CREATE TABLE activity_log (
 );
 CREATE INDEX idx_activity_ts ON activity_log(ts DESC);
 -- Retention: keep 7 days or 10 000 rows (whichever is smaller); pruned hourly.
--- 'suppressed' rows are written only when debug view is open (settings.debug.log_suppressed).
+-- 'suppressed' rows are written only while "Log ignored gestures" is on (settings.debug.log_suppressed, default off); when HA is not configured, actions are always logged as 'suppressed'.
 
 CREATE TABLE gesture_packs (
   id          TEXT PRIMARY KEY,
@@ -340,7 +340,7 @@ CREATE TABLE update_state (              -- small key/value table owned by flick
 | `feedback.sounds` | `{"enabled":true,"volume":0.6}` |
 | `ui.theme` | `"system"` |
 | `inference.ep_choice` | set by auto-benchmark |
-| `debug.log_suppressed` | `false` |
+| `debug.log_suppressed` | `false` (Activity → "Log ignored gestures") |
 | `onboarding.completed` | `false` |
 | `gestures.params` | `{}` (user overrides of built-in parameters; always win over catalog defaults, `10-…` §5.3) |
 | `gestures.two_hand_separate.axis` | `"any"` (`any` \| `vertical` \| `horizontal`) |
@@ -425,7 +425,7 @@ CREATE TABLE update_state (              -- small key/value table owned by flick
 | `PATCH /mappings/{id}` / `DELETE /mappings/{id}` | | |
 | `POST /mappings/{id}/test` | → `ActionOutcome` | fires the action now |
 | `PUT /mappings/order` | `[id…]` → 204 | |
-| `GET /activity?limit=50&before=<ulid>&status=` | → `{items, next_before}` | |
+| `GET /activity?limit=50&before=<ulid>&status=&include_suppressed=` | → `{items, next_before}` | `limit` 1–200 (default 50, else 422 `invalid_limit`); `before` is the cursor id (empty = none); `status` ∈ fired\|sent\|ok\|error\|timeout\|stale\|suppressed (empty = all, else 422 `invalid_status`); `include_suppressed` = `true`\|`1` (implied by `status=suppressed`), otherwise suppressed rows are hidden. Items are newest first (`ts DESC, id DESC`) and include `camera_id`, `confidence`; `next_before` is the last id when the page is full. 500 `activity_store_failed` |
 | `GET /places?camera_id=` | → `Place[]` (no signature bytes) | |
 | `PATCH /places/{id}` / `DELETE /places/{id}` | `{name}` | delete cascades anchors + targeted mappings (UI confirms) |
 | `POST /places/{id}/realign` | → `RealignSession {id, prompts:[anchor_id…]}` | `09-…` §6 |
@@ -474,7 +474,7 @@ CREATE TABLE update_state (              -- small key/value table owned by flick
 | `camera.status` | `{camera_id, state:"starting"|"running"|"idle"|"reconnecting"|"error"|"stopped", fps, error?}` | `status` |
 | `hands` | `{camera_id, seq, hands:[{track_id, hand, landmarks:[[x,y,z]×21], bbox}], ray?:{origin2d, tip2d, model}}` | `hands:<id>` |
 | `gesture.candidate` | `{camera_id, track_id, gesture_id, confidence, progress:0..1}` | `gestures` |
-| `gesture.suppressed` | `{camera_id, gesture_id, reason}` | `gestures` (only if `debug.log_suppressed`) |
+| `gesture.suppressed` | `{camera_id, gesture_id, reason}` | `gestures` (only if `debug.log_suppressed`, i.e. "Log ignored gestures") |
 | `gesture.fired` | `{event_id, camera_id, gesture_id, hand, confidence, mapping_ids[], action_summary}` | `gestures` |
 | `gesture.update` / `gesture.end` | `{event_id, value?}` (dial) | `gestures` |
 | `armed` | `{until}` / `disarmed` | `gestures` |

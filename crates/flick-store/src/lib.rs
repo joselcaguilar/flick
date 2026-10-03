@@ -96,6 +96,11 @@ impl Store {
         MaintenanceRepository { store: self }
     }
 
+    /// Returns an activity-log repository over the locked connection.
+    pub fn activity(&self) -> ActivityRepository<'_> {
+        ActivityRepository { store: self }
+    }
+
     /// Deletes a place; SQLite cascades anchors and targeted mappings.
     pub fn delete_place(&self, place_id: &str) -> Result<usize> {
         self.maintenance().delete_place(place_id)
@@ -193,6 +198,99 @@ impl MaintenanceRepository<'_> {
             .map_err(database_error)?;
         tx.commit().map_err(database_error)?;
         Ok(old + extra)
+    }
+}
+
+/// One persisted `activity_log` row (`06-data-model-and-api.md` §2).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActivityRow {
+    /// Activity ULID.
+    pub id: String,
+    /// Unix epoch milliseconds.
+    pub ts_ms: i64,
+    /// Camera that produced the gesture.
+    pub camera_id: Option<String>,
+    /// Gesture ID.
+    pub gesture_id: Option<String>,
+    /// Recognizer confidence in `0..=1`.
+    pub confidence: Option<f64>,
+    /// Mapping that matched, when any.
+    pub mapping_id: Option<String>,
+    /// Targeted anchor, when any.
+    pub anchor_id: Option<String>,
+    /// Human-readable action summary.
+    pub action_summary: Option<String>,
+    /// Outcome status.
+    pub status: String,
+    /// Machine-readable reason or error code.
+    pub reason: Option<String>,
+    /// Human-readable message.
+    pub message: Option<String>,
+    /// Latency breakdown JSON.
+    pub latency: Option<Value>,
+}
+
+/// Read access to the activity log.
+pub struct ActivityRepository<'a> {
+    store: &'a Store,
+}
+
+impl ActivityRepository<'_> {
+    /// Lists activity newest first, strictly older than `before_id` when given.
+    ///
+    /// Suppressed rows are hidden unless `include_suppressed` is set or `status` asks for them.
+    pub fn list(
+        &self,
+        limit: usize,
+        before_id: Option<&str>,
+        status: Option<&str>,
+        include_suppressed: bool,
+    ) -> Result<Vec<ActivityRow>> {
+        let limit = i64::try_from(limit).map_err(|err| StoreError::Database(err.to_string()))?;
+        let conn = self.store.connection();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, ts, camera_id, gesture_id, confidence, mapping_id, anchor_id, \
+                 action_summary, status, reason, message, latency FROM activity_log \
+                 WHERE (?1 IS NULL OR (ts, id) < (SELECT ts, id FROM activity_log WHERE id = ?1)) \
+                 AND (?2 IS NULL OR status = ?2) \
+                 AND (?3 OR IFNULL(?2, '') = 'suppressed' OR status <> 'suppressed') \
+                 ORDER BY ts DESC, id DESC LIMIT ?4",
+            )
+            .map_err(database_error)?;
+        let rows = stmt
+            .query_map(
+                params![before_id, status, include_suppressed, limit],
+                |row| {
+                    Ok((
+                        ActivityRow {
+                            id: row.get(0)?,
+                            ts_ms: row.get(1)?,
+                            camera_id: row.get(2)?,
+                            gesture_id: row.get(3)?,
+                            confidence: row.get(4)?,
+                            mapping_id: row.get(5)?,
+                            anchor_id: row.get(6)?,
+                            action_summary: row.get(7)?,
+                            status: row.get(8)?,
+                            reason: row.get(9)?,
+                            message: row.get(10)?,
+                            latency: None,
+                        },
+                        row.get::<_, Option<String>>(11)?,
+                    ))
+                },
+            )
+            .map_err(database_error)?;
+        rows.map(|row| {
+            let (mut activity, latency) = row.map_err(database_error)?;
+            activity.latency = latency
+                .map(|raw| serde_json::from_str(&raw))
+                .transpose()
+                .map_err(json_error)?;
+            Ok(activity)
+        })
+        .collect()
     }
 }
 

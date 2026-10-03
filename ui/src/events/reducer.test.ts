@@ -56,6 +56,17 @@ describe("eventReducer", () => {
     expect(state.hud.state).toBe("done");
     expect(state.hud.title).toBe("Ventilador dormitorio → speed 1");
     expect(state.hud.icon).toBe("ok");
+    expect(state.activity).toHaveLength(1);
+    expect(state.activity[0]).toMatchObject({
+      id: "act-1",
+      status: "ok",
+      gesture_id: "builtin.circle_cw",
+      gesture_name: "Circle Cw",
+      camera_id: "camera-main",
+      confidence: 0.93,
+      mapping_id: "map-fan-speed-1",
+      action_summary: "Ventilador dormitorio → speed 1",
+    });
   });
 
   it("shows targeting recovery copy for suppressed targeted verbs", () => {

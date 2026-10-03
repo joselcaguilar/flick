@@ -40,6 +40,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "include_suppressed",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -48,6 +56,15 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ActivityPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemJson"
                 }
               }
             }
@@ -2116,6 +2133,21 @@
               "null"
             ],
             "description": "Anchor id."
+          },
+          "camera_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Camera id."
+          },
+          "confidence": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Recognizer confidence in `0..=1`."
           },
           "gesture_id": {
             "type": [

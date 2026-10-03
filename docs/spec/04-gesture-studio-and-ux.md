@@ -247,7 +247,7 @@ Small pill (360×96, rounded, blurred translucent background; high-contrast opti
 ## 9. Activity & debugging
 - Table: time, camera, gesture (+ confidence), mapping, action, status icon, latency breakdown (detect / dispatch / HA) on hover.
 - Filters: status, gesture, mapping, time range. Export CSV.
-- **"Why didn't it fire?" mode** (toggle; enables `debug.log_suppressed`):
+- **"Why didn't it fire?" panel**; the Activity toolbar's **"Log ignored gestures"** switch enables `debug.log_suppressed` (default off; the engine records no ignored gestures while off). Ignored rows show the status label **"Ignored"**:
   - Live list of suppressed candidates with a plain-English reason (one message per reason code in `02-…` §5; examples):
     - "Confidence 0.61 below 0.75"
     - "Cooling down (0.4 s left)"

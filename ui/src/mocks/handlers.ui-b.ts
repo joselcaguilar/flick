@@ -323,8 +323,15 @@ export const uiBHandlers = [
   }),
   http.get(`${api}/activity`, ({ request }) => {
     const url = new URL(request.url);
-    const status = url.searchParams.get("status");
-    const items = status ? mutableActivity.filter((item) => item.status === status) : mutableActivity;
+    const status = url.searchParams.get("status") || null;
+    const flag = url.searchParams.get("include_suppressed");
+    const includeSuppressed = flag === "true" || flag === "1" || status === "suppressed";
+    const limit = Number(url.searchParams.get("limit")) || 50;
+    const items = mutableActivity
+      .filter((item) => !status || item.status === status)
+      .filter((item) => includeSuppressed || item.status !== "suppressed")
+      .sort((a, b) => b.ts.localeCompare(a.ts) || b.id.localeCompare(a.id))
+      .slice(0, limit);
     return ok({ items, next_before: undefined });
   }),
   http.post(`${api}/ha/connect`, async ({ request }) => {

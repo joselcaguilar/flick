@@ -772,8 +772,12 @@ pub struct ActivityItem {
     pub id: String,
     /// Timestamp.
     pub ts: String,
+    /// Camera id.
+    pub camera_id: Option<String>,
     /// Gesture id.
     pub gesture_id: Option<String>,
+    /// Recognizer confidence in `0..=1`.
+    pub confidence: Option<f64>,
     /// Mapping id.
     pub mapping_id: Option<String>,
     /// Anchor id.

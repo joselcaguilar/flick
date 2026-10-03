@@ -13,8 +13,8 @@ use flick_core::{
 };
 use flick_engine::{
     dispatcher::{
-        Dispatcher, DispatcherAnchor, DispatcherMapping, HaActionSink, owner_fan_anchor,
-        owner_scenario_mappings, owner_scenario_mappings_for,
+        Dispatcher, DispatcherAnchor, DispatcherMapping, DispatcherSettings, HaActionSink,
+        owner_fan_anchor, owner_scenario_mappings, owner_scenario_mappings_for,
     },
     fake_landmarks::replay_once,
     targeting_store::{SqliteTargetingStore, anchor_record_to_anchor, anchor_to_record},
@@ -50,6 +50,10 @@ async fn replay_owner_scenario_dispatches_mock_ha() -> anyhow::Result<()> {
         .registry(registry)
         .mappings(owner_scenario_mappings_for(anchor_id))
         .anchors(dispatcher_anchors)
+        .settings(DispatcherSettings {
+            log_suppressed: true,
+            ..DispatcherSettings::default()
+        })
         .build();
 
     let idle = SelectionState::Idle;
@@ -137,6 +141,26 @@ async fn paused_dispatcher_suppresses_without_ha_call() -> anyhow::Result<()> {
     .await?;
     assert!(reasons.contains(&SuppressionReason::Paused));
     assert!(mock.calls().await.is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+async fn suppressed_gestures_are_not_logged_by_default() -> anyhow::Result<()> {
+    let (client, _mock) = mock_client(&owner_fan_anchor().entity).await?;
+    let registry = client.refresh_registry().await?;
+    let store = Arc::new(Store::open_memory()?);
+    let dispatcher = Dispatcher::builder(Arc::new(HaActionSink::new(client)))
+        .store(Arc::clone(&store))
+        .registry(registry)
+        .mappings(owner_scenario_mappings())
+        .anchors(vec![owner_fan_anchor()])
+        .build();
+    dispatcher.set_paused(true).await;
+    let report = dispatcher.dispatch(&thumb_up_event()).await;
+    assert!(!report.suppressions.is_empty());
+    let conn = store.connection();
+    let rows: i64 = conn.query_row("SELECT COUNT(*) FROM activity_log", [], |row| row.get(0))?;
+    assert_eq!(rows, 0);
     Ok(())
 }
 

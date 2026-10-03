@@ -25,17 +25,17 @@ use axum::{
     routing::{get, post},
 };
 use flick_api::{
-    ActionDto, ActionOutcomeDto, ActionTargetDto, Anchor as ApiAnchor, ApiConfig, ApiGateways,
-    ApiProblem, ApiState, AvailableCamera, Camera as ApiCamera, CameraCreate, CameraFormat,
-    CameraPatch, CameraStatus, ConfigGateway, EmptyEvent, EngineControl, EnginePausedEvent,
-    EngineStatus, EventHub, FakeUpdates, HaArea, HaClientCertificate, HaConnectRequest,
-    HaConnectionUpdate, HaDiscovery, HaEntity, HaGateway, HaInstance, HaServiceSchema,
-    HaStatus as ApiHaStatus, HandEvent, HandsEvent, LatencyBreakdown, Mapping, NetworkReport,
-    PauseRequest, PreviewFrame, PreviewSource, RayEvent, RealignCommitResponse,
-    RealignPointRequest, RealignPointResponse, RealignSession, SettingsMap, SetupSuggestRequest,
-    SetupSuggestion, StageLatency, TargetAmbiguousEvent, TargetClearedEvent, TargetHoverEvent,
-    TargetModeDto, TargetSelectedEvent, TeachCommitRequest, TeachCommitResponse, TeachGateway,
-    TeachLevelRequest, TeachLevelResponse, TeachProgressEvent, TeachRequest,
+    ActionDto, ActionOutcomeDto, ActionTargetDto, ActivityItem, ActivityPage, ActivityQuery,
+    Anchor as ApiAnchor, ApiConfig, ApiGateways, ApiProblem, ApiState, AvailableCamera,
+    Camera as ApiCamera, CameraCreate, CameraFormat, CameraPatch, CameraStatus, ConfigGateway,
+    EmptyEvent, EngineControl, EnginePausedEvent, EngineStatus, EventHub, FakeUpdates, HaArea,
+    HaClientCertificate, HaConnectRequest, HaConnectionUpdate, HaDiscovery, HaEntity, HaGateway,
+    HaInstance, HaServiceSchema, HaStatus as ApiHaStatus, HandEvent, HandsEvent, LatencyBreakdown,
+    Mapping, NetworkReport, PauseRequest, PreviewFrame, PreviewSource, RayEvent,
+    RealignCommitResponse, RealignPointRequest, RealignPointResponse, RealignSession, SettingsMap,
+    SetupSuggestRequest, SetupSuggestion, StageLatency, TargetAmbiguousEvent, TargetClearedEvent,
+    TargetHoverEvent, TargetModeDto, TargetSelectedEvent, TeachCommitRequest, TeachCommitResponse,
+    TeachGateway, TeachLevelRequest, TeachLevelResponse, TeachProgressEvent, TeachRequest,
     TeachSession as ApiTeachSession, TeachSpotResponse, VerbBinding, WsServerMessage, router,
 };
 use flick_capture::{
@@ -442,6 +442,12 @@ fn dispatcher_settings_from_map(settings: &SettingsMap) -> DispatcherSettings {
         .and_then(serde_json::Value::as_bool)
     {
         dispatcher.allow_sensitive_actions = value;
+    }
+    if let Some(value) = settings
+        .get("debug.log_suppressed")
+        .and_then(serde_json::Value::as_bool)
+    {
+        dispatcher.log_suppressed = value;
     }
     dispatcher
 }
@@ -4081,6 +4087,50 @@ impl ConfigGateway for EngineApp {
         }
         self.refresh_selector_anchors().await;
         Ok(())
+    }
+
+    async fn activity(&self, query: ActivityQuery) -> Result<ActivityPage, ApiProblem> {
+        let rows = self
+            .store
+            .activity()
+            .list(
+                query.limit,
+                query.before.as_deref(),
+                query.status.as_deref(),
+                query.include_suppressed,
+            )
+            .map_err(|err| {
+                ApiProblem::new(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "activity_store_failed",
+                    err.to_string(),
+                )
+            })?;
+        let next_before = if rows.len() == query.limit {
+            rows.last().map(|row| row.id.clone())
+        } else {
+            None
+        };
+        let items = rows
+            .into_iter()
+            .map(|row| ActivityItem {
+                id: row.id,
+                ts: rfc3339_from_ms(row.ts_ms),
+                camera_id: row.camera_id,
+                gesture_id: row.gesture_id,
+                confidence: row.confidence,
+                mapping_id: row.mapping_id,
+                anchor_id: row.anchor_id,
+                action_summary: row.action_summary,
+                status: row.status,
+                reason: row.reason,
+                message: row.message,
+                latency: row
+                    .latency
+                    .and_then(|value| serde_json::from_value::<LatencyBreakdown>(value).ok()),
+            })
+            .collect();
+        Ok(ActivityPage { items, next_before })
     }
 }
 

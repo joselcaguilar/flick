@@ -1101,6 +1101,13 @@ export interface components {
             action_summary?: string | null;
             /** @description Anchor id. */
             anchor_id?: string | null;
+            /** @description Camera id. */
+            camera_id?: string | null;
+            /**
+             * Format: double
+             * @description Recognizer confidence in `0..=1`.
+             */
+            confidence?: number | null;
             /** @description Gesture id. */
             gesture_id?: string | null;
             /** @description Activity id. */
@@ -2676,6 +2683,7 @@ export interface operations {
                 limit?: number;
                 before?: string;
                 status?: string;
+                include_suppressed?: boolean;
             };
             header?: never;
             path?: never;
@@ -2689,6 +2697,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActivityPage"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemJson"];
                 };
             };
         };

@@ -1,7 +1,6 @@
 import { HttpResponse, http } from "msw";
 import type { HaClientCertificate } from "../api/types";
 import {
-  activityItems,
   anchors,
   cameras,
   camerasAvailable,
@@ -233,7 +232,6 @@ export const handlers = [
   http.delete(`${api}/mappings/:id`, () => noContent()),
   http.post(`${api}/mappings/:id/test`, () => outcome()),
   http.put(`${api}/mappings/order`, () => noContent()),
-  http.get(`${api}/activity`, () => ok({ items: activityItems, next_before: undefined })),
   http.get(`${api}/places`, () => ok(places)),
   http.patch(`${api}/places/:id`, async ({ request, params }) =>
     ok({ ...places[0], id: params.id, ...((await request.json()) as object) }),

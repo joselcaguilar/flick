@@ -104,9 +104,7 @@ export type Mapping = Schema<"Mapping"> & {
   target_label?: string;
 };
 export type ActivityItem = Schema<"ActivityItem"> & {
-  camera_id?: string;
   gesture_name?: string;
-  confidence?: number;
 };
 export type Place = Schema<"Place">;
 export type Anchor = Schema<"Anchor"> & { uncertainty_deg?: number };
