@@ -708,6 +708,8 @@ pub struct MappingPatch {
     pub target_domain: Option<String>,
     /// Sensitive ack.
     pub sensitive_ack: Option<bool>,
+    /// Gesture id that fires the mapping.
+    pub gesture_id: Option<String>,
 }
 
 /// Mapping record.
@@ -894,6 +896,9 @@ pub struct Anchor {
     pub created_at: String,
     /// Updated time.
     pub updated_at: String,
+    /// Camera that taught the anchor; extra spots must come from it.
+    #[serde(default)]
+    pub camera_id: Option<String>,
 }
 
 /// Verb binding shown for a selected target.
@@ -936,6 +941,9 @@ pub struct TeachRequest {
     pub target: Value,
     /// Existing anchor id for reteach.
     pub anchor_id: Option<String>,
+    /// Keep the anchor's taught spots and add new ones (requires `anchor_id`).
+    #[serde(default)]
+    pub append: bool,
 }
 
 /// Teach session.

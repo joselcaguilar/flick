@@ -20,9 +20,32 @@ export const mappingHandlers = [
   http.post(`${api}/mappings`, async ({ request }) =>
     ok({ ...mappings[0], ...((await request.json()) as object), id: "map-new" }),
   ),
-  http.patch(`${api}/mappings/:id`, async ({ request, params }) =>
-    ok({ ...mappings[0], id: params.id, ...((await request.json()) as object) }),
-  ),
+  http.patch(`${api}/mappings/:id`, async ({ request, params }) => {
+    const mapping = mappings.find((item) => item.id === params.id) ?? mappings[0];
+    const patch = (await request.json()) as { gesture_id?: string };
+    const conflict =
+      patch.gesture_id &&
+      mapping.anchor_id &&
+      mappings.some(
+        (other) =>
+          other.id !== mapping.id &&
+          other.anchor_id === mapping.anchor_id &&
+          other.gesture_id === patch.gesture_id,
+      );
+    if (conflict) {
+      return HttpResponse.json(
+        {
+          type: "about:blank",
+          title: "Gesture already used",
+          status: 422,
+          code: "gesture_conflict",
+          detail: "This device already uses that gesture for another action. Pick a different gesture.",
+        },
+        { status: 422 },
+      );
+    }
+    return ok({ ...mapping, ...patch, id: params.id });
+  }),
   http.delete(`${api}/mappings/:id`, () => noContent()),
   http.post(`${api}/mappings/:id/test`, () => outcome()),
   http.put(`${api}/mappings/order`, () => noContent()),

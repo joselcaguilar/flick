@@ -60,7 +60,7 @@ use flick_spatial::{
     FingerAim, PlaceRecord, PlaceStatus, PointingRay, RayEstimator, RayEstimatorSettings, RayModel,
     RaySource, RealignPair, StoredIntrinsics, TargetClearReason, TargetEvent, TargetSelectorImpl,
     TargetSelectorSettings, TeachObservation, TeachSession as SpatialTeachSession, TeachTarget,
-    is_point_pose, realign,
+    is_point_pose, realign, seed_observations,
 };
 use flick_store::Store;
 use flick_vision::{EpChoice, FaceKeypointRunner, HandPipelineImpl, ModelSet};
@@ -496,11 +496,24 @@ fn load_api_mappings(store: &Store) -> anyhow::Result<Vec<Mapping>> {
 }
 
 fn load_api_anchors(targeting: &SqliteTargetingStore) -> anyhow::Result<Vec<ApiAnchor>> {
+    let mut cameras: HashMap<PlaceId, Option<String>> = HashMap::new();
     Ok(targeting
         .try_all_anchors()
         .map_err(|err| anyhow::anyhow!("{err}"))?
         .iter()
-        .map(api_anchor_from_record)
+        .map(|record| {
+            let camera_id = cameras
+                .entry(record.place_id)
+                .or_insert_with(|| {
+                    targeting
+                        .try_place(record.place_id)
+                        .ok()
+                        .flatten()
+                        .map(|place| place.camera_id.to_string())
+                })
+                .clone();
+            api_anchor_from_record(record, camera_id)
+        })
         .collect())
 }
 
@@ -656,6 +669,7 @@ fn api_anchor_from_dispatcher(anchor: &DispatcherAnchor) -> ApiAnchor {
         last_used_at: None,
         created_at: now.clone(),
         updated_at: now,
+        camera_id: None,
     }
 }
 
@@ -2011,6 +2025,54 @@ impl EngineApp {
         Ok(place)
     }
 
+    /// Seeds an append teach session with the stored anchor so new spots refine it
+    /// instead of replacing it. Only the camera/place that taught the anchor can append.
+    fn append_seeds(
+        &self,
+        camera_id: &str,
+        anchor_id: Option<AnchorId>,
+        target: &TeachTarget,
+    ) -> Result<Vec<TeachObservation>, ApiProblem> {
+        let id = anchor_id.ok_or_else(|| {
+            ApiProblem::validation(
+                "append_requires_anchor",
+                "Choose the device to add spots to",
+            )
+        })?;
+        let record = self
+            .targeting
+            .try_anchor(id)
+            .map_err(store_problem)?
+            .ok_or_else(|| ApiProblem::validation("anchor_not_found", "anchor not found"))?;
+        if &record.target != target {
+            return Err(ApiProblem::validation(
+                "target_mismatch",
+                "The device no longer matches this taught spot; teach it again",
+            ));
+        }
+        match CameraId::from_str(camera_id) {
+            Ok(camera) => {
+                if self.ensure_place(camera)?.id != record.place_id {
+                    return Err(ApiProblem::validation(
+                        "camera_mismatch",
+                        "Add spots with the camera that taught this device",
+                    ));
+                }
+            }
+            Err(err) if !self.runtime.dev => {
+                return Err(ApiProblem::validation("bad_camera_id", err.to_string()));
+            }
+            Err(_) => {}
+        }
+        let anchor = anchor_record_to_anchor(&record).ok_or_else(|| {
+            ApiProblem::validation(
+                "anchor_geometry",
+                "This device's stored aim can't be extended; teach it again",
+            )
+        })?;
+        Ok(seed_observations(&anchor))
+    }
+
     async fn ha_status_dto(&self) -> ApiHaStatus {
         let client = self.ha_client.lock().await.clone();
         let instance = self.ha_instance.lock().await.clone();
@@ -3277,21 +3339,34 @@ impl TeachGateway for EngineApp {
             .map(AnchorId::from_str)
             .transpose()
             .map_err(|err| ApiProblem::validation("bad_anchor_id", err.to_string()))?;
+        let seeds = if request.append {
+            self.append_seeds(&request.camera_id, replaces, &target)?
+        } else {
+            Vec::new()
+        };
         let domain = teach_domain(&target);
         let name = teach_name(&target);
-        let spatial = SpatialTeachSession::new(
+        let mut spatial = SpatialTeachSession::new(
             replaces.unwrap_or_else(AnchorId::new),
             name,
             target,
             domain,
             DEFAULT_ESTIMATOR_VERSION,
         );
+        for seed in seeds {
+            spatial.add_observation(seed);
+        }
+        let prompt = if request.append {
+            "Point at the device from a new spot"
+        } else {
+            "Point at the device and hold still"
+        };
         let session = ApiTeachSession {
             id: flick_core::TeachSessionId::new().to_string(),
             camera_id: request.camera_id,
             target: request.target,
             anchor_id: request.anchor_id,
-            prompt: "Point at the device and hold still".to_owned(),
+            prompt: prompt.to_owned(),
         };
         self.teach_sessions.lock().await.insert(
             session.id.clone(),
@@ -3604,7 +3679,7 @@ impl TeachGateway for EngineApp {
             .map_err(store_problem)?;
         self.reload_dispatcher_anchors_from_store().await?;
         Ok(TeachCommitResponse {
-            anchor: api_anchor_from_record(&record),
+            anchor: api_anchor_from_record(&record, Some(place.camera_id.to_string())),
             mapping_ids: request
                 .verbs
                 .into_iter()
@@ -4454,7 +4529,10 @@ fn target_entity_id(target: &serde_json::Value) -> Option<&str> {
     target.get("entity_id").and_then(serde_json::Value::as_str)
 }
 
-fn api_anchor_from_record(record: &flick_spatial::AnchorRecord) -> ApiAnchor {
+fn api_anchor_from_record(
+    record: &flick_spatial::AnchorRecord,
+    camera_id: Option<String>,
+) -> ApiAnchor {
     ApiAnchor {
         id: record.id.to_string(),
         place_id: record.place_id.to_string(),
@@ -4470,6 +4548,7 @@ fn api_anchor_from_record(record: &flick_spatial::AnchorRecord) -> ApiAnchor {
         last_used_at: record.last_used_at.map(ms_rfc3339),
         created_at: ms_rfc3339(record.created_at),
         updated_at: ms_rfc3339(record.updated_at),
+        camera_id,
     }
 }
 

@@ -1070,6 +1070,7 @@ impl TeachGateway for FakeTeach {
             last_used_at: None,
             created_at: now_rfc3339(),
             updated_at: now_rfc3339(),
+            camera_id: None,
         };
         Ok(TeachCommitResponse {
             anchor,
@@ -1730,8 +1731,57 @@ async fn patch_mapping(
     Path(id): Path<String>,
     Json(request): Json<MappingPatch>,
 ) -> Result<Json<Mapping>, ApiProblem> {
+    let gesture_id = request.gesture_id.as_deref().map(str::trim);
+    if gesture_id.is_some_and(str::is_empty) {
+        return Err(ApiProblem::validation(
+            "bad_gesture_id",
+            "Choose a gesture for this action.",
+        ));
+    }
+    let gesture_id = gesture_id.map(str::to_owned);
+    let anchors = state
+        .anchors
+        .lock()
+        .unwrap_or_else(|err| err.into_inner())
+        .clone();
     let (mapping, all_mappings) = {
         let mut mappings = state.mappings.lock().unwrap_or_else(|err| err.into_inner());
+        let Some(current) = mappings.get(&id) else {
+            return Err(ApiProblem::new(
+                StatusCode::NOT_FOUND,
+                "mapping_not_found",
+                "mapping not found",
+            ));
+        };
+        let target_mode = request.target_mode.unwrap_or(current.target_mode);
+        let anchor_id = request
+            .anchor_id
+            .clone()
+            .or_else(|| current.anchor_id.clone());
+        let next_gesture = gesture_id
+            .clone()
+            .unwrap_or_else(|| current.gesture_id.clone());
+        if target_mode == TargetModeDto::Anchor
+            && anchor_id.is_some()
+            && mappings.values().any(|other| {
+                other.id != id
+                    && other.target_mode == TargetModeDto::Anchor
+                    && other.anchor_id == anchor_id
+                    && other.gesture_id == next_gesture
+            })
+        {
+            return Err(ApiProblem::validation(
+                "gesture_conflict",
+                "Another action on this device already uses that gesture. Pick a different gesture.",
+            ));
+        }
+        let anchor_name = anchor_id
+            .as_deref()
+            .and_then(|anchor_id| anchors.get(anchor_id))
+            .map(|anchor| anchor.name.clone());
+        let auto_named = anchor_name.as_deref().is_some_and(|anchor_name| {
+            current.name == mapping_auto_name(anchor_name, &current.gesture_id, &current.action)
+        });
         let Some(mapping) = mappings.get_mut(&id) else {
             return Err(ApiProblem::new(
                 StatusCode::NOT_FOUND,
@@ -1739,8 +1789,12 @@ async fn patch_mapping(
                 "mapping not found",
             ));
         };
+        let renamed = request.name.is_some();
         if let Some(name) = request.name {
             mapping.name = name;
+        }
+        if let Some(gesture_id) = gesture_id {
+            mapping.gesture_id = gesture_id;
         }
         if let Some(enabled) = request.enabled {
             mapping.enabled = enabled;
@@ -1759,6 +1813,12 @@ async fn patch_mapping(
         }
         if let Some(sensitive_ack) = request.sensitive_ack {
             mapping.sensitive_ack = sensitive_ack;
+        }
+        if !renamed
+            && auto_named
+            && let Some(anchor_name) = anchor_name.as_deref()
+        {
+            mapping.name = mapping_auto_name(anchor_name, &mapping.gesture_id, &mapping.action);
         }
         mapping.updated_at = now_rfc3339();
         (
@@ -2173,7 +2233,11 @@ async fn teach_commit(
 }
 
 fn teach_mapping_name(anchor_name: &str, verb: &TeachVerb) -> String {
-    let action = match &verb.action {
+    mapping_auto_name(anchor_name, &verb.gesture_id, &verb.action)
+}
+
+fn mapping_auto_name(anchor_name: &str, gesture_id: &str, action: &ActionDto) -> String {
+    let action = match action {
         ActionDto::Verb { verb, level } if verb == "level_set" => {
             format!("speed {}", level.unwrap_or(1))
         }
@@ -2185,7 +2249,7 @@ fn teach_mapping_name(anchor_name: &str, verb: &TeachVerb) -> String {
     };
     format!(
         "{anchor_name} + {} → {action}",
-        verb.gesture_id.replace("builtin.", "")
+        gesture_id.replace("builtin.", "")
     )
 }
 
@@ -2540,6 +2604,7 @@ fn downscale_rgb(frame: &PreviewFrame) -> (u32, u32, Vec<u8>) {
 fn builtin_gestures() -> Vec<Gesture> {
     [
         ("builtin.thumb_up", "Thumb up", "👍"),
+        ("builtin.thumb_down", "Thumb down", "👎"),
         ("builtin.open_palm", "Open palm", "✋"),
         ("builtin.point", "Point", "☝"),
         ("builtin.circle_cw", "Circle clockwise", "↻"),

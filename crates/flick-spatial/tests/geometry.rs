@@ -7,7 +7,7 @@ use flick_core::{
 use flick_spatial::{
     Anchor, AnchorGeometry, CameraIntrinsics, PointingRay, RayEstimator, RayEstimatorSettings,
     RaySource, RealignPair, TargetSelectorImpl, TargetSelectorSettings, TeachObservation,
-    TeachSession, TeachTarget, is_point_pose, realign,
+    TeachSession, TeachTarget, is_point_pose, realign, seed_observations,
 };
 use nalgebra::{Matrix3, Unit, UnitQuaternion, Vector3};
 use proptest::prelude::*;
@@ -416,6 +416,54 @@ fn point_pose_reads_world_landmarks() -> Result<(), String> {
     hand.world[7] = [0.02, -0.05, 0.03];
     hand.world[8] = [0.02, -0.03, 0.03];
     assert!(!is_point_pose(&hand));
+    Ok(())
+}
+
+#[test]
+fn seeded_reteach_appends_a_spot_and_triangulates() -> Result<(), String> {
+    // A device taught from the camera's seat gains a second angle without re-teaching the first.
+    let lamp = Vector3::new(0.6, 0.0, 2.0);
+    let anchor = test_anchor(AnchorId::new(), "Flexo", lamp, "light.flexo", "light");
+    let mut session = TeachSession::new(
+        anchor.id,
+        anchor.name.clone(),
+        anchor.target.clone(),
+        anchor.domain.clone(),
+        anchor.estimator_version.clone(),
+    );
+    for seed in seed_observations(&anchor) {
+        session.add_observation(seed);
+    }
+    if session.spots() != 1 {
+        return Err(format!(
+            "expected the seed to count as spot 1, got {}",
+            session.spots()
+        ));
+    }
+    let origin = Vector3::new(1.0, 0.0, 0.5);
+    session.add_observation(TeachObservation {
+        spot_index: 2,
+        ray: PointingRay::new(
+            vec_to_array(origin),
+            vec_to_array(lamp - origin),
+            RaySource::FingerOnly,
+        ),
+        frames: 30,
+        ray_jitter_deg: 0.5,
+    });
+    let outcome = session.finish(&[]).map_err(|err| err.to_string())?;
+    let AnchorGeometry::Point3d { position, .. } = outcome.anchor.geometry else {
+        return Err(format!(
+            "expected a triangulated point, got {:?}",
+            outcome.anchor.geometry
+        ));
+    };
+    let error = (Vector3::from(position) - lamp).norm();
+    if error > 0.05 {
+        return Err(format!(
+            "triangulated {position:?}, {error} m from the lamp"
+        ));
+    }
     Ok(())
 }
 

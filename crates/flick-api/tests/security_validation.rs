@@ -80,6 +80,48 @@ async fn mapping_validation_returns_stable_codes() -> Result<(), Box<dyn std::er
 }
 
 #[tokio::test]
+async fn mapping_gesture_patch_rejects_conflicts() -> Result<(), Box<dyn std::error::Error>> {
+    let app = router(ApiState::fake(ApiConfig::dev()));
+    let mut ids = Vec::new();
+    for (gesture, verb) in [("builtin.thumb_up", "on"), ("builtin.thumb_down", "off")] {
+        let payload = json!({
+            "name": format!("Lamp {verb}"),
+            "gesture_id": gesture,
+            "target_mode": "anchor",
+            "anchor_id": "anchor-1",
+            "action": {"kind": "verb", "verb": verb}
+        });
+        let response = call(&app, json_request("/api/v1/mappings", payload)?).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let id = body_json(response).await?["id"]
+            .as_str()
+            .ok_or("missing id")?
+            .to_owned();
+        ids.push(id);
+    }
+    let uri = format!("/api/v1/mappings/{}", ids[1]);
+
+    for (gesture, code) in [
+        ("builtin.thumb_up", "gesture_conflict"),
+        ("  ", "bad_gesture_id"),
+    ] {
+        let patch = json!({"gesture_id": gesture});
+        let response = call(&app, json_request_with("PATCH", &uri, patch)?).await;
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(problem(response).await?.code, code);
+    }
+
+    let patch = json!({"gesture_id": "builtin.circle_cw"});
+    let response = call(&app, json_request_with("PATCH", &uri, patch)?).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        body_json(response).await?["gesture_id"],
+        "builtin.circle_cw"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn client_certificate_upload_rejects_unreadable_data()
 -> Result<(), Box<dyn std::error::Error>> {
     let request = json_request_with(
@@ -114,8 +156,11 @@ async fn activity_query_validation_returns_stable_codes() -> Result<(), Box<dyn 
 }
 
 async fn send(request: Request<Body>) -> Response<Body> {
-    let app = router(ApiState::fake(ApiConfig::dev()));
-    match app.oneshot(request).await {
+    call(&router(ApiState::fake(ApiConfig::dev())), request).await
+}
+
+async fn call(app: &axum::Router, request: Request<Body>) -> Response<Body> {
+    match app.clone().oneshot(request).await {
         Ok(response) => response,
         Err(err) => match err {},
     }
@@ -162,6 +207,13 @@ fn json_request_with(
 }
 
 async fn problem(response: Response<Body>) -> Result<ProblemJson, Box<dyn std::error::Error>> {
+    let bytes = to_bytes(response.into_body(), 1_048_576).await?;
+    Ok(serde_json::from_slice(&bytes)?)
+}
+
+async fn body_json(
+    response: Response<Body>,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let bytes = to_bytes(response.into_body(), 1_048_576).await?;
     Ok(serde_json::from_slice(&bytes)?)
 }

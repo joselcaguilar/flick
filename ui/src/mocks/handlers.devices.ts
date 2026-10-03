@@ -3,6 +3,15 @@ import { anchors, places } from "./data";
 
 const api = "*/api/v1";
 
+type TeachStartBody = {
+  camera_id?: string;
+  target?: Record<string, string>;
+  anchor_id?: string | null;
+  append?: boolean;
+};
+
+let spotCount = 0;
+
 function ok(body: unknown) {
   return HttpResponse.json(body as Parameters<typeof HttpResponse.json>[0]);
 }
@@ -25,24 +34,37 @@ export const deviceHandlers = [
     ok({ applied: true, residual_deg: 3.1, needs_reteach: [] }),
   ),
   http.get(`${api}/anchors`, () => ok(anchors)),
-  http.patch(`${api}/anchors/:id`, async ({ request, params }) =>
-    ok({ ...anchors[0], id: params.id, ...((await request.json()) as object) }),
-  ),
+  http.patch(`${api}/anchors/:id`, async ({ request, params }) => {
+    const anchor = anchors.find((item) => item.id === params.id) ?? anchors[0];
+    return ok({ ...anchor, ...((await request.json()) as object), updated_at: new Date().toISOString() });
+  }),
   http.delete(`${api}/anchors/:id`, () => noContent()),
   http.post(`${api}/anchors/:id/test`, () =>
     ok({ selected: true, angular_error_deg: 4, runner_up: "Bedroom lamp" }),
   ),
-  http.post(`${api}/teach`, () =>
-    ok({
+  http.post(`${api}/teach`, async ({ request }) => {
+    const body = (await request.json()) as TeachStartBody;
+    spotCount = 0;
+    return ok({
       id: "teach-mock",
-      camera_id: "camera-main",
-      target: { entity_id: "fan.ventilador_dormitorio" },
-      phase: "spot1",
-    }),
-  ),
-  http.post(`${api}/teach/:session_id/spot`, () =>
-    ok({ spot_index: 1, ray_jitter_deg: 1.4, confidence: 0.92, kind: "point3d", residual_deg: 3.2 }),
-  ),
+      camera_id: body.camera_id ?? "camera-main",
+      target: body.target ?? { entity_id: "fan.ventilador_dormitorio" },
+      anchor_id: body.anchor_id ?? null,
+      prompt: body.append
+        ? "Point at the device from a new spot"
+        : "Point at the device from where you usually stand",
+    });
+  }),
+  http.post(`${api}/teach/:session_id/spot`, () => {
+    spotCount += 1;
+    return ok({
+      spot_index: spotCount,
+      ray_jitter_deg: 1.4,
+      confidence: 0.92,
+      kind: "point3d",
+      residual_deg: 3.2,
+    });
+  }),
   http.post(`${api}/teach/:session_id/levels/use-current`, () => ok({ levels: [1], current_percentage: 1 })),
   http.post(`${api}/teach/:session_id/levels/test`, () =>
     ok({

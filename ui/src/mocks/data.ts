@@ -162,6 +162,7 @@ export const anchors: Anchor[] = [
   {
     id: "anchor-fan-bedroom",
     place_id: "place-bedroom-desk",
+    camera_id: "camera-main",
     name: "Ventilador dormitorio",
     target: jsonObject({ entity_id: "fan.ventilador_dormitorio" }),
     domain: "fan",
@@ -182,6 +183,7 @@ export const anchors: Anchor[] = [
   {
     id: "anchor-lamp-bedroom",
     place_id: "place-bedroom-desk",
+    camera_id: "camera-main",
     name: "Lámpara dormitorio",
     target: jsonObject({ entity_id: "light.lampara_dormitorio" }),
     domain: "light",
@@ -213,6 +215,21 @@ export const gestures: Gesture[] = [
     distinctiveness: null,
     threshold: null,
     used_by: 1,
+  },
+  {
+    id: "builtin.thumb_down",
+    source: "builtin",
+    kind: "static",
+    hands_required: 1,
+    name: "Thumbs down",
+    icon: "thumbs-down",
+    hand_constraint: "any",
+    enabled: true,
+    sample_count: 0,
+    accuracy: null,
+    distinctiveness: null,
+    threshold: null,
+    used_by: 0,
   },
   {
     id: "builtin.open_palm",

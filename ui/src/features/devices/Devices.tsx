@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { type FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   useAnchors,
   useCameras,
   useCancelTeach,
   useCommitTeach,
+  useDeleteAnchor,
   useHaEntities,
   useMappings,
+  usePatchAnchor,
+  usePatchMapping,
   usePlaces,
   useStartRealign,
   useStartTeach,
@@ -20,6 +23,7 @@ import type {
   Anchor,
   HaEntity,
   Mapping,
+  Place,
   TeachCommitResponse,
   TeachSpotResponse,
   TeachVerb,
@@ -31,7 +35,7 @@ import {
   GestureGlyph,
   PreviewCanvas,
 } from "../../components/domain";
-import { Badge, Button, GlassPanel, ListRow, Select, Skeleton, Switch } from "../../components/ui";
+import { Badge, Button, GlassPanel, Input, ListRow, Select, Skeleton, Switch } from "../../components/ui";
 import { useEventStore } from "../../events/store";
 import { useActiveCamera, useCameraLive, useLiveHands } from "../../events/useLiveHands";
 import { formatTime } from "../../lib/utils";
@@ -351,15 +355,447 @@ export function DevicesRoute() {
                     <Link className="ui-button ui-button-secondary ui-button-sm" to={reteachHref(anchor)}>
                       Re-teach
                     </Link>
-                    <Button variant="ghost" size="sm">
-                      Delete
-                    </Button>
+                    <Link
+                      className="ui-button ui-button-secondary ui-button-sm"
+                      to={`/devices/edit?anchor=${anchor.id}`}
+                      aria-label={`Edit ${anchor.name}`}
+                    >
+                      Edit
+                    </Link>
                   </div>
                 </article>
               ))}
             </div>
           </GlassPanel>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function problemCode(error: unknown) {
+  return (error as { problem?: { code?: string } } | null)?.problem?.code;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Something went wrong. Try again.";
+}
+
+function gestureLabel(gestureId: string) {
+  return gestureChoices.find((choice) => choice.value === gestureId)?.label ?? gestureId;
+}
+
+function spotErrorMessage(error: unknown) {
+  switch (problemCode(error)) {
+    case "camera_not_running":
+      return "This camera is off. Start it from Cameras, then capture again.";
+    case "camera_mismatch":
+      return "Add spots with the camera that taught this device.";
+    case "target_mismatch":
+      return "This device's Home Assistant target changed. Re-teach it instead.";
+    case "anchor_geometry":
+      return "Flick couldn't read this device's saved position. Re-teach it instead.";
+    default:
+      return errorMessage(error);
+  }
+}
+
+export function DeviceEditRoute() {
+  const [searchParams] = useSearchParams();
+  const anchorId = searchParams.get("anchor") ?? "";
+  const anchors = useAnchors();
+  const places = usePlaces();
+  const mappings = useMappings();
+  const anchor = anchors.data?.find((item) => item.id === anchorId);
+
+  if (!anchor) {
+    return (
+      <section className="feature-screen teach-screen" aria-labelledby="screen-title">
+        <header className="operate-header">
+          <div>
+            <h1 id="screen-title">Edit device</h1>
+          </div>
+          <Link className="ui-button ui-button-secondary ui-button-md" to="/devices">
+            Back to devices
+          </Link>
+        </header>
+        {anchors.isLoading ? (
+          <Skeleton />
+        ) : (
+          <GlassPanel className="empty-state-panel">
+            <h2>Device not found</h2>
+            <p>It may have been deleted. Pick another one from Devices.</p>
+          </GlassPanel>
+        )}
+      </section>
+    );
+  }
+
+  return (
+    <DeviceEditor
+      key={anchor.id}
+      anchor={anchor}
+      place={places.data?.find((item) => item.id === anchor.place_id)}
+      mappings={(mappings.data ?? []).filter((mapping) => mapping.anchor_id === anchor.id)}
+    />
+  );
+}
+
+function DeviceEditor({ anchor, place, mappings }: { anchor: Anchor; place?: Place; mappings: Mapping[] }) {
+  const navigate = useNavigate();
+  const cameraName = useCameraNames();
+  const patchAnchor = usePatchAnchor();
+  const patchMapping = usePatchMapping();
+  const deleteAnchor = useDeleteAnchor();
+  const startTeach = useStartTeach();
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const teachSpot = useTeachSpot(sessionId ?? undefined);
+  const commitTeach = useCommitTeach(sessionId ?? undefined);
+  const cancelTeach = useCancelTeach(sessionId ?? undefined);
+  const nameId = useId();
+  const [name, setName] = useState(anchor.name);
+  const [nameSaved, setNameSaved] = useState(false);
+  const [spots, setSpots] = useState<TeachSpotResponse[]>([]);
+  const [spotError, setSpotError] = useState<string | null>(null);
+  const [savedSpots, setSavedSpots] = useState<number | null>(null);
+  const [mappingError, setMappingError] = useState<string | null>(null);
+  const [pendingMappingId, setPendingMappingId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const deleteTrigger = useRef<HTMLButtonElement>(null);
+  const keepButton = useRef<HTMLButtonElement>(null);
+  const confirmOpened = useRef(false);
+  const cancelOnLeave = useRef<() => void>(() => undefined);
+  const cameraId = anchor.camera_id ?? place?.camera_id ?? "";
+  const camera = cameraId ? cameraName(cameraId) : "—";
+  const trimmedName = name.trim();
+  const canSaveName = trimmedName.length > 0 && trimmedName !== anchor.name;
+
+  useEffect(() => setName(anchor.name), [anchor.name]);
+
+  useEffect(() => {
+    if (confirmDelete) {
+      confirmOpened.current = true;
+      keepButton.current?.focus();
+    } else if (confirmOpened.current) {
+      confirmOpened.current = false;
+      deleteTrigger.current?.focus();
+    }
+  }, [confirmDelete]);
+
+  useEffect(() => {
+    cancelOnLeave.current = sessionId ? () => cancelTeach.mutate() : () => undefined;
+  });
+
+  useEffect(() => () => cancelOnLeave.current(), []);
+
+  function saveName(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canSaveName) return;
+    patchAnchor.mutate(
+      { id: anchor.id, patch: { name: trimmedName } },
+      { onSuccess: () => setNameSaved(true) },
+    );
+  }
+
+  function updateMapping(mapping: Mapping, patch: Partial<Mapping>) {
+    setMappingError(null);
+    setPendingMappingId(mapping.id);
+    patchMapping.mutate(
+      { id: mapping.id, patch },
+      {
+        onError: (error) =>
+          setMappingError(
+            problemCode(error) === "gesture_conflict" && patch.gesture_id
+              ? `${gestureLabel(patch.gesture_id)} is already used for another action on ${anchor.name}. Pick a different gesture.`
+              : errorMessage(error),
+          ),
+        onSettled: () => setPendingMappingId(null),
+      },
+    );
+  }
+
+  async function startSpots() {
+    setSpotError(null);
+    setSavedSpots(null);
+    setSpots([]);
+    try {
+      const started = await startTeach.mutateAsync({
+        camera_id: cameraId,
+        target: anchor.target,
+        anchor_id: anchor.id,
+        append: true,
+      });
+      setSessionId(started.id);
+    } catch (error) {
+      setSpotError(spotErrorMessage(error));
+    }
+  }
+
+  async function captureSpot() {
+    setSpotError(null);
+    try {
+      const spot = await teachSpot.mutateAsync();
+      setSpots((current) => [...current, spot]);
+    } catch (error) {
+      setSpotError(spotErrorMessage(error));
+    }
+  }
+
+  async function saveSpots() {
+    setSpotError(null);
+    try {
+      await commitTeach.mutateAsync({ verbs: [] });
+      setSavedSpots(spots.length);
+      setSpots([]);
+      setSessionId(null);
+    } catch (error) {
+      setSpotError(spotErrorMessage(error));
+    }
+  }
+
+  async function cancelSpots() {
+    await cancelTeach.mutateAsync().catch(() => undefined);
+    setSpots([]);
+    setSessionId(null);
+    setSpotError(null);
+  }
+
+  function removeDevice() {
+    deleteAnchor.mutate(anchor.id, { onSuccess: () => navigate("/devices", { replace: true }) });
+  }
+
+  return (
+    <section className="feature-screen teach-screen" aria-labelledby="screen-title">
+      <header className="operate-header">
+        <div>
+          <h1 id="screen-title">{anchor.name}</h1>
+          <p>{`${anchorTargetEntity(anchor)} · ${camera} · ${place?.name ?? "—"}`}</p>
+        </div>
+        <Link className="ui-button ui-button-secondary ui-button-md" to="/devices">
+          Back to devices
+        </Link>
+      </header>
+      <div className="teach-layout">
+        <div className="teach-main">
+          {sessionId ? (
+            <TeachPreview
+              title={`Point at ${anchor.name} from a new spot`}
+              detail={`new spot ${spots.length + 1} · hold steady`}
+              sessionId={sessionId}
+              cameraId={cameraId}
+            />
+          ) : null}
+          <GlassPanel className="teach-step-card">
+            <h2>Name</h2>
+            <form className="device-edit-name" onSubmit={saveName}>
+              <label className="sentence-field" htmlFor={nameId}>
+                <span>Device name</span>
+                <Input
+                  id={nameId}
+                  value={name}
+                  onChange={(event) => {
+                    setName(event.currentTarget.value);
+                    setNameSaved(false);
+                  }}
+                />
+              </label>
+              <Button type="submit" variant="primary" loading={patchAnchor.isPending} disabled={!canSaveName}>
+                Save name
+              </Button>
+            </form>
+            {nameSaved ? <p className="inline-result">Name saved.</p> : null}
+            {patchAnchor.error ? (
+              <p className="inline-error" role="alert">
+                {patchAnchor.error.message}
+              </p>
+            ) : null}
+          </GlassPanel>
+          <GlassPanel className="teach-step-card">
+            <h2>Gestures</h2>
+            <p>Point at {anchor.name}, then make the gesture. Switch one off to pause it.</p>
+            {mappings.length ? (
+              <div className="teach-verb-editor">
+                {mappings.map((mapping) => {
+                  const level = levelLabel(mapping.action);
+                  const choices = gestureChoices.some((choice) => choice.value === mapping.gesture_id)
+                    ? gestureChoices
+                    : [
+                        ...gestureChoices,
+                        { value: mapping.gesture_id, label: mapping.gesture_name ?? mapping.gesture_id },
+                      ];
+                  return (
+                    <article className="teach-verb-row" key={mapping.id}>
+                      <Switch
+                        checked={mapping.enabled}
+                        disabled={pendingMappingId === mapping.id}
+                        aria-label={`Enable gesture for ${level}`}
+                        onCheckedChange={(enabled) => updateMapping(mapping, { enabled })}
+                      />
+                      <GestureGlyph name={mapping.gesture_id} animated={false} />
+                      <Select
+                        value={mapping.gesture_id}
+                        label={`Gesture for ${level}`}
+                        items={choices}
+                        onValueChange={(value) => {
+                          if (value !== mapping.gesture_id) updateMapping(mapping, { gesture_id: value });
+                        }}
+                      />
+                      <strong>{level}</strong>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <>
+                <p>No gestures yet.</p>
+                <div className="level-actions">
+                  <Link className="ui-button ui-button-secondary ui-button-sm" to={reteachHref(anchor)}>
+                    Re-teach {anchor.name}
+                  </Link>
+                </div>
+              </>
+            )}
+            {mappingError ? (
+              <p className="inline-error" role="alert">
+                {mappingError}
+              </p>
+            ) : null}
+          </GlassPanel>
+          <GlassPanel className="teach-step-card">
+            <h2>Add spots from another angle</h2>
+            {cameraId ? (
+              <p>
+                Extra angles help Flick recognize {anchor.name} from more of the room. Use {camera}, the
+                camera that taught it.
+              </p>
+            ) : (
+              <p className="camera-note">
+                Flick doesn't know which camera taught this device. Re-teach it to add spots.
+              </p>
+            )}
+            {sessionId ? (
+              <>
+                {spots.length ? (
+                  <div className="spot-result-grid">
+                    {spots.map((spot, index) => (
+                      <div className="spot-result" key={spot.spot_index}>
+                        <Badge tone={spot.confidence >= 0.85 ? "success" : "warning"}>
+                          New spot {index + 1}
+                        </Badge>
+                        <ConfidenceMeter
+                          value={spot.confidence}
+                          label={`${spot.kind} · jitter ${spot.ray_jitter_deg.toFixed(1)}°`}
+                        />
+                        <span>
+                          {spot.residual_deg == null
+                            ? "Residual pending"
+                            : `${spot.residual_deg.toFixed(1)}° residual`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="level-actions">
+                  <Button
+                    variant={spots.length ? "secondary" : "primary"}
+                    loading={teachSpot.isPending}
+                    onClick={() => void captureSpot()}
+                  >
+                    Capture new spot
+                  </Button>
+                  <Button
+                    variant={spots.length ? "primary" : "secondary"}
+                    disabled={!spots.length}
+                    loading={commitTeach.isPending}
+                    onClick={() => void saveSpots()}
+                  >
+                    Save new spots
+                  </Button>
+                  <Button variant="ghost" onClick={() => void cancelSpots()}>
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="level-actions">
+                <Button
+                  variant="primary"
+                  disabled={!cameraId}
+                  loading={startTeach.isPending}
+                  onClick={() => void startSpots()}
+                >
+                  Add spots
+                </Button>
+              </div>
+            )}
+            {savedSpots != null ? (
+              <p className="inline-result">
+                {`New spots saved. ${anchor.name} now uses ${savedSpots} more ${savedSpots === 1 ? "angle" : "angles"}.`}
+              </p>
+            ) : null}
+            {spotError ? (
+              <p className="inline-error" role="alert">
+                {spotError}
+              </p>
+            ) : null}
+          </GlassPanel>
+        </div>
+        <aside className="teach-side">
+          <GlassPanel className="picked-device-card">
+            <span>Device</span>
+            <DevicePill name={anchor.name} domain={anchor.domain} detail={anchorTargetEntity(anchor)} />
+            <dl className="device-edit-facts">
+              <div>
+                <dt>Status</dt>
+                <dd>
+                  <Badge tone={statusTone(anchor.status)}>{statusLabel(anchor.status)}</Badge>
+                </dd>
+              </div>
+              <div>
+                <dt>Camera</dt>
+                <dd>{camera}</dd>
+              </div>
+              <div>
+                <dt>Place</dt>
+                <dd>{place?.name ?? "—"}</dd>
+              </div>
+            </dl>
+            {isSensitiveDomain(anchor.domain) ? <Badge tone="warning">Sensitive</Badge> : null}
+            <div className="level-actions">
+              <Link className="ui-button ui-button-secondary ui-button-sm" to={reteachHref(anchor)}>
+                Re-teach
+              </Link>
+            </div>
+          </GlassPanel>
+          <GlassPanel className="teach-step-card">
+            <h2>Delete device</h2>
+            <p>Flick forgets {anchor.name}'s position and its gestures. Home Assistant isn't changed.</p>
+            {confirmDelete ? (
+              <div className="device-edit-confirm">
+                <strong>Delete {anchor.name}?</strong>
+                <div className="level-actions">
+                  <Button variant="danger" loading={deleteAnchor.isPending} onClick={removeDevice}>
+                    Delete device
+                  </Button>
+                  <Button ref={keepButton} variant="ghost" onClick={() => setConfirmDelete(false)}>
+                    Keep device
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="level-actions">
+                <Button ref={deleteTrigger} variant="secondary" onClick={() => setConfirmDelete(true)}>
+                  Delete device…
+                </Button>
+              </div>
+            )}
+            {deleteAnchor.error ? (
+              <p className="inline-error" role="alert">
+                {deleteAnchor.error.message}
+              </p>
+            ) : null}
+          </GlassPanel>
+        </aside>
       </div>
     </section>
   );

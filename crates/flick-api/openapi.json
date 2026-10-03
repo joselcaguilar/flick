@@ -2244,6 +2244,13 @@
           "updated_at"
         ],
         "properties": {
+          "camera_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Camera that taught the anchor; extra spots must come from it."
+          },
           "created_at": {
             "type": "string",
             "description": "Created time."
@@ -4141,6 +4148,13 @@
             ],
             "description": "Enabled."
           },
+          "gesture_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Gesture id that fires the mapping."
+          },
           "name": {
             "type": [
               "string",
@@ -5089,6 +5103,10 @@
               "null"
             ],
             "description": "Existing anchor id for reteach."
+          },
+          "append": {
+            "type": "boolean",
+            "description": "Keep the anchor's taught spots and add new ones (requires `anchor_id`)."
           },
           "camera_id": {
             "type": "string",

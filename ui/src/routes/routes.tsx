@@ -4,7 +4,13 @@ import { features } from "../config/features";
 import { ActivityRoute } from "../features/activity/ActivityRoute";
 import { CamerasRoute } from "../features/cameras/Cameras";
 import { DashboardRoute } from "../features/dashboard/Dashboard";
-import { DevicesRoute, PlacesRoute, RealignRoute, TeachDeviceRoute } from "../features/devices/Devices";
+import {
+  DeviceEditRoute,
+  DevicesRoute,
+  PlacesRoute,
+  RealignRoute,
+  TeachDeviceRoute,
+} from "../features/devices/Devices";
 import { GesturesLibraryRoute } from "../features/gestures/GesturesLibraryRoute";
 import { MappingEditorRoute, MappingsRoute } from "../features/mappings/Mappings";
 import { OnboardingRoute } from "../features/onboarding/OnboardingRoute";
@@ -69,6 +75,12 @@ export const routes: RouteMeta[] = [
     title: "Teach a device",
     description: "Pick a device, point from two spots and test verbs.",
     element: <TeachDeviceRoute />,
+  },
+  {
+    path: "/devices/edit",
+    title: "Edit device",
+    description: "Rename, change gestures, add spots or delete a taught device.",
+    element: <DeviceEditRoute />,
   },
   {
     path: "/devices/places",

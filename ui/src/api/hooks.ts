@@ -360,10 +360,39 @@ export function useAnchors(placeId = "") {
   });
 }
 
+export function usePatchAnchor() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: { name?: string; verb_params?: Record<string, unknown> };
+    }) => api.patch<Anchor>(`/api/v1/anchors/${id}`, patch),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["anchors"] }),
+  });
+}
+
+export function useDeleteAnchor() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/api/v1/anchors/${id}`),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["anchors"] });
+      client.invalidateQueries({ queryKey: queryKeys.mappings });
+    },
+  });
+}
+
 export function useStartTeach() {
   return useMutation({
-    mutationFn: (body: { camera_id: string; target: Record<string, string>; anchor_id?: string }) =>
-      api.post<TeachSession>("/api/v1/teach", body),
+    mutationFn: (body: {
+      camera_id: string;
+      target: Record<string, string>;
+      anchor_id?: string;
+      append?: boolean;
+    }) => api.post<TeachSession>("/api/v1/teach", body),
   });
 }
 
@@ -393,7 +422,7 @@ export function useCommitTeach(sessionId?: string) {
     mutationFn: (body: { name?: string; verbs: TeachVerb[] }) =>
       api.post<TeachCommitResponse>(`/api/v1/teach/${sessionId}/commit`, body),
     onSuccess: () => {
-      client.invalidateQueries({ queryKey: queryKeys.anchors() });
+      client.invalidateQueries({ queryKey: ["anchors"] });
       client.invalidateQueries({ queryKey: queryKeys.mappings });
     },
   });

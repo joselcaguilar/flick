@@ -1133,6 +1133,8 @@ export interface components {
         };
         /** @description Anchor record. */
         Anchor: {
+            /** @description Camera that taught the anchor; extra spots must come from it. */
+            camera_id?: string | null;
             /** @description Created time. */
             created_at: string;
             /** @description Domain. */
@@ -1908,6 +1910,8 @@ export interface components {
             anchor_id?: string | null;
             /** @description Enabled. */
             enabled?: boolean | null;
+            /** @description Gesture id that fires the mapping. */
+            gesture_id?: string | null;
             /** @description Name. */
             name?: string | null;
             /** @description Sensitive ack. */
@@ -2289,6 +2293,8 @@ export interface components {
         TeachRequest: {
             /** @description Existing anchor id for reteach. */
             anchor_id?: string | null;
+            /** @description Keep the anchor's taught spots and add new ones (requires `anchor_id`). */
+            append?: boolean;
             /** @description Camera id. */
             camera_id: string;
             /** @description Target object with exactly one entity_id/device_id/area_id. */

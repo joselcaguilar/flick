@@ -331,6 +331,54 @@ pub fn recompute_anchor(
     )
 }
 
+/// Rebuilds synthetic teaching rays from a stored anchor so a re-teach can append spots.
+///
+/// Raw teach rays are not persisted, so each seed stands in for every spot taught before and
+/// carries the anchor's own uncertainty as its jitter. Seeds use spot index 1, so the first new
+/// spot is 2.
+#[must_use]
+pub fn seed_observations(anchor: &Anchor) -> Vec<TeachObservation> {
+    let mut seeds = vec![seed(
+        &anchor.geometry,
+        anchor.ray_source,
+        anchor.uncertainty_deg,
+        &anchor.estimator_version,
+    )];
+    if let Some(aim) = &anchor.finger_aim {
+        seeds.push(seed(
+            &aim.geometry,
+            RaySource::FingerOnly,
+            aim.uncertainty_deg,
+            &anchor.estimator_version,
+        ));
+    }
+    seeds
+}
+
+fn seed(
+    geometry: &AnchorGeometry,
+    source: RaySource,
+    jitter_deg: f32,
+    version: &str,
+) -> TeachObservation {
+    let (origin, direction) = match geometry {
+        AnchorGeometry::Point3d { position, .. } => ([0.0; 3], a3(unit_or_z(v3(*position)))),
+        AnchorGeometry::Direction {
+            direction,
+            teach_origin,
+            ..
+        } => (*teach_origin, *direction),
+    };
+    let mut ray = PointingRay::new(origin, direction, source);
+    ray.estimator_version = version.to_owned();
+    TeachObservation {
+        spot_index: 1,
+        ray,
+        frames: 30,
+        ray_jitter_deg: jitter_deg,
+    }
+}
+
 fn build_anchor(
     id: AnchorId,
     name: String,
