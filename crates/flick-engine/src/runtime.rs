@@ -30,8 +30,8 @@ use flick_api::{
     Camera as ApiCamera, CameraCreate, CameraFormat, CameraPatch, CameraStatus, ConfigGateway,
     EmptyEvent, EngineControl, EnginePausedEvent, EngineStatus, EventHub, FakeUpdates, HaArea,
     HaClientCertificate, HaConnectRequest, HaConnectionUpdate, HaDiscovery, HaEntity, HaGateway,
-    HaInstance, HaServiceSchema, HaStatus as ApiHaStatus, HandEvent, HandsEvent, LatencyBreakdown,
-    Mapping, NetworkReport, PauseRequest, PreviewFrame, PreviewSource, RayEvent,
+    HaInstance, HaServiceSchema, HaStatus as ApiHaStatus, HaStatusEvent, HandEvent, HandsEvent,
+    LatencyBreakdown, Mapping, NetworkReport, PauseRequest, PreviewFrame, PreviewSource, RayEvent,
     RealignCommitResponse, RealignPointRequest, RealignPointResponse, RealignSession, SettingsMap,
     SetupSuggestRequest, SetupSuggestion, StageLatency, TargetAmbiguousEvent, TargetClearedEvent,
     TargetHoverEvent, TargetModeDto, TargetSelectedEvent, TeachCommitRequest, TeachCommitResponse,
@@ -1230,21 +1230,30 @@ impl EngineApp {
 
     /// Refreshes the entity registry each time the client (re)connects after
     /// being down, e.g. after starting offline or switching Home/Remote URLs.
+    /// Also publishes `ha.status` on every connection change.
     /// Holds only the status receiver so the client actor can still shut down.
     fn spawn_ha_registry_sync(&self, generation: u64, mut status: watch::Receiver<HaStatus>) {
         let weak = self.weak_self.clone();
         tokio::spawn(async move {
             let mut was_ready = matches!(*status.borrow_and_update(), HaStatus::Ready { .. });
+            {
+                let Some(app) = weak.upgrade() else { return };
+                if app.ha_generation.load(std::sync::atomic::Ordering::SeqCst) != generation {
+                    return;
+                }
+                app.publish_ha_status().await;
+            }
             while status.changed().await.is_ok() {
                 let ready = matches!(*status.borrow_and_update(), HaStatus::Ready { .. });
                 let reconnected = ready && !was_ready;
                 was_ready = ready;
-                if !reconnected {
-                    continue;
-                }
                 let Some(app) = weak.upgrade() else { return };
                 if app.ha_generation.load(std::sync::atomic::Ordering::SeqCst) != generation {
                     return;
+                }
+                app.publish_ha_status().await;
+                if !reconnected {
+                    continue;
                 }
                 let Some(client) = app.ha_client.lock().await.clone() else {
                     return;
@@ -1380,9 +1389,12 @@ impl EngineApp {
             .store(epoch, std::sync::atomic::Ordering::SeqCst);
         let app = Arc::clone(self);
         tokio::spawn(async move {
+            app.publish_ha_status().await;
             app.restore_ha_connection(epoch).await;
             app.ha_restore_epoch
                 .store(0, std::sync::atomic::Ordering::SeqCst);
+            // A failed restore leaves no client, so this reports it as disconnected.
+            app.publish_ha_status().await;
         });
     }
 
@@ -1917,6 +1929,19 @@ impl EngineApp {
             events.publish(WsServerMessage::CameraStatus {
                 ts: now_rfc3339(),
                 payload: status,
+            });
+        }
+    }
+
+    async fn publish_ha_status(&self) {
+        let status = self.ha_status_dto().await;
+        if let Some(events) = self.events.lock().await.clone() {
+            events.publish(WsServerMessage::HaStatus {
+                ts: now_rfc3339(),
+                payload: HaStatusEvent {
+                    state: status.state,
+                    ha_version: status.ha_version,
+                },
             });
         }
     }
@@ -3965,6 +3990,8 @@ impl HaGateway for EngineApp {
                 .await;
             dispatcher.set_registry(RegistrySnapshot::default()).await;
         }
+        drop(client);
+        self.publish_ha_status().await;
         Ok(())
     }
 

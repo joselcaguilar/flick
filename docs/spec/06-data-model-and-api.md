@@ -480,7 +480,7 @@ CREATE TABLE update_state (              -- small key/value table owned by flick
 | `armed` | `{until}` / `disarmed` | `gestures` |
 | `confirm.required` | `{event_id, mapping_id, confirm_gesture_id, expires_at}` | `actions` |
 | `action.result` | `{activity_id, event_id, mapping_id, status, error_code?, message?, latency}` | `actions` |
-| `ha.status` | `{state:"disconnected"|"connecting"|"ready"|"auth_failed", ha_version?}` | `ha` |
+| `ha.status` | `{state:"disconnected"|"connecting"|"ready"|"auth_failed", ha_version?}` (on every connection change) | `ha` |
 | `ha.entity` | `{entity_id, state, attributes}` (subscribed entities only) | `ha` |
 | `capture.progress` | `{session_id, take, takes, phase:"countdown"|"recording"|"review"|"done", quality_hint?}` | `capture` |
 | `engine.paused` / `engine.resumed` | `{until?}` | `status` |
