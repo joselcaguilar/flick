@@ -2268,11 +2268,58 @@ body.hud-window {
   padding: 1rem;
 }
 
+.area-panel-header {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.area-panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-inline-size: 0;
+}
+
+.area-panel-title > :last-child {
+  flex: none;
+}
+
+.area-panel-title h2 {
+  margin: 0;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--text-title);
+}
+
 .area-members {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-block-start: 0.5rem;
+  list-style: none;
+  padding: 0;
+}
+
+.area-members .device-pill {
+  padding: 0.25rem 0.625rem 0.25rem 0.25rem;
+  border: 1px solid var(--flick-border);
+  border-radius: var(--radius-pill);
+  background: var(--flick-bg-subtle);
+}
+
+.area-members .device-pill strong {
+  color: var(--flick-text);
+  font-size: var(--text-body);
+  font-weight: 500;
+}
+
+.area-members .entity-icon {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--flick-surface);
+  font-size: var(--text-small);
 }
 
 .area-excluded {
@@ -2299,7 +2346,11 @@ body.hud-window {
 }
 
 .area-gesture-row.new-routine-row {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 220px) minmax(0, 220px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.new-routine-row .area-gesture-main {
+  grid-column: 1 / -1;
 }
 
 .area-gesture-main strong,
@@ -2325,8 +2376,13 @@ body.hud-window {
   grid-column: 1 / -1;
 }
 
+.other-gestures-panel .panel-heading > div {
+  flex-direction: column;
+}
+
 .other-gestures-panel .panel-heading h2 {
   margin: 0;
+  font-size: var(--text-title);
 }
 
 .other-gestures-panel .panel-heading p {

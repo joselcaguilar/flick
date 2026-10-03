@@ -53,6 +53,10 @@ function gestureLabel(gesture: Gesture) {
   return gesture.name ?? gesture.id;
 }
 
+function devicesLabel(count: number) {
+  return `${count} ${count === 1 ? "device" : "devices"}`;
+}
+
 function gestureItems(gestures: Gesture[], owners: Map<string, Mapping>, current?: Mapping): GestureItem[] {
   return gestures.map((gesture) => {
     const owner = owners.get(gesture.id);
@@ -252,24 +256,23 @@ function AreaPanel({
   );
   return (
     <GlassPanel className="area-panel">
-      <div className="panel-heading">
-        <div>
+      <header className="area-panel-header">
+        <div className="area-panel-title">
           <h2>{model.area.name}</h2>
-          <p className="area-members">
-            {model.members.length
-              ? model.members.map((anchor) => (
-                  <DevicePill
-                    key={anchor.id}
-                    name={anchor.name}
-                    domain={anchor.domain}
-                    detail="Taught device"
-                  />
-                ))
-              : "No taught devices in this area yet."}
-          </p>
+          <Badge tone="accent">{devicesLabel(model.members.length)}</Badge>
         </div>
-        <Badge tone="accent">{model.members.length} devices</Badge>
-      </div>
+        {model.members.length ? (
+          <ul className="area-members" aria-label={`Taught devices in ${model.area.name}`}>
+            {model.members.map((anchor) => (
+              <li key={anchor.id}>
+                <DevicePill name={anchor.name} domain={anchor.domain} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="area-empty-row">No taught devices in this area yet.</p>
+        )}
+      </header>
       {excluded.length ? (
         <p className="area-excluded">
           Not included in All on/off: {excluded.map((anchor) => anchor.name).join(", ")}.
@@ -356,7 +359,7 @@ function AreaGestureRow({
     <li className="area-gesture-row">
       <div className="area-gesture-main">
         <strong>{AREA_KIND_LABEL[kind]}</strong>
-        <span>{blocked ? "No toggleable devices in this area." : `${toggleIds.length} devices`}</span>
+        <span>{blocked ? "No toggleable devices in this area." : devicesLabel(toggleIds.length)}</span>
       </div>
       <Select
         value={mapping?.gesture_id ?? ""}
