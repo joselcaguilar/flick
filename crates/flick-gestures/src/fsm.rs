@@ -424,7 +424,7 @@ impl TriggerFsmSet {
         {
             return Ok((targeted, selected));
         }
-        if selected.is_some() {
+        if is_targeting(selection) {
             return Err(SuppressionReason::TargetSelected);
         }
 
@@ -843,11 +843,18 @@ fn make_event(
 
 fn selected_anchor(selection: &SelectionState) -> Option<AnchorId> {
     match selection {
-        SelectionState::Selected { anchor_id, .. } | SelectionState::Hover { anchor_id, .. } => {
-            Some(*anchor_id)
-        }
-        SelectionState::Idle | SelectionState::Aiming => None,
+        SelectionState::Selected { anchor_id, .. } => Some(*anchor_id),
+        SelectionState::Idle | SelectionState::Aiming | SelectionState::Hover { .. } => None,
     }
+}
+
+/// Pointing at a device suppresses global and area gestures, but only a
+/// completed selection may fire device verbs.
+fn is_targeting(selection: &SelectionState) -> bool {
+    matches!(
+        selection,
+        SelectionState::Selected { .. } | SelectionState::Hover { .. }
+    )
 }
 
 fn hand_matches(constraint: HandConstraint, hand: Handedness) -> bool {
@@ -925,5 +932,56 @@ mod tests {
         let resolved = fsm.resolve_mapping(&candidate, 1, &selection);
 
         assert!(matches!(resolved, Err(SuppressionReason::TargetSelected)));
+    }
+
+    fn thumb_up_setup(target_mode: TargetMode) -> (TriggerFsmSet, GestureCandidate) {
+        let gesture_id = GestureId::Builtin(BuiltinGesture::ThumbUp);
+        let fsm = TriggerFsmSet::new(TriggerConfig {
+            mappings: vec![GestureMapping {
+                gesture_id,
+                target_mode,
+                ..GestureMapping::tap(gesture_id)
+            }],
+            ..TriggerConfig::default()
+        });
+        let candidate = GestureCandidate {
+            gesture_id,
+            track_id: 1,
+            hand: Handedness::Right,
+            confidence: 1.0,
+            progress: None,
+            value: None,
+        };
+        (fsm, candidate)
+    }
+
+    #[test]
+    fn hover_does_not_fire_targeted_mapping() {
+        let (fsm, candidate) = thumb_up_setup(TargetMode::Targeted);
+        let selection = SelectionState::Hover {
+            anchor_id: AnchorId::new(),
+            score: 0.91,
+            dwell_progress: 0.5,
+            runner_up: None,
+        };
+
+        let resolved = fsm.resolve_mapping(&candidate, 1, &selection);
+
+        assert!(matches!(resolved, Err(SuppressionReason::TargetSelected)));
+    }
+
+    #[test]
+    fn selected_fires_targeted_mapping() {
+        let anchor_id = AnchorId::new();
+        let (fsm, candidate) = thumb_up_setup(TargetMode::Targeted);
+        let selection = SelectionState::Selected {
+            anchor_id,
+            domain: "light".to_string(),
+            expires_at_ms: i64::MAX,
+        };
+
+        let resolved = fsm.resolve_mapping(&candidate, 1, &selection);
+
+        assert!(matches!(resolved, Ok((_, Some(id))) if id == anchor_id));
     }
 }
