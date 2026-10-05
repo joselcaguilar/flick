@@ -1817,15 +1817,15 @@ impl FaceKeypointRunner {
         }
     }
 
-    /// Detects face keypoints on demand. Returns `Ok(None)` when the optional model is absent.
-    pub fn detect(&mut self, frame: &Frame) -> Result<Option<FaceKeypoints>, VisionError> {
+    /// Detects the faces in view, most confident first. Empty when the optional model is absent.
+    pub fn detect(&mut self, frame: &Frame) -> Result<Vec<FaceKeypoints>, VisionError> {
         if frame.format != PixelFormat::Rgb8 {
             return Err(VisionError::UnsupportedFrame(
                 "FaceKeypointRunner expects RGB8".to_owned(),
             ));
         }
         let Some(runner) = self.runner.as_mut() else {
-            return Ok(None);
+            return Ok(Vec::new());
         };
         // BlazeFace expects an aspect-preserving letterbox in [-1, 1]; zero padding becomes black.
         let (letterbox, mut input) = letterbox_rgb_to_nhwc(frame, FACE_INPUT_SIZE)?;
@@ -1906,44 +1906,71 @@ fn generate_face_anchors() -> Vec<Anchor> {
     generate_ssd_anchors(FACE_INPUT_SIZE, &[8, 16, 16, 16])
 }
 
+/// Neighbouring anchors find the same face; boxes overlapping more than this are one face.
+const FACE_NMS_IOU: f32 = 0.3;
+/// Enough people for a room; more only costs ownership checks.
+const MAX_FACES: usize = 4;
+
 fn decode_face_keypoints(
     regressors: &[f32],
     logits: &[f32],
     anchors: &[Anchor],
     letterbox: Letterbox,
-) -> Result<Option<FaceKeypoints>, VisionError> {
+) -> Result<Vec<FaceKeypoints>, VisionError> {
     let count = logits.len().min(anchors.len()).min(regressors.len() / 16);
     if count == 0 {
         return Err(VisionError::InvalidModelOutput(
             "empty BlazeFace outputs".to_owned(),
         ));
     }
-    let mut best_index = None;
-    let mut best_score = 0.5_f32;
-    for (index, logit) in logits.iter().take(count).enumerate() {
-        let score = sigmoid(*logit);
-        if score > best_score {
-            best_score = score;
-            best_index = Some(index);
+    let mut candidates: Vec<(f32, usize)> = logits
+        .iter()
+        .take(count)
+        .enumerate()
+        .filter_map(|(index, logit)| {
+            let score = sigmoid(*logit);
+            (score > 0.5).then_some((score, index))
+        })
+        .collect();
+    candidates.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let mut faces: Vec<(RectF, FaceKeypoints)> = Vec::new();
+    for (score, index) in candidates {
+        let anchor = &anchors[index];
+        let raw = &regressors[index * 16..index * 16 + 16];
+        let scale = |value: f32, size: f32| value / FACE_INPUT_SIZE as f32 * size;
+        let (w, h) = (scale(raw[2], anchor.w), scale(raw[3], anchor.h));
+        let bbox = letterbox.unletterbox_rect(RectF {
+            x: scale(raw[0], anchor.w) + anchor.x_center - w * 0.5,
+            y: scale(raw[1], anchor.h) + anchor.y_center - h * 0.5,
+            w,
+            h,
+        });
+        if faces
+            .iter()
+            .any(|(kept, _)| iou(*kept, bbox) > FACE_NMS_IOU)
+        {
+            continue;
+        }
+        let mut points = [[0.0_f32; 2]; 6];
+        for (point_index, point) in points.iter_mut().enumerate() {
+            let base = 4 + point_index * 2;
+            *point = letterbox.unletterbox_point([
+                scale(raw[base], anchor.w) + anchor.x_center,
+                scale(raw[base + 1], anchor.h) + anchor.y_center,
+            ]);
+        }
+        faces.push((
+            bbox,
+            FaceKeypoints {
+                points,
+                confidence: Some(score),
+            },
+        ));
+        if faces.len() == MAX_FACES {
+            break;
         }
     }
-    let Some(index) = best_index else {
-        return Ok(None);
-    };
-    let anchor = &anchors[index];
-    let raw = &regressors[index * 16..index * 16 + 16];
-    let mut points = [[0.0_f32; 2]; 6];
-    for (point_index, point) in points.iter_mut().enumerate() {
-        let base = 4 + point_index * 2;
-        *point = letterbox.unletterbox_point([
-            raw[base] / FACE_INPUT_SIZE as f32 * anchor.w + anchor.x_center,
-            raw[base + 1] / FACE_INPUT_SIZE as f32 * anchor.h + anchor.y_center,
-        ]);
-    }
-    Ok(Some(FaceKeypoints {
-        points,
-        confidence: Some(best_score),
-    }))
+    Ok(faces.into_iter().map(|(_, face)| face).collect())
 }
 
 fn normalize_l2<const N: usize>(values: &mut [f32; N]) {

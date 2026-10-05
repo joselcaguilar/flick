@@ -249,21 +249,19 @@ impl RayEstimator {
         {
             return None;
         }
-        let left = self.intrinsics.normalized_camera_xy(face.points[0]);
-        let right = self.intrinsics.normalized_camera_xy(face.points[1]);
-        let dx = left[0] - right[0];
-        let dy = left[1] - right[1];
-        let angular_width = (dx * dx + dy * dy).sqrt();
-        if angular_width <= 1.0e-4 || !angular_width.is_finite() {
-            return None;
-        }
-        let depth = (self.settings.interpupillary_distance_m / angular_width).clamp(0.2, 5.0);
-        let chosen = match self.settings.dominant_eye {
-            DominantEye::Center => [(left[0] + right[0]) * 0.5, (left[1] + right[1]) * 0.5],
-            DominantEye::Left => left,
-            DominantEye::Right => right,
-        };
-        Some(Vec3::new(chosen[0] * depth, chosen[1] * depth, depth))
+        eye_point(
+            face,
+            &self.intrinsics,
+            self.settings.interpupillary_distance_m,
+            self.settings.dominant_eye,
+        )
+    }
+
+    /// Forgets filtered history, so the next hand's ray isn't blended with the last one's.
+    pub fn reset(&mut self) {
+        self.origin_filter.reset();
+        self.direction_filter.reset();
+        self.samples.clear();
     }
 
     fn push_and_median(
@@ -357,6 +355,11 @@ impl OneEuroVec3 {
         }
     }
 
+    /// The next sample starts a fresh filter.
+    fn reset(&mut self) {
+        self.last = None;
+    }
+
     fn filter(&mut self, value: Vec3, at: std::time::Instant) -> Vec3 {
         let Some(last) = self.last else {
             self.last = Some(at);
@@ -400,6 +403,60 @@ impl LowPassVec3 {
 fn alpha(cutoff: f32, dt: f32) -> f32 {
     let tau = 1.0 / (2.0 * std::f32::consts::PI * cutoff.max(1.0e-4));
     1.0 / (1.0 + tau / dt.max(1.0e-4))
+}
+
+/// A pointing hand's wrist stays within arm's reach of its owner's eyes, plus range noise.
+const MAX_EYE_WRIST_M: f32 = 1.2;
+
+/// Picks the face of the person pointing: the one whose eyes sit nearest the hand's wrist in 3D.
+/// With several people in view, the eye-rooted ray then starts at the pointer's own eyes.
+/// `None` when no face is within arm's reach, so aiming falls back to the finger.
+#[must_use]
+pub fn owner_face<'a>(
+    faces: &'a [FaceKeypoints],
+    hand: &HandObservation,
+    intrinsics: &CameraIntrinsics,
+    interpupillary_distance_m: f32,
+) -> Option<&'a FaceKeypoints> {
+    let wrist = v3(estimate_hand_pose(hand, intrinsics).ok()?.camera_landmarks[0]);
+    faces
+        .iter()
+        .filter_map(|face| {
+            let eyes = eye_point(
+                face,
+                intrinsics,
+                interpupillary_distance_m,
+                DominantEye::Center,
+            )?;
+            let distance = (eyes - wrist).norm();
+            (distance <= MAX_EYE_WRIST_M).then_some((face, distance))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(face, _)| face)
+}
+
+/// Eye position in camera space, ranged by the assumed interpupillary distance.
+fn eye_point(
+    face: &FaceKeypoints,
+    intrinsics: &CameraIntrinsics,
+    interpupillary_distance_m: f32,
+    eye: DominantEye,
+) -> Option<Vec3> {
+    let left = intrinsics.normalized_camera_xy(face.points[0]);
+    let right = intrinsics.normalized_camera_xy(face.points[1]);
+    let dx = left[0] - right[0];
+    let dy = left[1] - right[1];
+    let angular_width = (dx * dx + dy * dy).sqrt();
+    if angular_width <= 1.0e-4 || !angular_width.is_finite() {
+        return None;
+    }
+    let depth = (interpupillary_distance_m / angular_width).clamp(0.2, 5.0);
+    let chosen = match eye {
+        DominantEye::Center => [(left[0] + right[0]) * 0.5, (left[1] + right[1]) * 0.5],
+        DominantEye::Left => left,
+        DominantEye::Right => right,
+    };
+    Some(Vec3::new(chosen[0] * depth, chosen[1] * depth, depth))
 }
 
 fn estimate_hand_pose(

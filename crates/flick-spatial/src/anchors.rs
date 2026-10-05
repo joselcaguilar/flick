@@ -90,7 +90,7 @@ pub enum AnchorGeometry {
         /// 3×3 covariance matrix, row-major.
         covariance: [[f32; 3]; 3],
     },
-    /// Direction fallback valid near the teaching origin.
+    /// Direction fallback taught from one spot; any spot can aim at it along the taught ray.
     Direction {
         /// Unit direction in camera coordinates.
         direction: [f32; 3],
@@ -553,10 +553,42 @@ fn geometry_error_deg(geometry: &AnchorGeometry, ray: &PointingRay) -> f32 {
         AnchorGeometry::Point3d { position, .. } => {
             vec_angle_deg(v3(ray.direction), v3(*position) - v3(ray.origin))
         }
-        AnchorGeometry::Direction { direction, .. } => {
-            vec_angle_deg(v3(ray.direction), v3(*direction))
+        AnchorGeometry::Direction {
+            direction,
+            teach_origin,
+            ..
+        } => taught_line_error_deg(v3(*teach_origin), unit_or_z(v3(*direction)), ray),
+    }
+}
+
+/// Room-scale depths at which a direction anchor's device can sit along its taught ray. Farther
+/// depths would let rays parallel to the taught one, from anywhere, match.
+const DIRECTION_DEPTH_M: std::ops::RangeInclusive<f32> = MIN_TARGET_DISTANCE_M..=5.0;
+
+/// The device lies somewhere along the taught ray, at an unknown depth. Scores the live ray
+/// against the point of that ray it aims closest to, so anyone, anywhere in the room, can point
+/// at it. From the teaching spot this is just the angle between the two directions.
+fn taught_line_error_deg(origin: Vec3, direction: Vec3, ray: &PointingRay) -> f32 {
+    let aim = unit_or_z(v3(ray.direction));
+    let offset = origin - v3(ray.origin);
+    let error_at = |depth: f32| vec_angle_deg(aim, offset + direction * depth);
+    let (near, far) = (*DIRECTION_DEPTH_M.start(), *DIRECTION_DEPTH_M.end());
+    let mut best = error_at(near).min(error_at(far));
+    // Depth where the aim's cosine to `offset + direction * depth` peaks.
+    let (a, b, c, e) = (
+        aim.dot(&offset),
+        aim.dot(&direction),
+        offset.norm_squared(),
+        direction.dot(&offset),
+    );
+    let denominator = b * e - a;
+    if denominator.abs() > 1.0e-6 {
+        let depth = (a * e - b * c) / denominator;
+        if DIRECTION_DEPTH_M.contains(&depth) {
+            best = best.min(error_at(depth));
         }
     }
+    best
 }
 
 /// Scores one anchor with the `09-device-targeting` Gaussian angular score.

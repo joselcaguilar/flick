@@ -7,7 +7,8 @@ use flick_core::{
 use flick_spatial::{
     Anchor, AnchorGeometry, CameraIntrinsics, PointingRay, RayEstimator, RayEstimatorSettings,
     RaySource, RealignPair, TargetSelectorImpl, TargetSelectorSettings, TeachObservation,
-    TeachSession, TeachTarget, is_point_pose, realign, seed_observations,
+    TeachSession, TeachTarget, angular_error_deg, is_point_pose, owner_face, realign,
+    seed_observations,
 };
 use nalgebra::{Matrix3, Unit, UnitQuaternion, Vector3};
 use proptest::prelude::*;
@@ -416,6 +417,80 @@ fn point_pose_reads_world_landmarks() -> Result<(), String> {
     hand.world[7] = [0.02, -0.05, 0.03];
     hand.world[8] = [0.02, -0.03, 0.03];
     assert!(!is_point_pose(&hand));
+    Ok(())
+}
+
+#[test]
+fn one_seat_anchor_is_aimable_by_a_guest_elsewhere() -> Result<(), String> {
+    // Taught from one chair, so only the direction is known, not the lamp's depth.
+    let lamp = Vector3::new(0.9, -0.1, 2.4);
+    let teacher = Vector3::new(-0.2, 0.0, 0.7);
+    let mut session = TeachSession::new(
+        AnchorId::new(),
+        "Flexo",
+        TeachTarget::Entity("light.flexo".to_owned()),
+        "light",
+        "test.estimator",
+    );
+    session.add_observation(TeachObservation {
+        spot_index: 1,
+        ray: PointingRay::new(
+            vec_to_array(teacher),
+            vec_to_array(lamp - teacher),
+            RaySource::EyeRooted,
+        ),
+        frames: 20,
+        ray_jitter_deg: 1.0,
+    });
+    let anchor = session.finish(&[]).map_err(|err| err.to_string())?.anchor;
+    if !matches!(anchor.geometry, AnchorGeometry::Direction { .. }) {
+        return Err(format!(
+            "expected a direction anchor, got {:?}",
+            anchor.geometry
+        ));
+    }
+
+    let guest = Vector3::new(1.6, 0.0, 0.9);
+    let at_lamp = PointingRay::new(
+        vec_to_array(guest),
+        vec_to_array(lamp - guest),
+        RaySource::EyeRooted,
+    );
+    let error = angular_error_deg(&anchor, &at_lamp);
+    assert!(
+        error < 1.0,
+        "the guest pointing at the lamp missed by {error}°"
+    );
+
+    // The teacher's direction, copied to the guest's seat, aims past the lamp.
+    let parallel = PointingRay::new(
+        vec_to_array(guest),
+        vec_to_array(lamp - teacher),
+        RaySource::EyeRooted,
+    );
+    let error = angular_error_deg(&anchor, &parallel);
+    assert!(error > 15.0, "a ray past the lamp matched it at {error}°");
+    Ok(())
+}
+
+#[test]
+fn pointing_hand_aims_from_its_owners_eyes() -> Result<(), String> {
+    let intrinsics = CameraIntrinsics::sane_default(1280, 720);
+    let ipd = RayEstimatorSettings::default().interpupillary_distance_m;
+    let bystander = Vector3::new(-1.0, -0.1, 2.0);
+    let pointer = Vector3::new(0.6, -0.1, 1.6);
+    let faces = [
+        synthetic_face(&intrinsics, bystander)?,
+        synthetic_face(&intrinsics, pointer)?,
+    ];
+    let hand = synthetic_hand(
+        &intrinsics,
+        pointer + Vector3::new(0.15, 0.35, -0.3),
+        Vector3::new(-0.3, 0.1, 1.0).normalize(),
+    )?;
+    assert_eq!(owner_face(&faces, &hand, &intrinsics, ipd), Some(&faces[1]));
+    // The pointer's face went undetected: a bystander's eyes must not root the ray.
+    assert_eq!(owner_face(&faces[..1], &hand, &intrinsics, ipd), None);
     Ok(())
 }
 

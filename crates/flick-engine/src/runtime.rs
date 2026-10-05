@@ -60,7 +60,7 @@ use flick_spatial::{
     FingerAim, PlaceRecord, PlaceStatus, PointingRay, RayEstimator, RayEstimatorSettings, RayModel,
     RaySource, RealignPair, StoredIntrinsics, TargetClearReason, TargetEvent, TargetSelectorImpl,
     TargetSelectorSettings, TeachObservation, TeachSession as SpatialTeachSession, TeachTarget,
-    is_point_pose, realign, seed_observations,
+    is_point_pose, owner_face, realign, seed_observations,
 };
 use flick_store::Store;
 use flick_vision::{EpChoice, FaceKeypointRunner, HandPipelineImpl, ModelSet};
@@ -2244,15 +2244,13 @@ impl EngineCapture {
             let source_info = source_info.clone();
             let camera_id = source_info.id;
             let (mut pipeline, face_runner) = build_vision(model_root, source_info.mirror);
-            let mut faces = FaceTracker::new(face_runner);
+            let intrinsics = CameraIntrinsics::sane_default(source_info.width, source_info.height);
+            let mut faces = FaceTracker::new(face_runner, intrinsics.clone());
             let mut gestures = GestureEngine::new(GestureEngineConfig::default());
             let mut anchor_count = anchors.len();
             tracing::info!(camera_id = %camera_id, anchors = anchor_count, "targeting anchors loaded");
-            let mut selector = TargetSelectorImpl::new(
-                CameraIntrinsics::sane_default(source_info.width, source_info.height),
-                anchors,
-                TargetSelectorSettings::default(),
-            );
+            let mut selector =
+                TargetSelectorImpl::new(intrinsics, anchors, TargetSelectorSettings::default());
             let mut hands_feed = events.map(|events| HandsFeed::new(events, camera_id.to_string()));
             let mut targets = TargetFeed::new(target_tx);
             let mut stats = VisionStats::new(Instant::now());
@@ -2694,26 +2692,43 @@ fn pointing_hand(hands: &[HandObservation]) -> Option<&HandObservation> {
 /// Face keypoints for eye-rooted aim, detected only while a hand points.
 struct FaceTracker {
     runner: Option<FaceKeypointRunner>,
-    held: Option<(FaceKeypoints, Instant)>,
+    intrinsics: CameraIntrinsics,
+    held: Option<HeldFace>,
     warned: bool,
 }
 
+/// The pointing hand's own face, kept briefly through detection misses.
+struct HeldFace {
+    face: FaceKeypoints,
+    track_id: u32,
+    at: Instant,
+}
+
 impl FaceTracker {
-    const fn new(runner: Option<FaceKeypointRunner>) -> Self {
+    const fn new(runner: Option<FaceKeypointRunner>, intrinsics: CameraIntrinsics) -> Self {
         Self {
             runner,
+            intrinsics,
             held: None,
             warned: false,
         }
     }
 
+    /// With several people in view, returns the face of the one pointing, never a bystander's.
     fn update(&mut self, frame: &Frame, hands: &HandFrame, now: Instant) -> Option<FaceKeypoints> {
-        if let Some(runner) = self.runner.as_mut()
-            && pointing_hand(&hands.hands).is_some()
-        {
+        let hand = pointing_hand(&hands.hands)?;
+        if let Some(runner) = self.runner.as_mut() {
             match runner.detect(frame) {
-                Ok(Some(face)) => self.held = Some((face, now)),
-                Ok(None) => {}
+                Ok(faces) => {
+                    let ipd = RayEstimatorSettings::default().interpupillary_distance_m;
+                    if let Some(face) = owner_face(&faces, hand, &self.intrinsics, ipd) {
+                        self.held = Some(HeldFace {
+                            face: face.clone(),
+                            track_id: hand.track_id,
+                            at: now,
+                        });
+                    }
+                }
                 Err(err) => {
                     if !self.warned {
                         self.warned = true;
@@ -2724,8 +2739,11 @@ impl FaceTracker {
         }
         self.held
             .as_ref()
-            .filter(|(_, at)| now.saturating_duration_since(*at) <= FACE_HOLD)
-            .map(|(face, _)| face.clone())
+            .filter(|held| {
+                held.track_id == hand.track_id
+                    && now.saturating_duration_since(held.at) <= FACE_HOLD
+            })
+            .map(|held| held.face.clone())
     }
 }
 

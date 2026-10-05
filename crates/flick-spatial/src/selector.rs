@@ -131,6 +131,8 @@ pub struct TargetSelectorImpl {
     hover: Option<Hover>,
     point_started: Option<Instant>,
     point_track_id: Option<u32>,
+    /// Hand whose rays the estimators were last fed, kept through brief pose drops.
+    ray_track_id: Option<u32>,
     last_point_at: Option<Instant>,
     last_ray: Option<LastRay>,
     last_camera_id: Option<CameraId>,
@@ -172,6 +174,7 @@ impl TargetSelectorImpl {
             hover: None,
             point_started: None,
             point_track_id: None,
+            ray_track_id: None,
             last_point_at: None,
             last_ray: None,
             last_camera_id: None,
@@ -314,6 +317,13 @@ impl TargetSelectorImpl {
             self.point_started = Some(now);
         } else if self.point_started.is_none() {
             self.point_started = Some(now);
+        }
+        if self.ray_track_id != Some(track_id) {
+            // Another hand, maybe another person: smoothing must not blend its ray with the last.
+            self.ray_track_id = Some(track_id);
+            self.eye_estimator.reset();
+            self.finger_estimator.reset();
+            self.last_ray = None;
         }
         self.last_point_at = Some(now);
     }

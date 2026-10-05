@@ -46,7 +46,7 @@ pub use places::{
 };
 pub use ray::{
     DEFAULT_ESTIMATOR_VERSION, DominantEye, HandPose, PointingRay, RayEstimateError, RayEstimator,
-    RayEstimatorSettings, RayModel, RaySource,
+    RayEstimatorSettings, RayModel, RaySource, owner_face,
 };
 pub use selector::{
     Spatial, TargetClearReason, TargetEvent, TargetSelectorImpl, TargetSelectorSettings,

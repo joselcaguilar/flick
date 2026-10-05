@@ -82,7 +82,11 @@ pub fn run(args: Args) -> Result<()> {
             .context("running vision pipeline")?;
         source.set_target_fps(pipeline.target_fps());
         let face = if let Some(runner) = face_runner.as_mut() {
-            runner.detect(&frame).context("running face keypoints")?
+            runner
+                .detect(&frame)
+                .context("running face keypoints")?
+                .into_iter()
+                .next()
         } else {
             None
         };
