@@ -41,8 +41,8 @@ The local `uv` project is in `tools/training/` and is pinned to Homebrew Python 
 
 ```bash
 cd tools/training
-UV_PYTHON_DOWNLOADS=never uv run --index-url https://packagefeedproxy.microsoft.io/pypi/simple/ --extra tensorflow --extra inspect python convert.py fetch
-UV_PYTHON_DOWNLOADS=never uv run --index-url https://packagefeedproxy.microsoft.io/pypi/simple/ --extra tensorflow --extra inspect python convert.py convert-gesture
+UV_PYTHON_DOWNLOADS=never uv run --extra tensorflow --extra inspect python convert.py fetch
+UV_PYTHON_DOWNLOADS=never uv run --extra tensorflow --extra inspect python convert.py convert-gesture
 ```
 
 Conversion output:
