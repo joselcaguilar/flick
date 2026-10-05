@@ -59,7 +59,7 @@ time = { version = "0.3.55", features = ["serde", "formatting", "parsing"] }
 
 # vision/geometry
 nalgebra = "0.35.0"
-ort = { version = "2.0.0-rc.13", features = ["download-binaries", "coreml"] }
+ort = { version = "2.0.0-rc.13", features = ["download-binaries"] }
 ndarray = "0.17.2"
 image = "0.25.10"
 jpeg-encoder = "0.6.1"

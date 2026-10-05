@@ -22,3 +22,11 @@ ndarray.workspace = true
 ort.workspace = true
 smallvec.workspace = true
 tracing.workspace = true
+
+# Prebuilt ONNX Runtime comes with CoreML on Apple platforms and always with DirectML on Windows;
+# Linux builds are CPU-only. Requesting anything else has no prebuilt binary and fails to link.
+[target.'cfg(target_vendor = "apple")'.dependencies]
+ort = { workspace = true, features = ["coreml"] }
+
+[target.'cfg(windows)'.dependencies]
+ort = { workspace = true, features = ["directml"] }

@@ -23,7 +23,6 @@ use flick_core::{
 use nalgebra::{Matrix2, Vector2};
 use ndarray::Array4;
 use ort::{
-    ep,
     session::{Session, SessionInputValue, builder::GraphOptimizationLevel},
     value::TensorRef,
 };
@@ -423,11 +422,12 @@ impl OrtSessionFactory {
 
         match ep_kind {
             EpKind::Cpu => {}
+            #[cfg(target_vendor = "apple")]
             EpKind::CoreMl => {
                 fs::create_dir_all(&self.coreml_cache_dir).map_err(|err| err.to_string())?;
-                let coreml = ep::CoreML::default()
-                    .with_model_format(ep::coreml::ModelFormat::NeuralNetwork)
-                    .with_compute_units(ep::coreml::ComputeUnits::CPUAndNeuralEngine)
+                let coreml = ort::ep::CoreML::default()
+                    .with_model_format(ort::ep::coreml::ModelFormat::NeuralNetwork)
+                    .with_compute_units(ort::ep::coreml::ComputeUnits::CPUAndNeuralEngine)
                     .with_model_cache_dir(self.coreml_cache_dir.to_string_lossy())
                     .build();
                 builder = builder
@@ -435,9 +435,9 @@ impl OrtSessionFactory {
                     .map_err(|err| err.to_string())?;
             }
             EpKind::Auto => return Err("auto EP must be expanded before session build".to_owned()),
-            EpKind::DirectMl | EpKind::Cuda | EpKind::OpenVino | EpKind::Xnnpack => {
+            unsupported => {
                 return Err(format!(
-                    "{ep_kind:?} execution provider is not enabled in this build"
+                    "{unsupported:?} execution provider is not enabled in this build"
                 ));
             }
         }

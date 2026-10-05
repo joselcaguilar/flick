@@ -15,8 +15,10 @@ use std::{
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use semver::Version;
 use serde::{Deserialize, Serialize};
+#[cfg(target_os = "macos")]
+use tauri::ActivationPolicy;
 use tauri::{
-    ActivationPolicy, AppHandle, Emitter, Manager, PhysicalPosition, RunEvent, State, WindowEvent,
+    AppHandle, Emitter, Manager, PhysicalPosition, RunEvent, State, WindowEvent,
     image::Image,
     menu::{MenuBuilder, MenuItem, SubmenuBuilder},
     tray::TrayIconBuilder,
@@ -1165,18 +1167,16 @@ fn main() {
             install_deep_link_handler(app.handle());
             #[cfg(target_os = "macos")]
             login_item::migrate_launch_agent(app.handle());
-            if launched_hidden() {
-                app.set_activation_policy(if prefs.menu_bar {
-                    ActivationPolicy::Accessory
-                } else {
-                    ActivationPolicy::Regular
-                });
+            let hidden = launched_hidden();
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(if hidden && prefs.menu_bar {
+                ActivationPolicy::Accessory
             } else {
-                app.set_activation_policy(ActivationPolicy::Regular);
-                if let Some(main) = app.get_webview_window("main") {
-                    main.show()?;
-                    main.set_focus()?;
-                }
+                ActivationPolicy::Regular
+            });
+            if !hidden && let Some(main) = app.get_webview_window("main") {
+                main.show()?;
+                main.set_focus()?;
             }
 
             let handle = app.handle().clone();
@@ -1258,7 +1258,7 @@ fn configure_windows(app: &AppHandle, menu_bar: Arc<AtomicBool>) -> tauri::Resul
                 api.prevent_close();
                 let _ = main_for_event.hide();
                 if menu_bar.load(Ordering::Relaxed) {
-                    let _ = handle.set_activation_policy(ActivationPolicy::Accessory);
+                    leave_dock(&handle);
                 }
             }
         });
@@ -1272,6 +1272,16 @@ fn configure_windows(app: &AppHandle, menu_bar: Arc<AtomicBool>) -> tauri::Resul
     }
     Ok(())
 }
+
+/// Drops the Dock icon while Flick lives in the menu bar. Elsewhere, hiding the window already
+/// removes its taskbar entry.
+#[cfg(target_os = "macos")]
+fn leave_dock(app: &AppHandle) {
+    let _ = app.set_activation_policy(ActivationPolicy::Accessory);
+}
+
+#[cfg(not(target_os = "macos"))]
+fn leave_dock(_app: &AppHandle) {}
 
 fn install_tray(app: &AppHandle) -> tauri::Result<()> {
     let status = MenuItem::with_id(
@@ -1413,6 +1423,7 @@ fn show_main_window_impl(app: &AppHandle, route: Option<String>) -> Result<(), S
         .ok_or_else(|| "main window not found".to_owned())?;
     window.show().map_err(|error| error.to_string())?;
     window.set_focus().map_err(|error| error.to_string())?;
+    #[cfg(target_os = "macos")]
     app.set_activation_policy(ActivationPolicy::Regular)
         .map_err(|error| error.to_string())?;
     if let Some(route) = route {
