@@ -51,6 +51,7 @@ Conversion output:
 - `models/cache/gesture_embedder.onnx` — SHA-256 `c9136cb7fed90600ecfcab23eebecb1a42842158466d9a717345e2ec326af00a`, 546,171 bytes.
 - `models/cache/canned_gesture_classifier.onnx` — SHA-256 `9d4770039ab2d4bece3e77bbacadfec1be3300e729e11686cb0a4276f66f3b8d`, 6,496 bytes.
 - The ONNX files are derived artifacts: not committed; generated from the pinned `.task` by `tools/training/convert.py convert-gesture`; hosted later in the bundled baseline/model OTA pack.
+- Superseded hashes: tf2onnx named generated constants nondeterministically and embedded the absolute `.tflite` path, so these bytes could not be rebuilt. `convert-gesture` now canonicalizes both (same graph and weights, identical outputs); the reproducible hashes are pinned in `models/manifest.toml`.
 
 ## Parity
 

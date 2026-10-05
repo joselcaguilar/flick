@@ -325,12 +325,60 @@ def convert_gesture_with_tf2onnx() -> int:
         ]
         print("+", " ".join(cmd))
         result = subprocess.run(cmd, cwd=ROOT, check=False)
+        if result.returncode == 0:
+            canonicalize_onnx(out, src)
         status = max(status, result.returncode)
     return status
 
 
-def cmd_fetch(_: argparse.Namespace) -> None:
-    summary = [fetch_one(item) for item in DOWNLOADS_TO_FETCH]
+def canonicalize_onnx(path: Path, source: Path) -> None:
+    """Makes tf2onnx output byte-for-byte reproducible, so the pinned SHA-256 can be rebuilt.
+
+    tf2onnx numbers the constants it generates (`const_fold_opt__N`, `const_axes__N`, ...) in a
+    different order on every run and records the absolute .tflite path in the graph doc
+    string. Generated constants are renumbered in order of first use, initializers are
+    sorted, and the doc string names the source relative to the repo. The graph and weights
+    are unchanged.
+    """
+    import re
+
+    import onnx
+
+    model = onnx.load(path)
+    graph = model.graph
+    subgraph_types = (onnx.AttributeProto.GRAPH, onnx.AttributeProto.GRAPHS)
+    if any(attr.type in subgraph_types for node in graph.node for attr in node.attribute):
+        raise SystemExit(f"{path}: subgraphs are not canonicalized; extend canonicalize_onnx")
+    generated = re.compile(r"^(.+?)__\d+$")
+    numbered = {init.name for init in graph.initializer if generated.match(init.name)}
+    used = [name for node in graph.node for name in node.input if name in numbered]
+    order = list(dict.fromkeys(used + sorted(numbered)))
+    mapping = {name: f"{generated.match(name).group(1)}__{index}" for index, name in enumerate(order)}
+    tensors = {out for node in graph.node for out in node.output} | {value.name for value in graph.input}
+    if tensors & (set(mapping.values()) - numbered):
+        raise SystemExit(f"{path}: renamed constants would collide with graph tensors")
+    for node in graph.node:
+        node.input[:] = [mapping.get(name, name) for name in node.input]
+    for value in [*graph.input, *graph.output, *graph.value_info]:
+        value.name = mapping.get(value.name, value.name)
+    initializers = []
+    for init in graph.initializer:
+        copy = onnx.TensorProto()
+        copy.CopyFrom(init)
+        copy.name = mapping.get(copy.name, copy.name)
+        initializers.append(copy)
+    del graph.initializer[:]
+    graph.initializer.extend(sorted(initializers, key=lambda init: init.name))
+    graph.doc_string = f"converted from {source.relative_to(ROOT).as_posix()}"
+    onnx.save(model, path)
+
+
+def cmd_fetch(args: argparse.Namespace) -> None:
+    names = {item.name for item in DOWNLOADS_TO_FETCH}
+    unknown = sorted(set(args.names) - names)
+    if unknown:
+        raise SystemExit(f"unknown downloads {unknown}; choose from {sorted(names)}")
+    summary = [fetch_one(item) for item in DOWNLOADS_TO_FETCH if not args.names or item.name in args.names]
     extract_known_archives()
     stage_canonical_cache_files()
     (DOWNLOADS / "download-summary.json").write_text(json.dumps(summary, indent=2) + "\n")
@@ -354,6 +402,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="cmd", required=True)
     fetch = sub.add_parser("fetch")
+    fetch.add_argument("names", nargs="*", help="download only these sources (default: all)")
     fetch.set_defaults(func=cmd_fetch)
     inspect = sub.add_parser("inspect")
     inspect.add_argument("paths", nargs="*")
