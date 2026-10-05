@@ -745,6 +745,9 @@ impl EngineControl for FakeEngine {
             idle_fps: 5,
             max_hands: 2,
             roi: None,
+            area_override: None,
+            ha_area_id: None,
+            ha_device_name: None,
             created_at: now.clone(),
             updated_at: now,
         })
@@ -765,6 +768,9 @@ impl EngineControl for FakeEngine {
             idle_fps: request.idle_fps.unwrap_or(5),
             max_hands: request.max_hands.unwrap_or(2),
             roi: request.roi,
+            area_override: request.area_override.flatten(),
+            ha_area_id: None,
+            ha_device_name: None,
             created_at: now.clone(),
             updated_at: now,
         })
@@ -1547,13 +1553,36 @@ async fn create_camera(
 async fn patch_camera(
     State(state): State<Arc<ApiState>>,
     Path(id): Path<String>,
-    Json(request): Json<CameraPatch>,
+    Json(mut request): Json<CameraPatch>,
 ) -> Result<Json<Camera>, ApiProblem> {
+    request.area_override = validated_area_override(request.area_override)?;
     state
         .engine
         .patch_camera(&id, request)
         .await
         .map(json_response)
+}
+
+/// Trims a Flick-only area id; an explicit null passes through to clear it.
+fn validated_area_override(
+    area_override: Option<Option<String>>,
+) -> Result<Option<Option<String>>, ApiProblem> {
+    match area_override {
+        Some(Some(area_id)) => {
+            let area_id = area_id.trim();
+            if area_id.is_empty()
+                || area_id.chars().count() > 128
+                || area_id.chars().any(char::is_control)
+            {
+                return Err(ApiProblem::validation(
+                    "bad_area_id",
+                    "area id must be 1-128 printable characters",
+                ));
+            }
+            Ok(Some(Some(area_id.to_owned())))
+        }
+        other => Ok(other),
+    }
 }
 
 #[utoipa::path(delete, path = "/api/v1/cameras/{id}", responses((status = 204)))]
@@ -2064,22 +2093,7 @@ async fn patch_anchor(
     Path(id): Path<String>,
     Json(request): Json<AnchorPatch>,
 ) -> Result<Json<Anchor>, ApiProblem> {
-    let area_override = match request.area_override {
-        Some(Some(area_id)) => {
-            let area_id = area_id.trim();
-            if area_id.is_empty()
-                || area_id.chars().count() > 128
-                || area_id.chars().any(char::is_control)
-            {
-                return Err(ApiProblem::validation(
-                    "bad_area_id",
-                    "area id must be 1-128 printable characters",
-                ));
-            }
-            Some(Some(area_id.to_owned()))
-        }
-        other => other,
-    };
+    let area_override = validated_area_override(request.area_override)?;
     let (anchor, all_anchors) = {
         let mut anchors = state.anchors.lock().unwrap_or_else(|err| err.into_inner());
         let Some(anchor) = anchors.get_mut(&id) else {

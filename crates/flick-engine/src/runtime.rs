@@ -81,6 +81,7 @@ use crate::{
         owner_fan_anchor, owner_scenario_mappings,
     },
     fake_landmarks::{ReplayCatalog, ReplayFixture, replay_once},
+    host::HostIdentity,
     targeting_store::{SqliteTargetingStore, anchor_record_to_anchor, anchor_to_record},
 };
 
@@ -337,7 +338,7 @@ fn load_cameras(store: &Store) -> flick_store::Result<Vec<ApiCamera>> {
     let mut stmt = conn
         .prepare(
             "SELECT id, name, kind, device_ref, url_redacted, enabled, mirror, rotation, \
-             active_fps, idle_fps, max_hands, roi, created_at, updated_at \
+             active_fps, idle_fps, max_hands, roi, created_at, updated_at, area_override \
              FROM cameras ORDER BY created_at",
         )
         .map_err(store_database_error)?;
@@ -351,7 +352,7 @@ fn load_camera(store: &Store, id: &str) -> flick_store::Result<Option<ApiCamera>
     let conn = store.connection();
     conn.query_row(
         "SELECT id, name, kind, device_ref, url_redacted, enabled, mirror, rotation, \
-         active_fps, idle_fps, max_hands, roi, created_at, updated_at \
+         active_fps, idle_fps, max_hands, roi, created_at, updated_at, area_override \
          FROM cameras WHERE id = ?1",
         params![id],
         camera_from_row,
@@ -370,12 +371,12 @@ fn upsert_camera(store: &Store, camera: &ApiCamera) -> flick_store::Result<()> {
         .map_err(|err| StoreError::InvalidJson(err.to_string()))?;
     conn.execute(
         "INSERT INTO cameras \
-         (id, name, kind, device_ref, url_redacted, enabled, mirror, rotation, active_fps, idle_fps, max_hands, roi, created_at, updated_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14) \
+         (id, name, kind, device_ref, url_redacted, enabled, mirror, rotation, active_fps, idle_fps, max_hands, roi, created_at, updated_at, area_override) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15) \
          ON CONFLICT(id) DO UPDATE SET name = excluded.name, kind = excluded.kind, device_ref = excluded.device_ref, \
          url_redacted = excluded.url_redacted, enabled = excluded.enabled, mirror = excluded.mirror, rotation = excluded.rotation, \
          active_fps = excluded.active_fps, idle_fps = excluded.idle_fps, max_hands = excluded.max_hands, roi = excluded.roi, \
-         updated_at = excluded.updated_at",
+         updated_at = excluded.updated_at, area_override = excluded.area_override",
         params![
             camera.id,
             camera.name,
@@ -391,6 +392,7 @@ fn upsert_camera(store: &Store, camera: &ApiCamera) -> flick_store::Result<()> {
             roi,
             ms_from_rfc3339(&camera.created_at),
             ms_from_rfc3339(&camera.updated_at),
+            camera.area_override,
         ],
     )
     .map_err(store_database_error)?;
@@ -421,9 +423,23 @@ fn camera_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ApiCamera> {
         idle_fps: row.get(9)?,
         max_hands: row.get(10)?,
         roi: roi_raw.and_then(|raw| serde_json::from_str(&raw).ok()),
+        area_override: row.get(14)?,
+        ha_area_id: None,
+        ha_device_name: None,
         created_at: rfc3339_from_ms(created_at),
         updated_at: rfc3339_from_ms(updated_at),
     })
+}
+
+/// Local cameras sit with this computer, so they default to its Home Assistant device's area.
+fn with_ha_area(mut camera: ApiCamera, registry: &RegistrySnapshot) -> ApiCamera {
+    if camera.kind == "local"
+        && let Some(device) = HostIdentity::current().ha_device(&registry.devices)
+    {
+        camera.ha_area_id = device.area_id.clone();
+        camera.ha_device_name = device.display_name().map(ToOwned::to_owned);
+    }
+    camera
 }
 
 fn store_database_error(err: rusqlite::Error) -> StoreError {
@@ -1304,6 +1320,8 @@ impl EngineApp {
                         if let Err(err) = app.reload_dispatcher_anchors_from_store().await {
                             tracing::warn!(error = ?err, "failed to reload anchors after HA reconnect");
                         }
+                        // Lets views that read the registry, like camera areas, refetch it.
+                        app.publish_ha_status().await;
                     }
                     Err(err) => {
                         tracing::warn!(error = %err, "failed to refresh HA registry after reconnect")
@@ -1797,6 +1815,9 @@ impl EngineApp {
             idle_fps: 5,
             max_hands: 2,
             roi: None,
+            area_override: None,
+            ha_area_id: None,
+            ha_device_name: None,
             created_at: rfc3339_from_ms(now),
             updated_at: rfc3339_from_ms(now),
         };
@@ -3227,7 +3248,12 @@ impl EngineControl for EngineApp {
     }
 
     async fn cameras(&self) -> Vec<ApiCamera> {
-        load_cameras(&self.store).unwrap_or_default()
+        let registry = self.registry.lock().await.clone();
+        load_cameras(&self.store)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|camera| with_ha_area(camera, &registry))
+            .collect()
     }
 
     async fn create_camera(&self, request: CameraCreate) -> Result<ApiCamera, ApiProblem> {
@@ -3245,12 +3271,15 @@ impl EngineControl for EngineApp {
             idle_fps: 5,
             max_hands: 2,
             roi: None,
+            area_override: None,
+            ha_area_id: None,
+            ha_device_name: None,
             created_at: rfc3339_from_ms(now),
             updated_at: rfc3339_from_ms(now),
         };
         upsert_camera(&self.store, &camera).map_err(store_problem)?;
         let _ = self.start_configured_camera(&camera).await;
-        Ok(camera)
+        Ok(with_ha_area(camera, &self.registry.lock().await.clone()))
     }
 
     async fn patch_camera(&self, id: &str, request: CameraPatch) -> Result<ApiCamera, ApiProblem> {
@@ -3288,6 +3317,9 @@ impl EngineControl for EngineApp {
         if request.roi.is_some() {
             camera.roi = request.roi;
         }
+        if let Some(area_override) = request.area_override {
+            camera.area_override = area_override;
+        }
         camera.updated_at = now_rfc3339();
         upsert_camera(&self.store, &camera).map_err(store_problem)?;
         match (was_enabled, camera.enabled) {
@@ -3299,7 +3331,7 @@ impl EngineControl for EngineApp {
             }
             _ => {}
         }
-        Ok(camera)
+        Ok(with_ha_area(camera, &self.registry.lock().await.clone()))
     }
 
     async fn delete_camera(&self, id: &str) -> Result<(), ApiProblem> {
@@ -3327,6 +3359,9 @@ impl EngineControl for EngineApp {
                     idle_fps: 5,
                     max_hands: 2,
                     roi: None,
+                    area_override: None,
+                    ha_area_id: None,
+                    ha_device_name: None,
                     created_at: now_rfc3339(),
                     updated_at: now_rfc3339(),
                 };

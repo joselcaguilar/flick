@@ -94,7 +94,8 @@ CREATE TABLE cameras (
   max_hands     INTEGER NOT NULL DEFAULT 2 CHECK (max_hands IN (1,2)),
   roi           TEXT,                     -- JSON {x,y,w,h} normalized, optional
   created_at    INTEGER NOT NULL,
-  updated_at    INTEGER NOT NULL
+  updated_at    INTEGER NOT NULL,
+  area_override TEXT                      -- Flick-only HA area id for the camera's place; never written to HA (migration 0006)
 );
 
 CREATE TABLE gestures (
@@ -406,7 +407,7 @@ CREATE TABLE update_state (              -- small key/value table owned by flick
 | `POST /ha/call` | `Action` → `ActionOutcome` | "Test" buttons; same safety rules |
 | `GET /cameras/available` | → `[{device_ref, name, kind:"local", formats}]` | |
 | `GET /cameras` / `POST /cameras` | `CameraCreate` → `Camera` | enforces `Entitlements.max_cameras` (`402 camera_limit` in Core) |
-| `PATCH /cameras/{id}` / `DELETE /cameras/{id}` | | |
+| `PATCH /cameras/{id}` / `DELETE /cameras/{id}` | `area_override` sets the camera's place in Flick; `null` returns to the HA default | `Camera` also returns `ha_area_id` and `ha_device_name`: for local cameras, the area of the HA device named like this computer |
 | `POST /cameras/{id}/start` / `stop` | → `CameraStatus` | |
 | `POST /cameras/test-rtsp` | `{url, trust_self_signed}` → `{ok, width, height, codec, latency_ms, error?}` | Phase 2 |
 | `POST /cameras/{id}/preview-ticket` | → `{url: "/stream/{id}.mjpg?ticket=…", expires_at}` | one-time ticket, 60 s. The stream is `multipart/x-mixed-replace`; append `&framing=raw` to get the same bytes as `application/octet-stream` (needed by WKWebView `fetch`) |

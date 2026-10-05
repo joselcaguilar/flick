@@ -1221,12 +1221,18 @@ export interface components {
              * @description Active fps.
              */
             active_fps: number;
+            /** @description Flick-only area id; Home Assistant is never changed. */
+            area_override?: string | null;
             /** @description Creation time. */
             created_at: string;
             /** @description Device reference. */
             device_ref?: string | null;
             /** @description Enabled. */
             enabled: boolean;
+            /** @description Area of this computer's Home Assistant device, the default area for local cameras. */
+            ha_area_id?: string | null;
+            /** @description Home Assistant device that `ha_area_id` comes from. */
+            ha_device_name?: string | null;
             /** @description ULID. */
             id: string;
             /**
@@ -1295,6 +1301,8 @@ export interface components {
              * @description Active fps.
              */
             active_fps?: number | null;
+            /** @description Flick-only area id; null clears it back to the Home Assistant area. */
+            area_override?: string | null;
             /** @description Enabled flag. */
             enabled?: boolean | null;
             /**

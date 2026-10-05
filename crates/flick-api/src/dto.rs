@@ -398,6 +398,14 @@ pub struct CameraPatch {
     /// Normalized ROI.
     #[schema(value_type = Object)]
     pub roi: Option<Value>,
+    /// Flick-only area id; null clears it back to the Home Assistant area.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_some",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[schema(value_type = Option<String>, nullable)]
+    pub area_override: Option<Option<String>>,
 }
 
 /// Camera record.
@@ -428,6 +436,15 @@ pub struct Camera {
     /// ROI.
     #[schema(value_type = Object)]
     pub roi: Option<Value>,
+    /// Flick-only area id; Home Assistant is never changed.
+    #[serde(default)]
+    pub area_override: Option<String>,
+    /// Area of this computer's Home Assistant device, the default area for local cameras.
+    #[serde(default)]
+    pub ha_area_id: Option<String>,
+    /// Home Assistant device that `ha_area_id` comes from.
+    #[serde(default)]
+    pub ha_device_name: Option<String>,
     /// Creation time.
     pub created_at: String,
     /// Update time.

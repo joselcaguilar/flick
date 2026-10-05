@@ -42,6 +42,29 @@ pub struct AreaInfo {
     pub floor_id: Option<String>,
 }
 
+/// HA device metadata, used to find the HA device of the computer running Flick.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceInfo {
+    /// Device id.
+    pub id: String,
+    /// Name reported by the integration.
+    pub name: Option<String>,
+    /// The user's rename in HA.
+    pub name_by_user: Option<String>,
+    /// Area id.
+    pub area_id: Option<String>,
+    /// Model.
+    pub model: Option<String>,
+}
+
+impl DeviceInfo {
+    /// Name shown in HA: the user's rename, else the integration's name.
+    #[must_use]
+    pub fn display_name(&self) -> Option<&str> {
+        self.name_by_user.as_deref().or(self.name.as_deref())
+    }
+}
+
 /// A picker group, including the synthetic `No area` group.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AreaGroup {
@@ -63,6 +86,9 @@ pub struct RegistrySnapshot {
     pub services: Value,
     /// Areas for grouping.
     pub areas: Vec<AreaInfo>,
+    /// Device registry metadata.
+    #[serde(default)]
+    pub devices: Vec<DeviceInfo>,
     /// Snapshot timestamp in Unix epoch milliseconds.
     pub fetched_at_ms: u64,
 }
@@ -157,7 +183,11 @@ pub fn build_snapshot(
     entity_registry_raw: Value,
 ) -> RegistrySnapshot {
     let areas = parse_areas(&areas_raw);
-    let device_areas = parse_device_areas(&devices_raw);
+    let devices = parse_devices(&devices_raw);
+    let device_areas: HashMap<String, String> = devices
+        .iter()
+        .filter_map(|device| Some((device.id.clone(), device.area_id.clone()?)))
+        .collect();
     let entity_meta = parse_entity_display(&entity_registry_raw);
 
     let entities = states
@@ -193,6 +223,7 @@ pub fn build_snapshot(
         entities,
         services,
         areas,
+        devices,
         fetched_at_ms: now_ms(),
     }
 }
@@ -228,21 +259,26 @@ fn parse_areas(value: &Value) -> Vec<AreaInfo> {
         .collect()
 }
 
-fn parse_device_areas(value: &Value) -> HashMap<String, String> {
+fn parse_devices(value: &Value) -> Vec<DeviceInfo> {
+    let text = |device: &Value, key: &str| {
+        device
+            .get(key)
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned)
+    };
     value
         .as_array()
         .into_iter()
         .flatten()
         .filter_map(|device| {
-            let id = device
-                .get("id")
-                .or_else(|| device.get("di"))
-                .and_then(Value::as_str)?;
-            let area = device
-                .get("area_id")
-                .or_else(|| device.get("ai"))
-                .and_then(Value::as_str)?;
-            Some((id.to_owned(), area.to_owned()))
+            let id = text(device, "id").or_else(|| text(device, "di"))?;
+            Some(DeviceInfo {
+                id,
+                name: text(device, "name"),
+                name_by_user: text(device, "name_by_user"),
+                area_id: text(device, "area_id").or_else(|| text(device, "ai")),
+                model: text(device, "model"),
+            })
         })
         .collect()
 }

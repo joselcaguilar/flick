@@ -2475,6 +2475,13 @@
             "description": "Active fps.",
             "minimum": 0
           },
+          "area_override": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Flick-only area id; Home Assistant is never changed."
+          },
           "created_at": {
             "type": "string",
             "description": "Creation time."
@@ -2489,6 +2496,20 @@
           "enabled": {
             "type": "boolean",
             "description": "Enabled."
+          },
+          "ha_area_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Area of this computer's Home Assistant device, the default area for local cameras."
+          },
+          "ha_device_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Home Assistant device that `ha_area_id` comes from."
           },
           "id": {
             "type": "string",
@@ -2621,6 +2642,13 @@
             "format": "int32",
             "description": "Active fps.",
             "minimum": 0
+          },
+          "area_override": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Flick-only area id; null clears it back to the Home Assistant area."
           },
           "enabled": {
             "type": [

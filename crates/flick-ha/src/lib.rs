@@ -50,7 +50,7 @@ pub use dial::{DialController, DialEvent, DialTarget};
 pub use discovery::{DiscoveredInstance, discover_instances};
 pub use error::{HaError, map_ha_error};
 pub use protocol::{EntityDelta, parse_compressed_entities};
-pub use registry::{AreaGroup, RegistryCache, RegistryEntity, RegistrySnapshot};
+pub use registry::{AreaGroup, DeviceInfo, RegistryCache, RegistryEntity, RegistrySnapshot};
 pub use safety::{SafetyCatalog, SafetyClass, SafetyInput, SafetyValidator};
 pub use secret::{KeyringSecretStore, MemorySecretStore, SecretStore};
 pub use types::{
