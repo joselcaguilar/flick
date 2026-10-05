@@ -97,6 +97,7 @@ Explicitly **not** in the suite: per-route API happy-path tests, retention/WAL/p
 - `cargo fmt --check`; `cargo clippy --workspace --all-targets -- -D warnings`.
 - `cargo test --workspace` on macOS, Windows, Linux.
 - `cargo deny check` (licenses allowlist, advisories, bans, sources).
+- CodeQL code scanning (`.github/workflows/codeql.yml`): Rust, TypeScript/JavaScript, Python and the workflows themselves, on PRs to `main`, pushes to `main` and weekly. Alerts appear in GitHub → Security → Code scanning.
 - UI: `pnpm lint`, `pnpm typecheck`, `pnpm test`.
 - API drift: generated `ui/src/api/schema.d.ts` is up to date.
 - No coverage gate or target (§1.1).
