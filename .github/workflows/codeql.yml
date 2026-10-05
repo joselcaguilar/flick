@@ -21,7 +21,7 @@ jobs:
       matrix:
         language: [actions, javascript-typescript, python, rust]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # CodeQL runs Rust build scripts, and Tauri's GTK/WebKit crates look up these libraries.
       - name: Install Tauri system libraries
         if: matrix.language == 'rust'

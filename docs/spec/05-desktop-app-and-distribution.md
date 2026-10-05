@@ -137,6 +137,7 @@ The HUD window gets only `core:event:default`.
   - `tauri build` with `APPLE_SIGNING_IDENTITY`, then notarize via App Store Connect API key (`APPLE_API_KEY`, `APPLE_API_ISSUER`, `APPLE_API_KEY_PATH`).
   - Staple the ticket. The sidecar, ONNX Runtime dylib and FFmpeg dylibs must all be signed with the same identity.
 - **Artifacts:** `Flick_<ver>_aarch64.dmg` + `Flick.app.tar.gz` (+ `.sig`) for the updater.
+- **Until a Developer ID exists:** `ci.yml` ships the DMG with an ad-hoc signature (`APPLE_SIGNING_IDENTITY=-`), still with the hardened runtime and entitlements on the app and the sidecar. Apple Silicon refuses apps with no signature at all; Gatekeeper asks the user to confirm in System Settings → Privacy & Security → Open Anyway.
 - **Update + TCC:** the camera grant must survive updates. This requires the same Team ID, bundle id and designated requirement across versions. It is checked in the release checklist and in the P0-06 spike.
 
 ## 6. Windows & Linux (CI from day one, polished in Phase 2)
@@ -144,12 +145,13 @@ The HUD window gets only `core:event:default`.
 | | Windows | Linux |
 |---|---|---|
 | Min version | Windows 10 22H2 / 11 (WebView2 evergreen) | Ubuntu 22.04+ / Fedora 39+ (webkit2gtk-4.1) |
+| Architectures | x64, arm64 | x64, arm64 |
 | Camera | Media Foundation (via `nokhwa`) | V4L2 |
 | Inference EP | DirectML, then CPU | CUDA (optional), then OpenVINO, then XNNPACK, then CPU |
 | Local network | No prompt expected (outbound only); headless LAN mode triggers a Windows Firewall prompt | n/a |
 | Secrets | Windows Credential Manager | Secret Service (libsecret). If unavailable: file `secrets.json` with `0600` + warning |
 | Installer | NSIS `.exe` (+ MSI optional) | AppImage, `.deb`, `.rpm` |
-| Signing | **Azure Artifact Signing** (formerly Trusted Signing; Basic ≈ $9.99/month) from the first Windows preview build. Verify identity-validation eligibility in P0-09. The updater `.sig` uses minisign | AppImage signature (optional); `.deb`/`.rpm` repo signed with GPG in Phase 2 |
+| Signing | **Unsigned for now** (`ci.yml`; SmartScreen warns on first run). Then **Azure Artifact Signing** (formerly Trusted Signing; Basic ≈ $9.99/month) from the first Windows preview build. Verify identity-validation eligibility in P0-09. The updater `.sig` uses minisign | AppImage signature (optional); `.deb`/`.rpm` repo signed with GPG in Phase 2 |
 | Autostart | Run key | XDG autostart |
 | Tray | native | AppIndicator (`libayatana-appindicator`) |
 
@@ -166,7 +168,7 @@ The HUD window gets only `core:event:default`.
 
 | Workflow | Trigger | Jobs |
 |---|---|---|
-| `ci.yml` | PR, push to `main` | `rust-lint` (fmt, clippy `-D warnings`), `rust-test` (matrix: macos-14 arm64, windows-latest, ubuntu-22.04), `ui` (pnpm install, lint, typecheck, vitest), `ui-design` (Impeccable detector `--json` on `ui/src`; fails on unresolved findings, `04-…` §0), `api-drift` (`cargo xtask gen-api` → no diff), `deny` (cargo-deny licenses/advisories), `build-bundles` (tauri build, unsigned, all 3 OSes; upload artifacts) |
+| `ci.yml` | release published; manual (`workflow_dispatch`) | `rust-lint` (fmt, clippy `-D warnings`), `rust-test` (matrix: macos-15 arm64, windows-latest, ubuntu-22.04), `deny` (cargo-deny licenses), `ui` (pnpm install, lint, typecheck, vitest, build), `ui-design` (Impeccable detector `--json` on `ui/src`; fails on unresolved findings, `04-…` §0), `models` (baseline models fetched and converted from their pinned sources, verified against `models/manifest.toml`), `bundle` (unsigned `tauri build` on native runners: Windows x64 + arm64 NSIS, macOS arm64 DMG with an ad-hoc signature, Linux x64 + arm64 AppImage + `.deb`; uploaded as workflow artifacts), `publish` (release only: attaches the bundles once every check passes). `api-drift` (`cargo xtask gen-api` → no diff) is still to do |
 | `nightly.yml` | cron 02:00 UTC | `ha-e2e` (docker HA demo + fake camera + targeted fan replay), `bench` (macos-14; fails on > 20 % regression vs baseline JSON), `fixtures` (vision parity + false-trigger replay) |
 | `release.yml` | tag `v*` | build + sign + notarize macOS; build Windows (Artifact Signing) and Linux; generate updater `latest.json` + minisign signatures; upload to Azure Blob (`app/<version>/…`) + GitHub Release (draft); SBOM (`cargo cyclonedx` + `pnpm sbom`); sign and publish `channels/nightly/index.json`. Promotion to beta/stable is a separate, approved metadata job (`10-…` §7) |
 | `release-dryrun.yml` | before each release tag (required by `release.yml`), or manual (macOS) | build signed test versions N−1 and N with test keys → install N−1 → update to N via `serve-updates` → health check → simulated failure → rollback + DB restore (`07-…` §1) |

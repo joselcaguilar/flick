@@ -40,15 +40,15 @@ This is the complete list. Adding a new category needs a decision-log entry (`01
 
 | Layer | What (only this) | Where | When |
 |---|---|---|---|
-| Unit (Rust) | Hard logic only: palm decode + weighted NMS, ROI math, TriggerFsm (one table test + one property test: no double fire within the cooldown), DTW matching, verb resolution + fan levels (one table test), safety validator (one table test), HA error mapping + compressed-state parser, dial coalescing, log redaction, `GestureId` parsing | next to the code | every PR |
-| Geometry (`flick-spatial`) | One property test each for ray recovery, triangulation and Kabsch re-align (synthetic poses + noise); one table test for the TargetSelector FSM | `crates/flick-spatial/tests/` | every PR |
-| Replay (one harness) | Recorded landmark (+ face-keypoint) JSONL → the exact `GestureEvent` / `target.*` sequence and the HA calls sent to mock HA. It covers gestures and targeting, incl. the fan scenario and the selection-lock fixture (`09-…` §11) | `crates/flick-engine/tests/replay.rs` over `tools/fixtures/{landmarks,targeting}/` | every PR (short fixtures); long negatives nightly |
-| HA protocol | Mock HA: handshake, reconnect + resubscribe with the stale-action drop, the `bedroom_fan` scenario (`03-…` §9) | `crates/flick-ha/tests/` | every PR |
-| Security-critical | API auth (token, Host, Origin); OTA verification: tamper, lower version, expired, catalog loosening the denylist (`10-…` §10) | `crates/flick-api/tests/`, `crates/flick-update/tests/` | every PR |
-| Store | One migration test: a previous-release DB snapshot → migrate → the N−1 queries still work (`06-…` §8); cascade delete place → anchors → targeted mappings | `crates/flick-store/tests/` | every PR |
+| Unit (Rust) | Hard logic only: palm decode + weighted NMS, ROI math, TriggerFsm (one table test + one property test: no double fire within the cooldown), DTW matching, verb resolution + fan levels (one table test), safety validator (one table test), HA error mapping + compressed-state parser, dial coalescing, log redaction, `GestureId` parsing | next to the code | every CI run |
+| Geometry (`flick-spatial`) | One property test each for ray recovery, triangulation and Kabsch re-align (synthetic poses + noise); one table test for the TargetSelector FSM | `crates/flick-spatial/tests/` | every CI run |
+| Replay (one harness) | Recorded landmark (+ face-keypoint) JSONL → the exact `GestureEvent` / `target.*` sequence and the HA calls sent to mock HA. It covers gestures and targeting, incl. the fan scenario and the selection-lock fixture (`09-…` §11) | `crates/flick-engine/tests/replay.rs` over `tools/fixtures/{landmarks,targeting}/` | every CI run (short fixtures); long negatives nightly |
+| HA protocol | Mock HA: handshake, reconnect + resubscribe with the stale-action drop, the `bedroom_fan` scenario (`03-…` §9) | `crates/flick-ha/tests/` | every CI run |
+| Security-critical | API auth (token, Host, Origin); OTA verification: tamper, lower version, expired, catalog loosening the denylist (`10-…` §10) | `crates/flick-api/tests/`, `crates/flick-update/tests/` | every CI run |
+| Store | One migration test: a previous-release DB snapshot → migrate → the N−1 queries still work (`06-…` §8); cascade delete place → anchors → targeted mappings | `crates/flick-store/tests/` | every CI run |
 | Vision parity | The Rust ONNX pipeline vs reference outputs that `tools/training/parity.py` generates once and stores as JSON (thresholds in `02-…` §8) | `crates/flick-vision/tests/parity.rs` | nightly |
 | Quality metrics | Recall, false triggers (incl. **0 targeted actions**), few-shot/motion accuracy, point pose, selection accuracy (`02-…` §8, `09-…` §11). Evaluation runs over the shared fixtures, not extra test code | `nightly.yml` | nightly |
-| UI unit | Vitest only for non-trivial logic: the WS event reducer, Areas mapping rules, dial value math | `ui/src/**/*.test.ts` | every PR |
+| UI unit | Vitest only for non-trivial logic: the WS event reducer, Areas mapping rules, dial value math | `ui/src/**/*.test.ts` | every CI run |
 | UI E2E | **The 5 journeys below, nothing else** | `ui/e2e/` against `flick-engine --dev` + `FLICK_FAKE_LANDMARKS` + mock HA + `serve-updates` | every PR (macOS) |
 | HA E2E | One script, two checks: 👍 toggles `light.bed_light`; point + circle sets a demo fan to level 1, then stop turns it off (`03-…` §9) | `tools/ha-e2e/` (docker HA `demo`) | nightly |
 | App update E2E | Signed N−1 → N with a migration, then a simulated failure → rollback + DB restore | `release-dryrun.yml` | before each release tag |
@@ -94,10 +94,12 @@ Explicitly **not** in the suite: per-route API happy-path tests, retention/WAL/p
 - `cargo xtask serve-updates --dir ./target/updates` serves a local signed update tree on `http://localhost:7880` with **test keys** (`10-…` §7). Dev builds honor `FLICK_UPDATE_URL`; release builds ignore it.
 
 ## 3. Quality gates (CI must pass)
+`ci.yml` runs these gates when a release is published and on manual dispatch, not on PRs or pushes. A release only gets its bundles once they pass (`05-…` §8).
+
 - `cargo fmt --check`; `cargo clippy --workspace --all-targets -- -D warnings`.
 - `cargo test --workspace` on macOS, Windows, Linux.
 - `cargo deny check` (licenses allowlist, advisories, bans, sources).
-- CodeQL code scanning (`.github/workflows/codeql.yml`): Rust, TypeScript/JavaScript, Python and the workflows themselves, on PRs to `main`, pushes to `main` and weekly. Alerts appear in GitHub → Security → Code scanning.
+- CodeQL code scanning (`.github/workflows/codeql.yml`): Rust, TypeScript/JavaScript, Python and the workflows themselves, on PRs to `main`, pushes to `main` and daily. Alerts appear in GitHub → Security → Code scanning.
 - UI: `pnpm lint`, `pnpm typecheck`, `pnpm test`.
 - API drift: generated `ui/src/api/schema.d.ts` is up to date.
 - No coverage gate or target (§1.1).
