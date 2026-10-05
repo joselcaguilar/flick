@@ -6,8 +6,8 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    # Weekly, so new CodeQL queries also check code that hasn't changed.
-    - cron: "17 3 * * 1"
+    # Every day at 3 AM, so new CodeQL queries also check code that hasn't changed.
+    - cron: "0 3 * * *"
 
 jobs:
   analyze:
