@@ -755,7 +755,8 @@ fn set_hud_config(
 fn open_external(app: AppHandle, url: String) -> Result<(), String> {
     let parsed = Url::parse(&url).map_err(|error| error.to_string())?;
     match parsed.scheme() {
-        "https" | "x-apple.systempreferences" => app
+        // Plain http too: a local Home Assistant is often served without TLS.
+        "http" | "https" | "x-apple.systempreferences" => app
             .opener()
             .open_url(url, None::<String>)
             .map_err(|error| error.to_string()),

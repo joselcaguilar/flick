@@ -330,9 +330,24 @@
   padding: 0.75rem;
 }
 
-.token-guide a {
+.token-guide-link {
+  justify-self: start;
+  border: 0;
+  background: transparent;
+  padding: 0;
   color: var(--flick-accent-blue);
+  font: inherit;
   font-weight: 600;
+  cursor: pointer;
+}
+
+.token-guide-link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.token-guide-link:disabled {
+  color: var(--flick-muted);
+  cursor: not-allowed;
 }
 
 .token-guide ol {

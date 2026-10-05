@@ -15,6 +15,7 @@ import {
   cameraPermissionStatus,
   isTauri,
   openCameraPrivacySettings,
+  openExternal,
 } from "../../platform/tauri";
 import { useCameraSetup } from "../cameras/useCameraSetup";
 import "./styles.css";
@@ -39,6 +40,21 @@ function errorMessage(error: unknown) {
   return (
     problem?.detail ?? problem?.title ?? (error instanceof Error ? error.message : "Something went wrong.")
   );
+}
+
+/** A page of the Home Assistant at `baseUrl`, or null unless that is an http(s) URL. */
+function homeAssistantPage(baseUrl: string, path: string) {
+  let url: URL;
+  try {
+    url = new URL(baseUrl.trim());
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  url.pathname = `${url.pathname.replace(/\/+$/, "")}/${path}`;
+  url.search = "";
+  url.hash = "";
+  return url.href;
 }
 
 const permissionLabels: Record<CameraPermissionView, string> = {
@@ -123,6 +139,7 @@ export function OnboardingRoute() {
   const [cameraStarted, setCameraStarted] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [baseUrl, setBaseUrl] = useState("http://homeassistant.local:8123");
+  const profileUrl = homeAssistantPage(baseUrl, "profile/security");
   const [token, setToken] = useState(devTools ? "demo-valid-token" : "");
   const [haError, setHaError] = useState<string | null>(null);
   const [haConnected, setHaConnected] = useState(false);
@@ -455,9 +472,21 @@ export function OnboardingRoute() {
                   />
                 </label>
                 <div className="token-guide">
-                  <a href={`${baseUrl}/profile/security`} target="_blank" rel="noreferrer">
+                  <button
+                    type="button"
+                    className="token-guide-link"
+                    disabled={!profileUrl}
+                    onClick={() => {
+                      if (!profileUrl) return;
+                      openExternal(profileUrl).catch(() =>
+                        setHaError(
+                          "Couldn't open your browser. Open Home Assistant and go to Profile → Security.",
+                        ),
+                      );
+                    }}
+                  >
                     Open my HA profile
-                  </a>
+                  </button>
                   <ol>
                     <li>Create a separate Home Assistant user for Flick.</li>
                     <li>Open Security and create a long-lived access token.</li>

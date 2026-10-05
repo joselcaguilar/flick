@@ -22,6 +22,15 @@ async function invokeTauri<T>(command: string, args?: Record<string, unknown>) {
   return invoke<T>(command, args);
 }
 
+/** Opens a web page in the default browser. The desktop shell only accepts http(s) URLs. */
+export async function openExternal(url: string) {
+  if (isTauri()) {
+    await invokeTauri<void>("open_external", { url });
+  } else {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+}
+
 export type AppPreferences = { menu_bar: boolean; open_at_login: boolean };
 
 export async function getAppPreferences() {
