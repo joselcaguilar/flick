@@ -1,4 +1,5 @@
 import * as SelectPrimitive from "@radix-ui/react-select";
+import type { ReactNode } from "react";
 import { cn } from "../../lib/utils";
 
 export function Select({
@@ -8,6 +9,8 @@ export function Select({
   items,
   disabled = false,
   placeholder,
+  className,
+  display,
 }: {
   value: string;
   onValueChange: (value: string) => void;
@@ -15,11 +18,15 @@ export function Select({
   items: Array<{ value: string; label: string; disabled?: boolean }>;
   disabled?: boolean;
   placeholder?: string;
+  /** Extra trigger classes, e.g. `ui-select-quiet` for a select that reads as plain text. */
+  className?: string;
+  /** Trigger text, when it should differ from the selected item's label. */
+  display?: ReactNode;
 }) {
   return (
     <SelectPrimitive.Root value={value} onValueChange={onValueChange} disabled={disabled}>
-      <SelectPrimitive.Trigger className="ui-select" aria-label={label}>
-        <SelectPrimitive.Value placeholder={placeholder} />
+      <SelectPrimitive.Trigger className={cn("ui-select", className)} aria-label={label}>
+        <SelectPrimitive.Value placeholder={placeholder}>{display}</SelectPrimitive.Value>
         <SelectPrimitive.Icon className="ui-select-chevron">
           <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
             <path d="m4 6 4 4 4-4" />

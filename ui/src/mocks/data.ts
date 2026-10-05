@@ -163,6 +163,9 @@ export const cameras: Camera[] = [
     roi: jsonObject({}),
     device_ref: "avfoundation:0",
     url_redacted: null,
+    area_override: null,
+    ha_area_id: "bedroom",
+    ha_device_name: "Jose’s MacBook Air",
   },
 ];
 

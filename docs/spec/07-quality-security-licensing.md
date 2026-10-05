@@ -48,7 +48,7 @@ This is the complete list. Adding a new category needs a decision-log entry (`01
 | Store | One migration test: a previous-release DB snapshot → migrate → the N−1 queries still work (`06-…` §8); cascade delete place → anchors → targeted mappings | `crates/flick-store/tests/` | every PR |
 | Vision parity | The Rust ONNX pipeline vs reference outputs that `tools/training/parity.py` generates once and stores as JSON (thresholds in `02-…` §8) | `crates/flick-vision/tests/parity.rs` | nightly |
 | Quality metrics | Recall, false triggers (incl. **0 targeted actions**), few-shot/motion accuracy, point pose, selection accuracy (`02-…` §8, `09-…` §11). Evaluation runs over the shared fixtures, not extra test code | `nightly.yml` | nightly |
-| UI unit | Vitest only for non-trivial logic: the WS event reducer, sentence-builder validation, dial value math | `ui/src/**/*.test.ts` | every PR |
+| UI unit | Vitest only for non-trivial logic: the WS event reducer, Areas mapping rules, dial value math | `ui/src/**/*.test.ts` | every PR |
 | UI E2E | **The 5 journeys below, nothing else** | `ui/e2e/` against `flick-engine --dev` + `FLICK_FAKE_LANDMARKS` + mock HA + `serve-updates` | every PR (macOS) |
 | HA E2E | One script, two checks: 👍 toggles `light.bed_light`; point + circle sets a demo fan to level 1, then stop turns it off (`03-…` §9) | `tools/ha-e2e/` (docker HA `demo`) | nightly |
 | App update E2E | Signed N−1 → N with a migration, then a simulated failure → rollback + DB restore | `release-dryrun.yml` | before each release tag |

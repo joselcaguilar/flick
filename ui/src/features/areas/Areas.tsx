@@ -222,9 +222,6 @@ export function AreasRoute() {
                 <h2 id="other-gestures-title">Other gestures</h2>
                 <p>Global mappings that are not managed by Areas.</p>
               </div>
-              <Link className="ui-button ui-button-secondary ui-button-sm" to="/mappings/new">
-                New gesture
-              </Link>
             </div>
             <div className="mapping-list">
               {otherMappings.length ? (

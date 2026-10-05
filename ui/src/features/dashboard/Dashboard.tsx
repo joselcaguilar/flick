@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
 import { useActivity, useCameras, useInstallUpdate, useStatus, useUpdates } from "../../api/hooks";
+import type { Camera } from "../../api/types";
 import { ConfidenceMeter, DevicePill, PreviewCanvas } from "../../components/domain";
-import { Badge, Button, GlassPanel, Kbd, ListRow, Skeleton } from "../../components/ui";
+import { Badge, Button, GlassPanel, Kbd, ListRow, Select, Skeleton } from "../../components/ui";
 import { useEventStore } from "../../events/store";
 import { useActiveCamera, useCameraLive, useLiveHands } from "../../events/useLiveHands";
 import { formatTime } from "../../lib/utils";
+import { useCameraPlace } from "../cameras/place";
 
 function statusLabel(status?: string | null) {
   if (!status) return "Unknown";
@@ -39,6 +41,31 @@ function StatusTile({
   );
 }
 
+const placeSources = {
+  flick: "Set in Flick",
+  ha: "From Home Assistant",
+  none: "Not in Home Assistant",
+};
+
+/** Where the live camera is, changeable in Flick without touching Home Assistant. */
+function PlaceTile({ camera }: { camera?: Camera }) {
+  const place = useCameraPlace(camera);
+  if (!place.select) {
+    return <StatusTile label="Place" value="Not set" detail="Add a camera to place it" />;
+  }
+  return (
+    <div className="status-tile place-tile">
+      <span>Place</span>
+      <Select {...place.select} className="ui-select-quiet" display={place.name ?? "Choose a room"} />
+      {place.failed ? (
+        <small role="alert">Couldn't save. Try again.</small>
+      ) : (
+        <small>{placeSources[place.source]}</small>
+      )}
+    </div>
+  );
+}
+
 export function DashboardRoute() {
   const status = useStatus();
   const updates = useUpdates();
@@ -51,10 +78,8 @@ export function DashboardRoute() {
   const running = camera?.state === "running";
   const liveHands = useLiveHands(active.id);
   const engine = status.data;
-  const cameraName =
-    cameras.data?.find((item) => item.id === active.id)?.name ??
-    cameras.data?.[0]?.name ??
-    (active.id ? "Camera" : "No camera yet");
+  const activeCamera = cameras.data?.find((item) => item.id === active.id) ?? cameras.data?.[0];
+  const cameraName = activeCamera?.name ?? (active.id ? "Camera" : "No camera yet");
   const target = eventState.selectedTarget;
   const candidate = eventState.candidate;
   const inference =
@@ -175,12 +200,7 @@ export function DashboardRoute() {
               detail={inference ? `${inference.toFixed(1)} ms p95` : "local"}
               tone={engine?.paused ? "warning" : "success"}
             />
-            <StatusTile
-              label="Place"
-              value={engine?.place?.name ?? "Not set"}
-              detail={engine?.place ? statusLabel(engine.place.state) : "Teach a device to set one"}
-              tone={statusTone(engine?.place?.state)}
-            />
+            <PlaceTile camera={activeCamera} />
           </section>
 
           {updateReady ? (
@@ -211,8 +231,8 @@ export function DashboardRoute() {
               </div>
             </div>
             <div className="quick-action-row">
-              <Link className="ui-button ui-button-secondary ui-button-md" to="/mappings/new">
-                Add mapping
+              <Link className="ui-button ui-button-secondary ui-button-md" to="/devices/teach">
+                Add a device
               </Link>
               <Link className="ui-button ui-button-secondary ui-button-md" to="/gestures">
                 Record a gesture

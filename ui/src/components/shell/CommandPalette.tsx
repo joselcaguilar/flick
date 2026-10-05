@@ -66,17 +66,6 @@ export function CommandPalette({ open, onOpenChange, paused, onTogglePause }: Co
           onOpenChange(false);
         },
       },
-      {
-        id: "action:mapping",
-        group: "Actions",
-        label: "Add mapping",
-        description: "Create a global or targeted gesture sentence.",
-        shortcut: "M",
-        run: () => {
-          navigate("/mappings/new");
-          onOpenChange(false);
-        },
-      },
     ],
     [navigate, onOpenChange, paused, onTogglePause],
   );

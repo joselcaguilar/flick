@@ -20,6 +20,12 @@ export function useStatusSync() {
       onServerMessage((message) => {
         if (statusEvents.has(message.type)) void client.invalidateQueries({ queryKey: queryKeys.status });
         if (message.type === "action.result") void client.invalidateQueries({ queryKey: ["activity"] });
+        // Areas, entities and camera defaults come from the HA registry, refreshed on (re)connect.
+        if (message.type === "ha.status") {
+          void client.invalidateQueries({ queryKey: queryKeys.haAreas });
+          void client.invalidateQueries({ queryKey: ["ha", "entities"] });
+          void client.invalidateQueries({ queryKey: queryKeys.cameras, exact: true });
+        }
       }),
     [client],
   );

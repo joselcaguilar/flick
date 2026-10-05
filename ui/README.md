@@ -10,7 +10,7 @@
 ## Folder conventions
 
 - `src/routes/` owns route metadata and route stubs. Add a screen by adding a `RouteMeta` item in `routes.tsx`; navigation, mobile tabs, and the command palette are generated from it.
-- `src/features/<feature>/` owns non-trivial feature logic and the only allowed unit tests: WS reducer, sentence-builder validation, and dial math.
+- `src/features/<feature>/` owns non-trivial feature logic and the only allowed unit tests: WS reducer, Areas mapping rules, and dial math.
 - `src/api/` owns generated OpenAPI types, endpoint resolution, the fetch client, and TanStack Query hooks.
 - `src/events/` owns the WebSocket client, normalization, Zustand store, and reducer.
 - `src/mocks/` owns MSW REST handlers, fixtures, and the mock WS sequence. Add a handler whenever a generated route is consumed.

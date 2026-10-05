@@ -1,4 +1,4 @@
-import { expect, test } from "playwright/test";
+import { test } from "playwright/test";
 import {
   enginePatch,
   enginePost,
@@ -10,13 +10,8 @@ import {
 } from "./helpers";
 
 test("sensitive mapping remains blocked until safety, ack, and confirm gesture are set", async ({
-  page,
   request,
 }) => {
-  await page.goto("/mappings/new");
-  await page.getByRole("switch", { name: "Mark mapping as sensitive" }).click();
-  await expect(page.getByRole("button", { name: "Resolve checks" })).toBeDisabled();
-
   const mapping = await enginePost<{ id: string }>(request, "/api/v1/mappings", {
     name: "Garage open requires safety",
     gesture_id: "motion.01J00000000000000000000004",
@@ -38,18 +33,10 @@ test("sensitive mapping remains blocked until safety, ack, and confirm gesture a
 
   const baseline = (await mockHaCalls(request)).length;
   await replay(request, "landmarks/sensitive_motion");
-  await expectNoMockHaCall(request, baseline);
+  // Also outlasts the mapping's 1 s cooldown, so the next replay is judged on safety alone.
+  await expectNoMockHaCall(request, baseline, 1_250);
 
-  const enableSafety = page.getByRole("button", { name: "Enable Safety setting" });
-  await page.goto("/mappings/new");
-  await page.getByRole("switch", { name: "Mark mapping as sensitive" }).click();
-  if (await enableSafety.isVisible()) {
-    await enableSafety.click();
-  }
-  await expect(page.getByText("Safety enabled")).toBeVisible();
-  await page.getByLabel("I understand this sends a sensitive Home Assistant action.").check();
-  await expect(page.getByRole("button", { name: "Enable mapping" })).toBeEnabled();
-
+  await enginePatch(request, "/api/v1/settings", { "safety.allow_sensitive": true });
   await enginePatch(request, `/api/v1/mappings/${mapping.id}`, { sensitive_ack: true });
   await replay(request, "landmarks/sensitive_motion");
   await expectNoMockHaCall(request, baseline);

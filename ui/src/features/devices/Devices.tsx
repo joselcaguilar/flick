@@ -40,6 +40,7 @@ import { Badge, Button, GlassPanel, Input, ListRow, Select, Skeleton, Switch } f
 import { useEventStore } from "../../events/store";
 import { useActiveCamera, useCameraLive, useLiveHands } from "../../events/useLiveHands";
 import { formatTime } from "../../lib/utils";
+import { cameraAreaId, useAreaName } from "../cameras/place";
 import { effectiveAreaOf, HA_AREA, haAreaOf } from "./area";
 
 function anchorTarget(anchor: Anchor) {
@@ -64,9 +65,13 @@ function statusLabel(status?: string | null) {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-function useCameraNames() {
+function useCameraLookup() {
   const cameras = useCameras();
-  return (cameraId: string) => cameras.data?.find((camera) => camera.id === cameraId)?.name ?? "Camera";
+  const areaName = useAreaName();
+  return (cameraId: string) => {
+    const camera = cameras.data?.find((item) => item.id === cameraId);
+    return { name: camera?.name ?? "Camera", place: areaName(cameraAreaId(camera)) };
+  };
 }
 
 function pickOwnerFan(entities: HaEntity[]) {
@@ -90,6 +95,78 @@ function VerbChip({ gestureId, label }: { gestureId: string; label: string }) {
       <GestureGlyph name={gestureId} animated={false} />
       {actionLabel(label)}
     </span>
+  );
+}
+
+/** Deletes a taught device's position, spots and gestures after an inline confirm. */
+function ForgetDevice({
+  anchor,
+  explain = true,
+  size = "sm",
+  onForgotten,
+}: {
+  anchor: Anchor;
+  explain?: boolean;
+  size?: "sm" | "md";
+  onForgotten?: () => void;
+}) {
+  const deleteAnchor = useDeleteAnchor();
+  const [confirming, setConfirming] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const keep = useRef<HTMLButtonElement>(null);
+  const opened = useRef(false);
+  const questionId = useId();
+
+  useEffect(() => {
+    if (confirming) {
+      opened.current = true;
+      keep.current?.focus();
+    } else if (opened.current) {
+      opened.current = false;
+      trigger.current?.focus();
+    }
+  }, [confirming]);
+
+  return (
+    <>
+      {confirming ? (
+        <div className="forget-device-confirm">
+          <strong id={questionId}>Forget {anchor.name}?</strong>
+          {explain ? (
+            <p>Its position, spots and gestures are deleted. Home Assistant isn't changed.</p>
+          ) : null}
+          <div className="level-actions">
+            <Button
+              variant="danger"
+              size={size}
+              loading={deleteAnchor.isPending}
+              aria-describedby={questionId}
+              onClick={() => deleteAnchor.mutate(anchor.id, { onSuccess: onForgotten })}
+            >
+              Forget
+            </Button>
+            <Button
+              ref={keep}
+              variant="ghost"
+              size={size}
+              aria-describedby={questionId}
+              onClick={() => setConfirming(false)}
+            >
+              Keep
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button ref={trigger} variant="danger" size={size} onClick={() => setConfirming(true)}>
+          Forget…
+        </Button>
+      )}
+      {deleteAnchor.error ? (
+        <p className="inline-error" role="alert">
+          {deleteAnchor.error.message}
+        </p>
+      ) : null}
+    </>
   );
 }
 
@@ -301,7 +378,7 @@ export function DevicesRoute() {
   const areas = useHaAreas();
   const entities = useHaEntities();
   const patchAnchor = usePatchAnchor();
-  const cameraName = useCameraNames();
+  const cameraLookup = useCameraLookup();
 
   const areaNames = new Map((areas.data ?? []).map((area) => [area.area_id, area.name]));
   const entityAreas = new Map(
@@ -369,6 +446,7 @@ export function DevicesRoute() {
               {areaAnchors.map((anchor) => {
                 const place = placesById.get(anchor.place_id);
                 const cameraId = anchor.camera_id ?? place?.camera_id;
+                const camera = cameraId ? cameraLookup(cameraId) : null;
                 const haArea = haAreaOf(anchor, entityAreas);
                 const override = anchor.area_override ?? null;
                 const items = [
@@ -387,8 +465,9 @@ export function DevicesRoute() {
                         detail={anchorTargetEntity(anchor)}
                       />
                       <div className="device-card-meta">
-                        <span>{cameraId ? cameraName(cameraId) : "No camera"}</span>
-                        <span>{place?.name ?? "Unknown place"}</span>
+                        <span>
+                          {camera ? [camera.name, camera.place].filter(Boolean).join(" · ") : "No camera"}
+                        </span>
                         <Badge tone={statusTone(anchor.status)}>{anchor.status}</Badge>
                         <span>
                           {anchor.last_used_at
@@ -440,6 +519,7 @@ export function DevicesRoute() {
                         >
                           Edit
                         </Link>
+                        <ForgetDevice anchor={anchor} />
                       </div>
                     </div>
                   </li>
@@ -523,10 +603,9 @@ export function DeviceEditRoute() {
 
 function DeviceEditor({ anchor, place, mappings }: { anchor: Anchor; place?: Place; mappings: Mapping[] }) {
   const navigate = useNavigate();
-  const cameraName = useCameraNames();
+  const cameraLookup = useCameraLookup();
   const patchAnchor = usePatchAnchor();
   const patchMapping = usePatchMapping();
-  const deleteAnchor = useDeleteAnchor();
   const startTeach = useStartTeach();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const teachSpot = useTeachSpot(sessionId ?? undefined);
@@ -540,27 +619,13 @@ function DeviceEditor({ anchor, place, mappings }: { anchor: Anchor; place?: Pla
   const [savedSpots, setSavedSpots] = useState<number | null>(null);
   const [mappingError, setMappingError] = useState<string | null>(null);
   const [pendingMappingId, setPendingMappingId] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const deleteTrigger = useRef<HTMLButtonElement>(null);
-  const keepButton = useRef<HTMLButtonElement>(null);
-  const confirmOpened = useRef(false);
   const cancelOnLeave = useRef<() => void>(() => undefined);
   const cameraId = anchor.camera_id ?? place?.camera_id ?? "";
-  const camera = cameraId ? cameraName(cameraId) : "—";
+  const camera = cameraId ? cameraLookup(cameraId) : null;
   const trimmedName = name.trim();
   const canSaveName = trimmedName.length > 0 && trimmedName !== anchor.name;
 
   useEffect(() => setName(anchor.name), [anchor.name]);
-
-  useEffect(() => {
-    if (confirmDelete) {
-      confirmOpened.current = true;
-      keepButton.current?.focus();
-    } else if (confirmOpened.current) {
-      confirmOpened.current = false;
-      deleteTrigger.current?.focus();
-    }
-  }, [confirmDelete]);
 
   useEffect(() => {
     cancelOnLeave.current = sessionId ? () => cancelTeach.mutate() : () => undefined;
@@ -640,16 +705,12 @@ function DeviceEditor({ anchor, place, mappings }: { anchor: Anchor; place?: Pla
     setSpotError(null);
   }
 
-  function removeDevice() {
-    deleteAnchor.mutate(anchor.id, { onSuccess: () => navigate("/devices", { replace: true }) });
-  }
-
   return (
     <section className="feature-screen teach-screen" aria-labelledby="screen-title">
       <header className="operate-header">
         <div>
           <h1 id="screen-title">{anchor.name}</h1>
-          <p>{`${anchorTargetEntity(anchor)} · ${camera} · ${place?.name ?? "—"}`}</p>
+          <p>{[anchorTargetEntity(anchor), camera?.name, camera?.place].filter(Boolean).join(" · ")}</p>
         </div>
         <Link className="ui-button ui-button-secondary ui-button-md" to="/devices">
           Back to devices
@@ -745,7 +806,7 @@ function DeviceEditor({ anchor, place, mappings }: { anchor: Anchor; place?: Pla
             <h2>Add spots from another angle</h2>
             {cameraId ? (
               <p>
-                Extra angles help Flick recognize {anchor.name} from more of the room. Use {camera}, the
+                Extra angles help Flick recognize {anchor.name} from more of the room. Use {camera?.name}, the
                 camera that taught it.
               </p>
             ) : (
@@ -833,11 +894,11 @@ function DeviceEditor({ anchor, place, mappings }: { anchor: Anchor; place?: Pla
               </div>
               <div>
                 <dt>Camera</dt>
-                <dd>{camera}</dd>
+                <dd>{camera?.name ?? "—"}</dd>
               </div>
               <div>
                 <dt>Place</dt>
-                <dd>{place?.name ?? "—"}</dd>
+                <dd>{camera?.place ?? "—"}</dd>
               </div>
             </dl>
             {isSensitiveDomain(anchor.domain) ? <Badge tone="warning">Sensitive</Badge> : null}
@@ -848,32 +909,16 @@ function DeviceEditor({ anchor, place, mappings }: { anchor: Anchor; place?: Pla
             </div>
           </GlassPanel>
           <GlassPanel className="teach-step-card">
-            <h2>Delete device</h2>
-            <p>Flick forgets {anchor.name}'s position and its gestures. Home Assistant isn't changed.</p>
-            {confirmDelete ? (
-              <div className="device-edit-confirm">
-                <strong>Delete {anchor.name}?</strong>
-                <div className="level-actions">
-                  <Button variant="danger" loading={deleteAnchor.isPending} onClick={removeDevice}>
-                    Delete device
-                  </Button>
-                  <Button ref={keepButton} variant="ghost" onClick={() => setConfirmDelete(false)}>
-                    Keep device
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="level-actions">
-                <Button ref={deleteTrigger} variant="secondary" onClick={() => setConfirmDelete(true)}>
-                  Delete device…
-                </Button>
-              </div>
-            )}
-            {deleteAnchor.error ? (
-              <p className="inline-error" role="alert">
-                {deleteAnchor.error.message}
-              </p>
-            ) : null}
+            <h2>Forget device</h2>
+            <p>Flick forgets {anchor.name}'s position, spots and gestures. Home Assistant isn't changed.</p>
+            <div className="level-actions">
+              <ForgetDevice
+                anchor={anchor}
+                explain={false}
+                size="md"
+                onForgotten={() => navigate("/devices", { replace: true })}
+              />
+            </div>
           </GlassPanel>
         </aside>
       </div>
@@ -1359,7 +1404,7 @@ export function TeachDeviceRoute() {
 export function PlacesRoute() {
   const places = usePlaces();
   const anchors = useAnchors();
-  const cameraName = useCameraNames();
+  const cameraLookup = useCameraLookup();
   return (
     <section className="feature-screen" aria-labelledby="screen-title">
       <header className="operate-header">
@@ -1373,7 +1418,7 @@ export function PlacesRoute() {
           <GlassPanel className="place-card" key={place.id}>
             <div className="panel-heading">
               <div>
-                <span>{cameraName(place.camera_id)}</span>
+                <span>{cameraLookup(place.camera_id).name}</span>
                 <strong>{place.name}</strong>
               </div>
               <Badge tone={statusTone(place.status)}>{place.status}</Badge>

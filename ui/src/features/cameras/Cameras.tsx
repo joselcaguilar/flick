@@ -2,9 +2,10 @@ import { useState } from "react";
 import { useCameras, useCamerasAvailable, useStartCamera, useStatus, useStopCamera } from "../../api/hooks";
 import type { Camera, CameraAvailable, CameraStatus } from "../../api/types";
 import { PreviewCanvas } from "../../components/domain";
-import { Badge, Button, GlassPanel, ListRow, Skeleton, useToast } from "../../components/ui";
+import { Badge, Button, GlassPanel, ListRow, Select, Skeleton, useToast } from "../../components/ui";
 import { useCameraLive, useLiveHands } from "../../events/useLiveHands";
 import { isTauri } from "../../platform/tauri";
+import { useCameraPlace } from "./place";
 import { useCameraSetup } from "./useCameraSetup";
 
 function permissionTone(permission?: string | null) {
@@ -37,6 +38,7 @@ function bestFormat(camera: CameraAvailable) {
 function ConfiguredCameraCard({ camera, live }: { camera: Camera; live?: CameraStatus }) {
   const start = useStartCamera();
   const stop = useStopCamera();
+  const place = useCameraPlace(camera);
   const running = live?.state === "running" || live?.state === "starting" || live?.state === "reconnecting";
   const failed = live?.state === "error" || live?.state === "permission_denied";
   const pending = start.isPending || stop.isPending;
@@ -59,6 +61,20 @@ function ConfiguredCameraCard({ camera, live }: { camera: Camera; live?: CameraS
         <Badge tone={cameraTone(live?.state)}>{live?.state ?? (camera.enabled ? "idle" : "disabled")}</Badge>
       </div>
       <div className="camera-details-grid">
+        <ListRow
+          className="camera-place-row"
+          title="Place"
+          description={
+            place.failed ? (
+              <span role="alert" className="camera-place-error">
+                Couldn't change the place. Try again.
+              </span>
+            ) : (
+              place.hint
+            )
+          }
+          trailing={place.select ? <Select {...place.select} /> : null}
+        />
         <ListRow
           title="Device"
           description={camera.device_ref ?? "local camera"}

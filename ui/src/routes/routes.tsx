@@ -13,7 +13,6 @@ import {
   TeachDeviceRoute,
 } from "../features/devices/Devices";
 import { GesturesLibraryRoute } from "../features/gestures/GesturesLibraryRoute";
-import { MappingEditorRoute } from "../features/mappings/Mappings";
 import { OnboardingRoute } from "../features/onboarding/OnboardingRoute";
 import { ProRoute } from "../features/pro/Pro";
 import { SettingsRoute } from "../features/settings/SettingsRoute";
@@ -80,7 +79,7 @@ export const routes: RouteMeta[] = [
   {
     path: "/devices/edit",
     title: "Edit device",
-    description: "Rename, change gestures, add spots or delete a taught device.",
+    description: "Rename, change gestures, add spots or forget a taught device.",
     element: <DeviceEditRoute />,
   },
   {
@@ -109,12 +108,6 @@ export const routes: RouteMeta[] = [
     title: "Mappings",
     description: "Redirect to Areas.",
     element: <Navigate to="/areas" replace />,
-  },
-  {
-    path: "/mappings/new",
-    title: "Mapping editor",
-    description: "Sentence builder for actions and safety behavior.",
-    element: <MappingEditorRoute />,
   },
   {
     path: "/cameras",

@@ -34,7 +34,6 @@
   "actions": {
     "teachDevice": "Teach a device",
     "recordGesture": "Record gesture",
-    "addMapping": "Add mapping",
     "pause15": "Pause 15 min",
     "resume": "Resume",
     "openPalette": "Open palette",

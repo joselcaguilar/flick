@@ -199,6 +199,18 @@ export function useCreateCamera() {
   });
 }
 
+export function usePatchCamera() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: { area_override?: string | null } }) =>
+      api.patch<Camera>(`/api/v1/cameras/${id}`, patch),
+    onSuccess: (camera) =>
+      client.setQueryData<Camera[]>(queryKeys.cameras, (cameras) =>
+        cameras?.map((item) => (item.id === camera.id ? camera : item)),
+      ),
+  });
+}
+
 export function useStartCamera() {
   const client = useQueryClient();
   return useMutation({

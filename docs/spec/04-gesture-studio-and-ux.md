@@ -59,7 +59,7 @@ Tray menu ─┬─ Pause / Resume
            └─ Open Flick ─┬─ Home (dashboard)
                           ├─ Gestures ── Gesture Studio (record static / motion / two-hand)
                           ├─ Devices ── Teach a device (point) · Places (per camera) · Re-align
-                          ├─ Mappings ── Mapping editor (global · targeted)
+                          ├─ Areas ── room gestures (all on · all off) and routines
                           ├─ Cameras
                           ├─ Activity (+ "Why didn't it fire?" debug)
                           ├─ Settings (General · Detection · Pointing · Safety · Feedback · Privacy · Home Assistant · Updates · Advanced)
@@ -87,7 +87,7 @@ HUD overlay (separate window)
   - Camera: name, fps, state
   - Home Assistant: state, version
   - Engine: inference ms p95, "Watching / Idle / Paused"
-  - Place: current place name for the camera ("Bedroom desk") with an OK / "Camera moved — re-align" state
+  - Place: the room the live camera is in. It defaults to the Home Assistant area of this computer's HA device (the companion app's device, matched by computer name), and can be changed right on the card. The change is saved in Flick only and never written to HA. Cameras → Place offers the same picker
 - **Live preview** (collapsible): MJPEG stream + canvas overlay with the hand skeleton, track IDs, current top gesture + confidence ring.
   - When pointing, the overlay also shows the pointing ray and the hovered or selected device label.
   - The overlay is drawn from `hands:<camera_id>` and `target.*` WS events (15 Hz), not burned into the video.
@@ -96,7 +96,7 @@ HUD overlay (separate window)
   - Camera held by another app (Teams, FaceTime, Zoom): the Cameras page and onboarding show "Camera is in use by another app. Close that app or pick another camera, then start it again." Flick never forces the device lock.
 - **Update banner** (only when relevant): "Flick 1.3 is ready — restart to update" or "Hand model improved (v3)", with a link to the changelog.
 - **Recent activity** (last 10) with status icons, and a link to Activity.
-- **Quick actions:** Pause 15 min · Add mapping · Record gesture.
+- **Quick actions:** Add a device · Record a gesture · Camera status.
 
 ## 5. Gestures library
 - Grid of cards in 2 sections:
@@ -147,7 +147,7 @@ flowchart LR
      - accuracy (leave-one-take-out);
      - distinctiveness;
      - nearest confusable gesture, e.g. "Looks a bit like ✌️ Victory (62 %)" or "Your Z looks like swipe right". The report ends with "add 3 more takes or pick a more distinct shape".
-6. **Save:** shows "Use it as a device verb or a global gesture?" and opens the Mapping editor with the gesture preselected.
+6. **Save:** shows "Use it as a device verb or a global gesture?". Device verbs are picked in Devices → Edit; room gestures in Areas.
 
 Target: a custom static gesture in ≤ 60 s, and a custom motion or two-hand gesture in ≤ 90 s.
 
@@ -179,46 +179,26 @@ flowchart LR
 
 - **Distinctiveness warning:** if another taught device is < 15° away as seen from this camera, show "This is close to *Bedroom lamp*. Point more deliberately, or teach from another spot."
 - **Re-align flow** (from a `needs_realign` notice): "The camera moved. Point at **Ventilador Dormitorio**…" and then a second known device. It shows the residual. If the residual is > 10°: "Re-teach these devices".
-- **Devices list:** cards grouped by place. Each card shows:
+- **Devices list:** rows grouped by area (the Flick-only override, else the HA area). Each row shows:
   - the HA name + domain icon;
+  - the camera that taught it and that camera's place;
   - status (OK / needs re-align);
   - the taught verbs;
   - last used;
-  - "Re-teach" and "Delete" actions.
+  - "Re-teach", "Edit" and "Forget…" actions. Forget asks inline, then deletes the device's position, spots and gestures; HA isn't changed.
   - A small top-down **room sketch** (camera + anchor directions) helps users understand spacing. It is decorative and labelled for screen readers as a list.
 - Target time: **≤ 90 s per device** (acceptance, §12).
 
-## 7. Mappings
+## 7. Areas
 
-### 7.1 List
-- Two tabs: **Devices** (targeted mappings, grouped by taught device) and **Global** (gesture → action anywhere).
-- Rows read as sentences:
-  - Global: **"👍 Thumbs up (right hand) → Toggle *Living room lights*"**.
-  - Targeted: **"Point at *Ventilador Dormitorio* + ↻ → Speed 1"**.
-  - Each row has an enabled toggle, a mode badge (tap/hold/repeat/dial), a camera badge, and a sensitive 🔒 badge.
-- Drag to reorder (`sort_order`). Search/filter by gesture, area, domain, device.
-- **Conflict warnings:**
-  - The same gesture + hand + camera used by several mappings → info badge "fires 2 actions".
-  - A global mapping on a gesture that is also a device verb → info "Suppressed while a device is selected".
+Room gestures replace the Mappings page and its sentence-builder editor; `/mappings` redirects here.
 
-### 7.2 Editor (sentence builder)
-- Global: `When [gesture ▾] with [any hand ▾] on [all cameras ▾] → [action ▾] on [target ▾]`
-- Targeted: `When I point at [taught device ▾ | any <domain> ▾] and [gesture ▾] → [verb ▾]`
-  - The verbs come from `03-…` §6.3 (Speed level N / Next / Previous / On / Off / Stop / Toggle / Dial). Levels are labelled with their taught values ("Speed 1 · 1 %").
-
-- **Target picker:** search across areas, devices, entities, scenes, scripts, grouped by area/floor. Shows each entity's current state.
-- **Action picker:** presets per domain (`03-…` §6.1). "Advanced" reveals a raw service picker plus a JSON data editor with field hints from `get_services`.
-- **Behavior** (collapsible):
-  - Mode: tap / hold (ms) / repeat (interval) / dial (for supported targets)
-  - Cooldown
-  - Require arm
-  - Active hours
-  - Feedback (HUD/sound)
-- **Sensitive targets:**
-  - The editor shows a lock notice. The mapping can't be enabled unless Settings → Safety → "Allow sensitive devices" is on.
-  - The user checks "I understand" (`sensitive_ack`) and picks a confirmation gesture (default 👍).
-- **Test button:** fires the action now (`POST /mappings/{id}/test`) and shows the result inline.
-- Validation errors come from the API `422` `problem+json`, shown inline with the field.
+- One panel per HA area that has taught devices (a device's area is its Flick-only override, else its HA area).
+- **All on / All off:** a gesture per room that calls `homeassistant.turn_on` / `turn_off` on the room's on/off devices.
+- **Routines:** a gesture that runs an HA scene or script.
+- Room gestures are global mappings: they pause while a device is selected, so pointing always wins.
+- **Other gestures** lists global mappings that Areas doesn't manage, each with its enabled toggle, Test and Delete.
+- **Sensitive targets** keep the safety rules of `03-…`: they never fire unless Settings → Safety allows sensitive devices, the mapping is acknowledged (`sensitive_ack`), and the confirm gesture follows.
 
 ## 8. HUD overlay
 

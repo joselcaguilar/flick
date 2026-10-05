@@ -28,8 +28,8 @@ test("teaches the fan and verifies circle and stop through HA, HUD, and activity
   await page.getByRole("button", { name: "Continue to verbs" }).click();
   await page.getByRole("button", { name: "Commit taught device" }).click();
   await expect(page.getByRole("heading", { name: /is ready/ })).toBeVisible();
-  await page.getByRole("link", { name: "View mappings" }).click();
-  await expect(page.getByText(/Point at Ventilador Dormitorio/i).first()).toBeVisible();
+  await page.getByRole("link", { name: "View devices" }).click();
+  await expect(page.getByRole("link", { name: /^Edit Ventilador Dormitorio/i }).first()).toBeVisible();
 
   const beforeCircle = (await mockHaCalls(request)).length;
   await replay(request, "targeting/point_fan_circle");
