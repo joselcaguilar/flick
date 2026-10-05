@@ -185,7 +185,7 @@ flowchart LR
   - status (OK / needs re-align);
   - the taught verbs;
   - last used;
-  - "Re-teach", "Edit" and "Forget…" actions. Forget asks inline, then deletes the device's position, spots and gestures; HA isn't changed.
+  - "Re-teach", "Edit" and "Forget" actions. Forget asks inline, then deletes the device's position, spots and gestures; HA isn't changed.
   - A small top-down **room sketch** (camera + anchor directions) helps users understand spacing. It is decorative and labelled for screen readers as a list.
 - Target time: **≤ 90 s per device** (acceptance, §12).
 

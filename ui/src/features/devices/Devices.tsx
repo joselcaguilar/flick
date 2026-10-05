@@ -158,7 +158,7 @@ function ForgetDevice({
         </div>
       ) : (
         <Button ref={trigger} variant="danger" size={size} onClick={() => setConfirming(true)}>
-          Forget…
+          Forget
         </Button>
       )}
       {deleteAnchor.error ? (
