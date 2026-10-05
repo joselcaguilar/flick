@@ -144,6 +144,7 @@ Explicitly **not** in the suite: per-route API happy-path tests, retention/WAL/p
 
 ### 5.3 Supply chain
 - `cargo-deny` + `pnpm audit` in CI; Dependabot/Renovate weekly.
+- Accepted advisory: RUSTSEC-2024-0429 / GHSA-wrw7-89jp-8q8g, unsound `glib::VariantStrIter` in glib 0.18. Linux only, via Tauri 2's GTK 3 stack, which pins glib 0.18 (fixed only in 0.20+). Nothing in the build calls `VariantStrIter` or `Variant::array_iter_str`, so the Dependabot alert is dismissed as "not used". Revisit when Tauri moves off GTK 3.
 - SBOM per release (CycloneDX for Rust and npm).
 - Models are pinned by sha256 in `models/manifest.toml` (bundled) or the signed pack manifest (OTA), and verified on load.
 - Release signing:
