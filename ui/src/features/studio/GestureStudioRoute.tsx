@@ -99,7 +99,7 @@ function TrajectoryGlyph({ type, index }: { type: StudioType; index: number }) {
 }
 
 function targetTime(type: StudioType) {
-  return type === "static" ? "≤ 60 s" : "≤ 90 s";
+  return type === "static" ? "60 s" : "90 s";
 }
 
 export function GestureStudioRoute() {
